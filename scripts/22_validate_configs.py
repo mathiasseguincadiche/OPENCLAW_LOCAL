@@ -68,7 +68,9 @@ def main() -> int:
 
     gate_models = set(qualification.get("automated_gates", {}).get("required_models", []))
     if gate_models != required_models:
-        failures.append("les modèles requis du catalogue et de la qualification doivent correspondre")
+        failures.append(
+            "les modèles requis du catalogue et de la qualification doivent correspondre"
+        )
 
     if qualification.get("promotion", {}).get("automatic_promotion") is not False:
         failures.append("la promotion automatique des modèles doit rester désactivée")
