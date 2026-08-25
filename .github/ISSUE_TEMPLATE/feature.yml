@@ -1,6 +1,6 @@
 name: Évolution
 about: Proposer une amélioration
- title: "[FEATURE] "
+title: "[FEATURE] "
 labels: ["enhancement"]
 body:
   - type: textarea
