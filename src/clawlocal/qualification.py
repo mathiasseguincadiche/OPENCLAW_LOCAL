@@ -30,8 +30,16 @@ def evaluate_benchmark(payload: dict[str, Any], policy: dict[str, Any]) -> dict[
         errors = [case for case in selected if case.get("status") != "ok"]
         checked = [case for case in selected if case.get("check_required", True)]
         passed = [case for case in checked if case.get("check_passed") is True]
-        tps = [float(case["tokens_per_second"]) for case in selected if case.get("tokens_per_second")]
-        ttft = [float(case["ttft_ms"]) for case in selected if case.get("ttft_ms") is not None]
+        tps = [
+            float(case["tokens_per_second"])
+            for case in selected
+            if case.get("tokens_per_second")
+        ]
+        ttft = [
+            float(case["ttft_ms"])
+            for case in selected
+            if case.get("ttft_ms") is not None
+        ]
         observed_contexts = {int(case["context"]) for case in selected if case.get("context")}
 
         error_rate = _ratio(len(errors), len(selected))
@@ -52,9 +60,12 @@ def evaluate_benchmark(payload: dict[str, Any], policy: dict[str, Any]) -> dict[
         if p95_ttft_ms is None or p95_ttft_ms > float(thresholds["max_p95_ttft_ms"]):
             failures.append(f"p95_ttft_ms={p95_ttft_ms}")
 
-        for context_text, minimum in thresholds.get("per_context_min_check_pass_rate", {}).items():
+        per_context = thresholds.get("per_context_min_check_pass_rate", {})
+        for context_text, minimum in per_context.items():
             context = int(context_text)
-            context_cases = [case for case in checked if int(case.get("context", 0)) == context]
+            context_cases = [
+                case for case in checked if int(case.get("context", 0)) == context
+            ]
             context_passed = [case for case in context_cases if case.get("check_passed") is True]
             rate = _ratio(len(context_passed), len(context_cases))
             if not context_cases or rate < float(minimum):
