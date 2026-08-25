@@ -14,7 +14,9 @@ POLICY = ROOT / "config" / "v1" / "qualification_policy.yaml"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Évalue une preuve de benchmark sans promouvoir de modèle.")
+    parser = argparse.ArgumentParser(
+        description="Évalue une preuve de benchmark sans promouvoir de modèle."
+    )
     parser.add_argument("path", nargs="?", type=Path)
     return parser.parse_args()
 
