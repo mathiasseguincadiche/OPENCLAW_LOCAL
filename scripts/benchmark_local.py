@@ -33,7 +33,10 @@ def model_available(runtime_id: str, names: set[str]) -> bool:
     if runtime_id in names:
         return True
     if ":" not in runtime_id:
-        return any(name == f"{runtime_id}:latest" or name.startswith(f"{runtime_id}:") for name in names)
+        return any(
+            name == f"{runtime_id}:latest" or name.startswith(f"{runtime_id}:")
+            for name in names
+        )
     return False
 
 
@@ -57,17 +60,23 @@ def run_checks(output: str, checks: list[dict[str, Any]]) -> tuple[bool, list[st
             passed = bool(cleaned.strip())
         elif check_type == "contains_any":
             lowered = cleaned.casefold()
-            passed = any(str(value).casefold() in lowered for value in check.get("values", []))
+            passed = any(
+                str(value).casefold() in lowered for value in check.get("values", [])
+            )
         elif check_type == "json_keys":
             try:
                 parsed = json.loads(cleaned)
-                passed = isinstance(parsed, dict) and all(key in parsed for key in check.get("keys", []))
+                passed = isinstance(parsed, dict) and all(
+                    key in parsed for key in check.get("keys", [])
+                )
             except json.JSONDecodeError:
                 passed = False
         elif check_type == "yaml_keys":
             try:
                 parsed = yaml.safe_load(cleaned)
-                passed = isinstance(parsed, dict) and all(key in parsed for key in check.get("keys", []))
+                passed = isinstance(parsed, dict) and all(
+                    key in parsed for key in check.get("keys", [])
+                )
             except yaml.YAMLError:
                 passed = False
         else:
@@ -92,7 +101,12 @@ def add_synthetic_context(prompt: str, target_chars: int) -> str:
 
 
 def run_generation(
-    endpoint: str, runtime_id: str, prompt: str, context: int, temperature: float, timeout: float
+    endpoint: str,
+    runtime_id: str,
+    prompt: str,
+    context: int,
+    temperature: float,
+    timeout: float,
 ) -> dict[str, Any]:
     body = json.dumps(
         {
@@ -141,7 +155,9 @@ def run_generation(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Benchmark local reproductible via API native Ollama.")
+    parser = argparse.ArgumentParser(
+        description="Benchmark local reproductible via API native Ollama."
+    )
     parser.add_argument("--endpoint", default="http://127.0.0.1:11434")
     parser.add_argument("--model", action="append", dest="models")
     parser.add_argument("--context", action="append", type=int, dest="contexts")
@@ -200,7 +216,8 @@ def main() -> int:
                 runtime_id = str(model["runtime_id"])
                 scenario_id = str(scenario["id"])
                 prompt = add_synthetic_context(
-                    str(scenario["prompt"]), int(scenario.get("synthetic_context_chars") or 0)
+                    str(scenario["prompt"]),
+                    int(scenario.get("synthetic_context_chars") or 0),
                 )
                 print(f"[{current}/{total}] {alias} ctx={context} scenario={scenario_id}")
                 base = {
@@ -220,7 +237,9 @@ def main() -> int:
                         float(scenario.get("temperature", suite["default_temperature"])),
                         args.timeout,
                     )
-                    passed, details = run_checks(result["output"], list(scenario.get("checks", [])))
+                    passed, details = run_checks(
+                        result["output"], list(scenario.get("checks", []))
+                    )
                     cases.append(
                         {
                             **base,
@@ -230,7 +249,12 @@ def main() -> int:
                             "check_details": details,
                         }
                     )
-                except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                except (
+                    OSError,
+                    urllib.error.URLError,
+                    TimeoutError,
+                    json.JSONDecodeError,
+                ) as exc:
                     cases.append(
                         {
                             **base,
