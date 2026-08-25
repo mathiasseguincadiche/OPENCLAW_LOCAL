@@ -1,0 +1,50 @@
+schema_version: "1.0.0"
+platform_version: "0.1.0"
+roles:
+  chef-operations:
+    own: [cadrage, orchestration, planification, risques, verdict_global]
+    assist: [priorisation, pedagogie]
+    review: [coherence_globale]
+    forbidden: [code_production, fabrication_preuves, auto_approbation]
+
+  expert-recherche:
+    own: [recherche, sources, benchmark, veille, verification_faits]
+    assist: [architecture, documentation]
+    review: [fraicheur_sources]
+    forbidden: [decision_architecture_finale, publication]
+
+  architecte-solutions:
+    own: [architecture, adr, interfaces, modeles_donnees, compromis]
+    assist: [securite, devops, documentation]
+    review: [coherence_technique]
+    forbidden: [implementation_complete, audit_final, approbation_finale]
+
+  ingenieur-devops:
+    own: [automatisation, iac, conteneurs, ci_cd, tests_techniques, preuves_locales]
+    assist: [architecture, runbooks, observabilite]
+    review: [exploitabilite]
+    forbidden: [audit_final_de_son_travail, approbation_finale]
+
+  ingenieur-securite:
+    own: [threat_model, secrets, hardening, supply_chain, sbom, dependances, securite_ci]
+    assist: [architecture, devops, publication]
+    review: [surface_attaque]
+    forbidden: [audit_final_de_son_travail, acceptation_risque_residuel]
+
+  ingenieur-release-forges:
+    own: [git, forges, pr_mr, releases, versionnage, preuves_distantes]
+    assist: [ci_cd, documentation_release]
+    review: [etat_publication]
+    forbidden: [refonte_architecture, force_push_par_defaut, publication_sans_approbation]
+
+  redacteur-technique:
+    own: [readme, documentation, runbooks, vulgarisation, structure_pedagogique]
+    assist: [presentation, handover]
+    review: [lisibilite, coherence_documentaire]
+    forbidden: [inventer_preuves, modifier_logique_technique, simplification_fausse]
+
+  auditeur-qualite:
+    own: [audit_independant, conformite, qualite, accessibilite, controle_preuves]
+    assist: [revue_securite, revue_documentaire]
+    review: [livrables_finaux]
+    forbidden: [corriger_silencieusement, produire_livrable_audite, auto_approbation]

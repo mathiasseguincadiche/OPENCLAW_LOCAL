@@ -1,0 +1,46 @@
+schema_version: "1.0.0"
+platform_version: "0.1.0"
+fallback_policy: local_family_first
+cloud_enabled_by_default: false
+agents:
+  chef-operations:
+    local_primary: qwen-general
+    local_fallback: gemma-review
+    cloud_escalation: frontier-reasoning
+
+  expert-recherche:
+    local_primary: qwen-general
+    local_fallback: gemma-review
+    cloud_escalation: research
+
+  architecte-solutions:
+    local_primary: gemma-review
+    local_fallback: qwen-general
+    cloud_escalation: frontier-review
+
+  ingenieur-devops:
+    local_primary: qwen-general
+    local_specialist: sera-devops
+    local_fallback: gemma-review
+    cloud_escalation: frontier-reasoning
+
+  ingenieur-securite:
+    local_primary: qwen-general
+    local_fallback: gemma-review
+    cloud_escalation: frontier-review
+
+  ingenieur-release-forges:
+    local_primary: qwen-general
+    local_fallback: gemma-review
+    cloud_escalation: frontier-reasoning
+
+  redacteur-technique:
+    local_primary: gemma-review
+    local_fallback: qwen-general
+    cloud_escalation: frontier-review
+
+  auditeur-qualite:
+    local_primary: qwen-general
+    local_fallback: gemma-review
+    cloud_escalation: frontier-review
+    independence_rule: reviewer_family_must_differ_from_producer_when_practical

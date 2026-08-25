@@ -1,0 +1,46 @@
+schema_version: "1.0.0"
+platform_version: "0.1.0"
+models:
+  qwen-general:
+    provider: ollama
+    runtime_id: "qwen3.5:9b"
+    family: qwen
+    class: local_fast
+    role: generalist
+    required: true
+    status: candidate
+    context_policy: benchmark_before_raise
+
+  gemma-review:
+    provider: ollama
+    runtime_id: "gemma4"
+    family: gemma
+    class: local_fast
+    role: writing_architecture_review
+    required: true
+    status: candidate
+    context_policy: benchmark_before_raise
+
+  sera-devops:
+    provider: custom_gguf
+    runtime_id: "sera-14b"
+    family: qwen-derived
+    class: local_deep
+    role: software_engineering
+    required: false
+    status: optional_candidate
+    activation: import_and_benchmark_required
+
+cloud_catalog:
+  research:
+    provider: openrouter
+    runtime_id: "perplexity/sonar-pro-search"
+    enabled: false
+  frontier-reasoning:
+    provider: openrouter
+    runtime_id: "openai/gpt-5.6-sol"
+    enabled: false
+  frontier-review:
+    provider: openrouter
+    runtime_id: "anthropic/claude-sonnet-5"
+    enabled: false

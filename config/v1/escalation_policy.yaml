@@ -1,0 +1,33 @@
+schema_version: "1.0.0"
+platform_version: "0.1.0"
+default: deny
+cloud_required_flags:
+  - cloud_enabled
+  - explicit_reason
+triggers:
+  web_freshness:
+    allowed_roles: [expert-recherche, chef-operations]
+    preferred_cloud_route: research
+  context_overflow:
+    allowed_roles: [chef-operations, architecte-solutions, ingenieur-devops]
+    preferred_cloud_route: frontier-reasoning
+  repeated_local_failure:
+    max_local_attempts: 2
+    require_failure_evidence: true
+  high_impact_decision:
+    require_human_approval: true
+  independent_final_review:
+    require_human_approval: true
+forbidden_reasons:
+  - local_model_is_only_slower
+  - convenience
+  - silent_fallback
+  - missing_local_benchmark
+privacy:
+  send_secrets_to_cloud: false
+  send_private_documents_to_cloud_by_default: false
+logging:
+  record_role: true
+  record_reason: true
+  record_model: true
+  record_cost_when_available: true

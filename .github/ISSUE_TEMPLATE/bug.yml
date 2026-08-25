@@ -1,0 +1,28 @@
+name: Bug
+about: Signaler un comportement reproductible
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Ne publiez jamais de clé API, prompt privé ou journal sensible."
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problème
+      description: Décrivez le comportement observé.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Étapes minimales, commandes et configuration non sensible.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Résultat attendu
+    validations:
+      required: true
