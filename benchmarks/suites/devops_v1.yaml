@@ -1,0 +1,78 @@
+schema_version: "1.0.0"
+id: devops-v1
+description: Qualification locale orientée DevOps, documentation, sécurité et comportement structuré.
+default_temperature: 0.1
+scenarios:
+  - id: synthesis-local-first
+    category: synthesis
+    prompt: >-
+      Résume en quatre points, sans inventer de métriques, les avantages et limites d'une
+      architecture IA local-first avec escalade cloud explicite.
+    checks:
+      - type: nonempty
+
+  - id: gitlab-ci-yaml
+    category: devops
+    prompt: >-
+      Retourne uniquement un YAML GitLab CI valide. Il doit définir stages avec une étape test
+      et un job test utilisant python:3.12 qui exécute pytest -q. Aucun markdown.
+    checks:
+      - type: yaml_keys
+        keys: [stages, test]
+
+  - id: kubernetes-diagnostic
+    category: troubleshooting
+    prompt: >-
+      Un Deployment Kubernetes reste à 0/2 Ready. Donne une procédure courte et ordonnée de
+      diagnostic avec commandes concrètes, sans supposer la cause.
+    checks:
+      - type: contains_any
+        values: [kubectl, describe, logs]
+
+  - id: runbook-rollback
+    category: documentation
+    prompt: >-
+      Rédige un mini-runbook de déploiement contenant explicitement les sections Préconditions,
+      Vérification et Rollback. Reste opérationnel et concis.
+    checks:
+      - type: contains_any
+        values: [Préconditions, Verification, Vérification]
+      - type: contains_any
+        values: [Rollback, retour arrière]
+
+  - id: security-review
+    category: security
+    prompt: >-
+      Revois une pipeline CI qui reçoit des secrets, construit une image et publie un artefact.
+      Donne cinq contrôles de sécurité prioritaires et explique brièvement le risque couvert.
+    checks:
+      - type: contains_any
+        values: [secret, dépendance, dependance, SBOM, artefact, signature]
+
+  - id: tool-intent-json
+    category: agentic-structure
+    prompt: >-
+      Tu dois inspecter le fichier README.md avant de répondre. Retourne uniquement un objet JSON
+      avec les clés tool, arguments et reason. La valeur tool doit être read_file et arguments
+      doit contenir path=README.md. N'exécute rien réellement.
+    checks:
+      - type: json_keys
+        keys: [tool, arguments, reason]
+
+  - id: tool-feedback-repair-json
+    category: agentic-repair
+    prompt: >-
+      Un outil a répondu: ERROR file_not_found pour config/prod.yaml. Retourne uniquement un objet
+      JSON avec les clés diagnosis et next_action. Ne prétends pas que le fichier existe.
+    checks:
+      - type: json_keys
+        keys: [diagnosis, next_action]
+
+  - id: long-context-discipline
+    category: long-context
+    synthetic_context_chars: 12000
+    prompt: >-
+      À partir de l'inventaire synthétique fourni avant cette consigne, réponds uniquement avec
+      trois risques généraux de dérive de configuration. N'invente aucun hôte absent.
+    checks:
+      - type: nonempty
