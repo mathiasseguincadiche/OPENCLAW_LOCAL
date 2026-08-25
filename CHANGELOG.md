@@ -4,6 +4,16 @@ Toutes les modifications notables sont documentées ici. Le format s'inspire de 
 
 ## [Unreleased]
 
+### Added
+
+- protocole de qualification matérielle sans cloud ;
+- inventaire Windows de preuves ;
+- suite DevOps `devops-v1` ;
+- benchmark Ollama streaming avec TTFT et débit ;
+- gate automatique configurable et promotion manuelle uniquement ;
+- orchestrateur PowerShell de qualification ;
+- tests du moteur d'évaluation.
+
 ## [0.1.0] - 2026-08-25
 
 ### Added

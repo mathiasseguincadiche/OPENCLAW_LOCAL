@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('menu', 'audit', 'configure-local', 'models', 'verify', 'benchmark', 'team', 'docs')]
+    [ValidateSet('menu', 'audit', 'configure-local', 'models', 'verify', 'benchmark', 'inventory', 'qualification', 'team', 'docs')]
     [string]$Action = 'menu',
     [switch]$DryRun
 )
@@ -15,6 +15,8 @@ $Scripts = @{
     models = Join-Path $RepoRoot 'scripts\windows\03_pull_models.ps1'
     verify = Join-Path $RepoRoot 'scripts\windows\04_verify_local.ps1'
     benchmark = Join-Path $RepoRoot 'scripts\windows\05_benchmark.ps1'
+    inventory = Join-Path $RepoRoot 'scripts\windows\06_collect_inventory.ps1'
+    qualification = Join-Path $RepoRoot 'scripts\windows\07_run_qualification.ps1'
 }
 
 function Show-Title {
@@ -62,9 +64,11 @@ while ($true) {
 2) Configurer/vérifier Ollama local
 3) Télécharger les modèles locaux de référence
 4) Vérifier l'inférence locale
-5) Lancer un benchmark simple
-6) Afficher les contrats de l'équipe IA
-7) Afficher la documentation
+5) Lancer le benchmark simple
+6) Collecter l'inventaire de qualification
+7) Lancer la qualification matérielle complète
+8) Afficher les contrats de l'équipe IA
+9) Afficher la documentation
 0) Quitter
 '@ | Write-Host
 
@@ -74,8 +78,10 @@ while ($true) {
         '3' { Invoke-Action 'models' }
         '4' { Invoke-Action 'verify' }
         '5' { Invoke-Action 'benchmark' }
-        '6' { Invoke-Action 'team' }
-        '7' { Invoke-Action 'docs' }
+        '6' { Invoke-Action 'inventory' }
+        '7' { Invoke-Action 'qualification' }
+        '8' { Invoke-Action 'team' }
+        '9' { Invoke-Action 'docs' }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }

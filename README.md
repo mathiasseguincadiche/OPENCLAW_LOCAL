@@ -19,7 +19,7 @@ OpenClaw ------------------------------+
 Ollama natif Windows                         - dernier recours
    |
    +--> Qwen 3.5 9B        généraliste
-   +--> Gemma 4 12B        rédaction / seconde opinion
+   +--> Gemma 4            rédaction / seconde opinion
    +--> SERA 14B (*)       candidat spécialiste code/DevOps
    |
    v
@@ -39,7 +39,7 @@ Ollama natif Windows                         - dernier recours
 - **Séparation des responsabilités** : les huit agents gardent des rôles distincts ; un producteur ne s'auto-audite pas.
 - **Fail closed** : une escalade non autorisée, un modèle absent ou une configuration invalide doit échouer explicitement.
 - **Preuves avant promesses** : le dépôt distingue ce qui est implémenté, testé, candidat ou simplement documenté.
-- **Configuration versionnée** : rôles, modèles, politiques d'escalade, sécurité et profils matériels sont des contrats Git.
+- **Configuration versionnée** : rôles, modèles, politiques d'escalade, qualification, sécurité et profils matériels sont des contrats Git.
 - **État local hors Git** : modèles téléchargés, secrets, journaux, benchmarks et caches restent sur la workstation.
 
 ## Démarrage rapide
@@ -60,11 +60,21 @@ Prérequis : Windows 11 Pro x64, PowerShell 7, Python 3.12+ et OpenClaw. Ollama 
 # 4. Vérifier l'inférence locale
 .\menu.ps1 -Action verify
 
-# 5. Mesurer la machine
+# 5. Mesure simple
 .\menu.ps1 -Action benchmark
+
+# 6. Qualification matérielle complète, sans cloud
+.\menu.ps1 -Action qualification -DryRun
+.\menu.ps1 -Action qualification
 ```
 
 Le raccourci `START_MENU.cmd` ouvre le même centre de contrôle en mode interactif.
+
+## Qualification avant promotion
+
+Les modèles restent `candidate` tant qu'ils n'ont pas été mesurés sur la workstation réelle. La phase 2 fournit maintenant un protocole reproductible : inventaire, suite DevOps versionnée, TTFT, débit, contextes 8K/16K et gate automatique. Un gate réussi produit uniquement `READY_FOR_MANUAL_QUALIFICATION` : le tool-calling OpenClaw réel, la stabilité et la revue humaine restent obligatoires.
+
+Voir [Qualification](docs/QUALIFICATION.md) et [Benchmark](docs/BENCHMARK.md).
 
 ## Huit rôles
 
@@ -72,18 +82,18 @@ Le raccourci `START_MENU.cmd` ouvre le même centre de contrôle en mode interac
 |---|---|---|---|
 | Chef des opérations | cadrage, orchestration, risques | Qwen 3.5 9B | arbitrage exceptionnel |
 | Expert recherche | recherche, sources, synthèse | Qwen 3.5 9B | recherche web fraîche |
-| Architecte solutions | architecture, ADR, compromis | Gemma 4 12B | décision complexe |
+| Architecte solutions | architecture, ADR, compromis | Gemma 4 | décision complexe |
 | Ingénieur DevOps | CI/CD, IaC, conteneurs, scripts | Qwen 3.5 9B / SERA candidat | blocage technique persistant |
 | Ingénieur sécurité | hardening, supply chain, secrets | Qwen 3.5 9B | revue critique |
 | Ingénieur release/forges | Git, PR, releases, preuves distantes | Qwen 3.5 9B | exceptionnel |
-| Rédacteur technique | README, runbooks, vulgarisation | Gemma 4 12B | document stratégique |
+| Rédacteur technique | README, runbooks, vulgarisation | Gemma 4 | document stratégique |
 | Auditeur qualité | conformité, preuves, contrôle final | famille différente du producteur | contrôle indépendant si nécessaire |
 
-La source de vérité se trouve dans `config/v1/role_matrix.yaml`, `config/v1/model_routing.yaml` et `config/v1/escalation_policy.yaml`.
+La source de vérité se trouve dans `config/v1/role_matrix.yaml`, `config/v1/model_routing.yaml`, `config/v1/escalation_policy.yaml` et `config/v1/qualification_policy.yaml`.
 
 ## État du projet
 
-Cette première version est un **socle de production contrôlé**, pas une prétention de performance universelle. Les modèles doivent être benchmarkés sur la workstation avant promotion. Voir [STATUS.md](STATUS.md) et [docs/BENCHMARK.md](docs/BENCHMARK.md).
+La version actuelle est un **socle de production contrôlé avec outillage de qualification**, pas une prétention de performance universelle. Aucun résultat matériel n'est déclaré tant que la suite n'a pas été exécutée sur la workstation. Voir [STATUS.md](STATUS.md).
 
 ## Documentation
 
@@ -92,6 +102,7 @@ Cette première version est un **socle de production contrôlé**, pas une prét
 - [Installation Windows 11](docs/INSTALLATION_WINDOWS_11.md)
 - [Modèles locaux](docs/MODELES_LOCAUX.md)
 - [Routage hybride](docs/ROUTAGE_HYBRIDE.md)
+- [Qualification](docs/QUALIFICATION.md)
 - [Opérations](docs/OPERATIONS.md)
 - [Sécurité](docs/SECURITY.md)
 - [Benchmark](docs/BENCHMARK.md)
