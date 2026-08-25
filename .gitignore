@@ -1,0 +1,41 @@
+# Secrets / environnement
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Runtime local IA
+state/
+runtime/
+models/
+benchmarks/results/
+proofs/
+logs/
+*.gguf
+*.safetensors
+*.bin
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Archives / temporaires
+*.zip
+*.7z
+*.tar
+*.gz
+*.tmp
+*.bak

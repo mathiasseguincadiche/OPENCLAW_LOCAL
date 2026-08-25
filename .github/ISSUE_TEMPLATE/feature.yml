@@ -1,0 +1,23 @@
+name: Évolution
+about: Proposer une amélioration
+ title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Besoin
+      description: Quel problème concret faut-il résoudre ?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposition
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Critère de validation
+      description: Test, benchmark ou preuve attendu.
