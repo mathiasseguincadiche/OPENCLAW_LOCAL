@@ -1,0 +1,25 @@
+schema_version: "1.0.0"
+profile: intel-arc-b580-12gb-reference
+gpu:
+  vendor: Intel
+  family: Arc B-Series
+  model: B580
+  vram_gb: 12
+  memory_type: GDDR6
+  memory_bandwidth_gbps: 456
+  peak_int8_tops: 233
+cpu_reference:
+  model: AMD Ryzen 7 7700
+  cores: 8
+  threads: 16
+  tdp_w: 65
+system_memory_reference_gb: 48
+policy:
+  preferred_mode: local_fast
+  local_fast_target: compact_quantized_models
+  local_deep_allowed: true
+  offload_requires_benchmark: true
+  context_requires_benchmark: true
+notes:
+  - "Le profil décrit une cible de qualification, pas une garantie de débit."
+  - "Comparer les backends réellement disponibles sous Windows avant promotion."

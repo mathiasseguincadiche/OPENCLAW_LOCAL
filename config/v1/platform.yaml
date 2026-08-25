@@ -1,0 +1,20 @@
+schema_version: "1.0.0"
+platform_version: "0.1.0"
+deployment_mode: windows-native
+runtime:
+  preferred_root: "E:\\AI\\OpenClawLocal"
+  fallback_root: "%LOCALAPPDATA%\\OpenClawLocal"
+  openclaw_gateway: native-windows
+  devops_backend: external-wsl2-optional
+local_provider:
+  id: ollama
+  base_url: "http://127.0.0.1:11434"
+  api: ollama-native
+  expose_lan: false
+cloud:
+  provider: openrouter
+  enabled_by_default: false
+  require_explicit_escalation: true
+state_policy:
+  git_contains_expected_state_only: true
+  runtime_state_outside_git: true

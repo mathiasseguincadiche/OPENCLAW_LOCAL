@@ -1,0 +1,19 @@
+schema_version: "1.0.0"
+platform_version: "0.1.0"
+network:
+  local_model_loopback_only: true
+  default_ollama_host: "127.0.0.1"
+secrets:
+  commit_real_secrets: false
+  cloud_key_required_for_local_mode: false
+cloud:
+  enabled_by_default: false
+  require_budget_limit: true
+  require_human_approval_for_sensitive_data: true
+agents:
+  least_privilege_tools: true
+  producer_cannot_self_approve: true
+models:
+  small_local_model_is_security_boundary: false
+  qualify_tool_calling_before_promotion: true
+  prompt_injection_tests_required: true
