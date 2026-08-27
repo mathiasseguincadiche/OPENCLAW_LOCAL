@@ -2,85 +2,133 @@
 
 ## Frontière de responsabilité
 
-`OPENCLAW_LOCAL` gère les contrats, l'installation reproductible et les outils de la plateforme IA locale. Il ne transforme pas Windows en workstation générale et ne gère pas WSL2.
+`OPENCLAW_LOCAL` gère la plateforme IA locale-first sous Windows 11 Pro. WSL2 Ubuntu reste un environnement DevOps/Linux externe : il peut héberger des dépôts et outils Linux, mais il n'est pas l'hôte du runtime IA nominal.
 
 ```text
 HOST Windows 11 Pro
 |
-+-- OPENCLAW_LOCAL runtime verrouillé
++-- OPENCLAW_LOCAL runtime
 |    +-- Python / venv clawlocal
 |    +-- Node.js isolé
 |    +-- OpenClaw
-|    +-- Ollama natif Windows
+|    +-- backend IA natif Windows
+|
++-- Project Intake
+|    +-- consignes / cahier des charges
+|    +-- sources / dépôt réel
+|    +-- contexte
+|    +-- livrables / preuves / diagrammes
 |
 +-- OpenClaw / Gateway loopback
 |    +-- 8 agents matérialisés
 |    +-- 8 workspaces gérés
+|    +-- snapshots projet protégés
 |    +-- politiques outils par rôle
-|    +-- Ollama natif Windows (nominal)
-|    |    +-- Qwen / Gemma
-|    +-- OpenRouter (optionnel, escalade explicite)
+|    +-- web_search / web_fetch
+|    +-- browser pour expert-recherche
+|
++-- Pool local
+|    +-- LOCAL_FAST
+|    |    +-- Qwen 3.5 9B
+|    |    +-- Gemma 4 12B
+|    +-- LOCAL_DEEP candidats
+|         +-- Qwen 3.5 27B
+|         +-- SERA 14B
+|
++-- Backends
+|    +-- Ollama/Vulkan (nominal V0.2)
+|    +-- llama.cpp/SYCL (candidat)
+|    +-- llama.cpp/Vulkan (candidat)
 |
 +-- clawlocal
-|    +-- contrats de rôles
-|    +-- catalogue modèles
-|    +-- décision de routage
-|    +-- renderer de configuration OpenClaw
-|    +-- pont décision -> commande OpenClaw
+|    +-- contrats
+|    +-- routage
+|    +-- préconditions d'escalade
+|    +-- FinOps
 |    +-- qualification / preuves
 |
-+-- WSL2 (externe, facultatif)
-     +-- outils DevOps/Linux
++-- OpenRouter (optionnel)
+|    +-- escalade explicite uniquement
+|
++-- WSL2 Ubuntu (externe)
+     +-- outils et projets DevOps/Linux
 ```
 
-## Chaîne de configuration
+## Flux projet principal
 
 ```text
-config/v1/*.yaml + runtime_versions.json + agents/*
-                    |
-                    v
-          clawlocal.openclaw_config
-                    |
-                    v
-         openclaw.local.patch.json
-                    |
-          config patch --dry-run
-                    |
-                    v
-        config OpenClaw validée
-                    |
-                    v
-         Gateway + 8 agents locaux
+consignes + sources + livrables
+            |
+            v
+       Project Intake
+            |
+            v
+   Chef des opérations
+            |
+    +-------+--------+----------------+
+    |                |                |
+    v                v                v
+ Recherche       Architecture       DevOps
+    |                |                |
+    +------ LOCAL / LOCAL+WEB --------+
+                     |
+              LOCAL_DEEP si utile
+                     |
+                insuffisant ?
+                |          |
+               non        oui
+                |          |
+                v          v
+           livrables   cloud sous
+                        politique
+                |
+                v
+         audit indépendant
+                |
+                v
+        validation humaine
 ```
-
-Aucun secret n'est incorporé au patch généré. Les workspaces sont reconstruits depuis Git et l'état runtime reste hors dépôt.
 
 ## Sources de vérité
 
-- `config/v1/*.yaml` : rôles, routage, sécurité et qualification ;
-- `config/v1/runtime_versions.json` : versions runtime supportées/préférées ;
+- `config/v1/platform.yaml` : mode de déploiement et contrats liés ;
+- `model_catalog.yaml` : modèles et identifiants runtime ;
+- `model_routing.yaml` : routes par agent ;
+- `project_policy.yaml` : structure Project Intake ;
+- `web_policy.yaml` : recherche Web local-first ;
+- `runtime_backends.yaml` : backends d'inférence ;
+- `budget_policy.yaml` : limites FinOps ;
+- `diagram_policy.yaml` : rendu de schémas ;
+- `qualification_policy.yaml` : suites, seuils et règles de promotion ;
 - `agents/*` : comportements humainement lisibles ;
-- `src/clawlocal/openclaw_config.py` : rendu de la flotte ;
-- `src/clawlocal/runtime.py` : routage exécutable ;
-- runtime local : état observé, jamais supposé conforme ;
-- `benchmarks/results/` et `<OPENCLAW_LOCAL_ROOT>/proofs/` : preuves locales non versionnées.
+- `runtime_versions.json` : versions runtime supportées/préférées.
 
-## Modes
+Le runtime local reste un **état observé**. Les contrats Git décrivent l'état attendu mais ne constituent pas une preuve matérielle.
 
-1. **LOCAL_FAST** : modèle compact entièrement ou majoritairement en VRAM ;
-2. **LOCAL_DEEP** : modèle plus lourd/offload, latence acceptée et activation explicite ;
-3. **CLOUD_ESCALATION** : appel explicitement autorisé pour un motif déclaré.
+## Modes de routage
 
-Les fallbacks persistants OpenClaw restent locaux. L'escalade cloud est décidée par `clawlocal`, jamais par un fallback implicite dans la configuration de l'agent.
+1. **LOCAL_FAST** : parcours quotidien ;
+2. **LOCAL + WEB** : recherche/fetch Internet puis raisonnement local ;
+3. **LOCAL_DEEP** : modèle plus lourd/offload explicitement disponible ;
+4. **LOCAL_SPECIALIST** : modèle spécialisé explicitement qualifié ;
+5. **CLOUD_ESCALATION** : dernier niveau, sous motif, préconditions et budget.
+
+Le cloud n'apparaît pas dans les fallbacks persistants OpenClaw.
+
+## Découplage modèle / backend
+
+Un alias modèle et un backend d'inférence sont deux axes indépendants. Le projet doit pouvoir comparer Ollama/Vulkan et llama.cpp sans réécrire les huit rôles ni les politiques de projet.
 
 ## Contrôles de sécurité structurants
 
-- Ollama en loopback et API native ;
-- Gateway en mode local/loopback ;
+- endpoints locaux en loopback ;
 - filesystem borné au workspace ;
-- exec en mode `ask` lorsqu'il est autorisé ;
+- snapshots projet gérés explicitement ;
+- exec en mode `ask` ;
 - elevated désactivé ;
 - rôles de revue sans mutation/exec ;
+- recherche Web considérée comme entrée non fiable ;
 - cloud désactivé par défaut ;
-- secrets hors Git ;
-- aucune promotion automatique à partir de la CI.
+- budget cloud fail-closed ;
+- secrets hors Git et hors requêtes Web ;
+- aucune promotion automatique depuis la CI.
