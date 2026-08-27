@@ -29,6 +29,8 @@ jobs:
         run: python scripts/21_validate_repository.py
       - name: Validate configuration
         run: python scripts/22_validate_configs.py
+      - name: Validate V7 capability parity
+        run: python scripts/36_validate_v7_parity.py
       - name: Validate SemVer tag
         run: python scripts/24_validate_release.py --tag "${GITHUB_REF_NAME}"
       - name: Ruff
