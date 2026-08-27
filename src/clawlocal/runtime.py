@@ -16,7 +16,8 @@ def model_ref(model_alias: str) -> str:
         if provider == "ollama":
             return f"ollama/{model['runtime_id']}"
         raise ValueError(
-            f"Le modèle local {model_alias} utilise {provider}; import/qualification explicite requis"
+            f"Le modèle local {model_alias} utilise {provider}; "
+            "import/qualification explicite requis"
         )
 
     if model_alias in catalog["cloud_catalog"]:
