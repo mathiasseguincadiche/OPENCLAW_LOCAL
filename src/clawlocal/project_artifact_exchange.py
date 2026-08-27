@@ -45,21 +45,29 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _plan_dependencies(project: Path) -> dict[str, list[str]]:
+def _plan_tasks(project: Path) -> dict[str, dict[str, Any]]:
     plan = _load_json(project / "context" / "project_plan.json")
     tasks = plan.get("tasks", [])
     if not isinstance(tasks, list):
         raise ValueError("project_plan.json: tasks invalide")
-    dependencies: dict[str, list[str]] = {}
+    result: dict[str, dict[str, Any]] = {}
     for task in tasks:
         if not isinstance(task, dict):
             raise ValueError("project_plan.json: task invalide")
         task_id = str(task.get("id", "")).strip()
         values = task.get("depends_on", [])
-        if not task_id or not isinstance(values, list):
-            raise ValueError("project_plan.json: id/depends_on invalide")
-        dependencies[task_id] = [str(value) for value in values]
-    return dependencies
+        role = str(task.get("role", "")).strip()
+        if not task_id or not role or not isinstance(values, list):
+            raise ValueError("project_plan.json: id/role/depends_on invalide")
+        result[task_id] = task
+    return result
+
+
+def _plan_dependencies(project: Path) -> dict[str, list[str]]:
+    return {
+        task_id: [str(value) for value in task.get("depends_on", [])]
+        for task_id, task in _plan_tasks(project).items()
+    }
 
 
 def _dependent_tasks(
@@ -224,11 +232,7 @@ def publish_task_outputs(
         {
             "at": _now(),
             "producer_task_id": producer_task_id,
-            "consumer_task_id": (
-                None
-                if path.parent.name == "self"
-                else path.parents[2].name
-            ),
+            "consumer_task_id": None if path.parent.name == "self" else path.parents[2].name,
             "attempt": attempt,
             "status": normalized_status,
             "bundle": path.relative_to(project).as_posix(),
@@ -237,6 +241,30 @@ def publish_task_outputs(
     ]
     _append_index(project, index_records)
     return [path.relative_to(project).as_posix() for path in published]
+
+
+def affected_agents_after_publish(
+    project: Path,
+    producer_task_id: str,
+    *,
+    status: str,
+) -> list[str]:
+    tasks = _plan_tasks(project)
+    if producer_task_id not in tasks:
+        raise KeyError(f"artifact exchange: tâche inconnue: {producer_task_id}")
+    task_ids = {producer_task_id}
+    if status.strip().upper() == "PASS":
+        dependencies = _plan_dependencies(project)
+        transitive = bool(_policy().get("propagation", {}).get("transitive_dependents", True))
+        task_ids.update(
+            task_id
+            for task_id, _ in _dependent_tasks(
+                dependencies,
+                producer_task_id,
+                transitive=transitive,
+            )
+        )
+    return sorted({str(tasks[task_id]["role"]) for task_id in task_ids})
 
 
 def validate_exchange_bundle(project: Path, bundle: Path) -> list[str]:
@@ -277,4 +305,40 @@ def validate_exchange_for_task(project: Path, task_id: str) -> list[str]:
     failures: list[str] = []
     for manifest in sorted(root.rglob("manifest.json")):
         failures.extend(validate_exchange_bundle(project, manifest.parent))
+    return failures
+
+
+def validate_exchange_completeness(project: Path) -> list[str]:
+    assignments = _load_json(project / "context" / "task_assignments.json")
+    tasks = assignments.get("tasks", [])
+    if not isinstance(tasks, list):
+        raise ValueError("task_assignments.json: tasks invalide")
+    dependencies = _plan_dependencies(project)
+    transitive = bool(_policy().get("propagation", {}).get("transitive_dependents", True))
+    failures: list[str] = []
+
+    for raw in tasks:
+        if not isinstance(raw, dict):
+            failures.append("assignation invalide")
+            continue
+        task_id = str(raw.get("task_id", ""))
+        attempts = int(raw.get("attempts", 0))
+        status = str(raw.get("status", ""))
+        if attempts < 1:
+            continue
+        self_bundle = _bundle_path(project, task_id, None, attempts)
+        if not self_bundle.is_dir():
+            failures.append(f"self-history absent: {task_id} run-{attempts:03d}")
+        else:
+            failures.extend(validate_exchange_bundle(project, self_bundle))
+        if status != "PASS":
+            continue
+        for consumer, _ in _dependent_tasks(dependencies, task_id, transitive=transitive):
+            bundle = _bundle_path(project, task_id, consumer, attempts)
+            if not bundle.is_dir():
+                failures.append(
+                    f"propagation absente: {task_id} -> {consumer} run-{attempts:03d}"
+                )
+            else:
+                failures.extend(validate_exchange_bundle(project, bundle))
     return failures
