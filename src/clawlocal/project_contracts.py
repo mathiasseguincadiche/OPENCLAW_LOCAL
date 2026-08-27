@@ -230,8 +230,13 @@ def validate_task_contract(task: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"task contract: {field} doit être une liste de chaînes")
     for field in ("producer", "reviewer"):
         value = task.get(field)
-        if value is not None and not isinstance(value, str):
-            raise ValueError(f"task contract: {field} doit être une chaîne ou null")
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ValueError(f"task contract: {field} doit être une chaîne non vide ou null")
+    producer = task.get("producer")
+    reviewer = task.get("reviewer")
+    if isinstance(producer, str) and isinstance(reviewer, str):
+        if producer.strip() == reviewer.strip():
+            raise ValueError("task contract: producer et reviewer doivent être distincts")
     return task
 
 

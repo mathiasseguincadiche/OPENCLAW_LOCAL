@@ -12,9 +12,20 @@ Classifications : `public`, `internal`, `confidential`, `restricted`. Criticité
 
 La classification et la criticité ne sont plus décoratives. `restricted` interdit le cloud. `confidential` exige redaction et approbation humaine. Les projets `high` et `critical` renforcent les gates ; `critical` exige notamment une seconde revue indépendante et une approbation explicite avant cloud.
 
+## Gates de criticité exécutables
+
+Les gates sont persistées dans `context/governance/criticality_gates.json` et vérifiées par l'orchestrateur avant les transitions sensibles. Elles ne sont donc plus de simples métadonnées.
+
+- `standard` : preuve de travail puis audit indépendant avant `REVIEW` ;
+- `high` : audit indépendant + revue sécurité par `ingenieur-securite` + preuve de rollback avant `PACKAGING`, puis approbation humaine finale ;
+- `critical` : tous les gates `high` + seconde revue indépendante réalisée par un reviewer différent ;
+- `cloud_requires_human_approval` reste conditionnel : il ne bloque pas un projet qui ne consomme pas le cloud, mais tout appel cloud d'un projet `high/critical` exige déjà l'approbation humaine dans le routeur.
+
+La CLI `scripts/41_project_gates.py` permet d'afficher les gates manquants et d'enregistrer leurs preuves. L'orchestrateur enregistre automatiquement les preuves qu'il peut établir sans ambiguïté : tâches toutes `PASS`, audit de validation et approbation finale.
+
 ## Task Contract enrichi
 
-Chaque tâche peut porter : scope in/out, faits, hypothèses, inconnues, critères d'acceptation, preuves requises, producteur, reviewer et décisions humaines. Le plan est normalisé avant d'être accepté par l'orchestrateur.
+Chaque tâche peut porter : scope in/out, faits, hypothèses, inconnues, critères d'acceptation, preuves requises, producteur, reviewer et décisions humaines. Le plan est normalisé avant d'être accepté par l'orchestrateur. Lorsqu'un reviewer est déclaré, il doit être distinct du producteur.
 
 ## Intake et sources
 
@@ -46,9 +57,11 @@ La machine d'états de publication reste active, mais V7 Full Parity rétablit a
 
 Un état valide ne donne donc jamais implicitement l'autorisation d'exécuter une action sensible.
 
-## Migration non destructive
+## Migration non destructive et transactionnelle
 
 Les projets schema `1.1.0` sont migrables vers `2.0.0` avec backup préalable sous `.migrations/`, validation post-migration et ledger JSONL. La migration est idempotente : un projet déjà courant ne produit aucune étape.
+
+Si une étape échoue après avoir commencé à modifier le projet, le moteur restaure `project.json` ainsi que les contextes Learning/Governance sauvegardés, inscrit `ROLLED_BACK` dans le ledger et propage l'échec. Une migration ne peut donc plus laisser silencieusement un projet à moitié converti.
 
 ## Pilotage
 
@@ -68,6 +81,6 @@ Le contrat supply-chain exige versions bornées, lockfile avant release lorsque 
 
 ## Gate anti-régression
 
-`scripts/39_validate_v7_superset.py` vérifie la matrice de parité, les contrats critiques et le branchement effectif des CLI. Ce gate est destiné à la CI et à la release afin qu'une évolution future ne puisse pas supprimer silencieusement une qualité héritée de V7.
+`scripts/39_validate_v7_superset.py` vérifie la matrice de parité, les contrats critiques, les gates `high/critical`, la séparation producteur/reviewer, le rollback des migrations et le branchement effectif des CLI. Ce gate est exécuté en CI et dans le workflow Release afin qu'une évolution future ne puisse pas supprimer silencieusement une qualité héritée de V7.
 
 Cette parité est **fonctionnelle et contractuelle**. Elle ne remplace toujours pas la qualification réelle de la workstation, des modèles locaux, de l'Intel Arc B580, des ACL Windows sur la machine finale ou d'une publication GitHub/GitLab E2E.

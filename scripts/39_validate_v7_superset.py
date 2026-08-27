@@ -46,6 +46,21 @@ def main() -> int:
     if confidential.get("human_approval_required") is not True:
         failures.append("classification confidential doit exiger approbation humaine")
 
+    high_gates = set(schema.get("criticality_gates", {}).get("high", []))
+    if not {
+        "security_review_required",
+        "independent_audit_required",
+        "rollback_required_when_relevant",
+        "human_final_approval_required",
+    } <= high_gates:
+        failures.append("criticité high: gates exécutables incomplets")
+    critical_gates = set(schema.get("criticality_gates", {}).get("critical", []))
+    if not {
+        "second_independent_review_required",
+        "cloud_requires_human_approval",
+    } <= critical_gates:
+        failures.append("criticité critical: seconde revue/cloud approval absents")
+
     intake_security = intake.get("security", {})
     for key in (
         "scan_project_sources_before_copy",
@@ -149,6 +164,7 @@ def main() -> int:
         "src/clawlocal/project_orchestrator_superset.py",
         "scripts/37_project_migrate.py",
         "scripts/38_project_integrity.py",
+        "scripts/41_project_gates.py",
         "docs/V7_FULL_PARITY_SUPERSET.md",
     )
     for relative in required_files:
@@ -167,6 +183,27 @@ def main() -> int:
     if "assert_sensitive_action" not in publication_script:
         failures.append("publication CLI non branchée aux action gates")
 
+    governance_source = (ROOT / "src/clawlocal/project_governance.py").read_text(encoding="utf-8")
+    for marker in (
+        "record_criticality_gate",
+        "assert_transition_criticality_gates",
+        "second_independent_review_required",
+    ):
+        if marker not in governance_source:
+            failures.append(f"gates de criticité non exécutables: {marker}")
+    facade_source = (ROOT / "src/clawlocal/project_orchestrator_superset.py").read_text(
+        encoding="utf-8"
+    )
+    if "assert_transition_criticality_gates" not in facade_source:
+        failures.append("orchestrateur superset ne bloque pas sur les gates de criticité")
+    contract_source = (ROOT / "src/clawlocal/project_contracts.py").read_text(encoding="utf-8")
+    if "producer et reviewer doivent être distincts" not in contract_source:
+        failures.append("Task Contract: séparation producer/reviewer non exécutable")
+    migration_source = (ROOT / "src/clawlocal/project_migrations.py").read_text(encoding="utf-8")
+    for marker in ("_restore_backup", '"ROLLED_BACK"'):
+        if marker not in migration_source:
+            failures.append(f"migration transactionnelle absente: {marker}")
+
     if failures:
         for failure in failures:
             print(f"KO  {failure}")
@@ -174,7 +211,8 @@ def main() -> int:
         return 2
     print("OK  V7 Full Parity / Superset Gate")
     print(f"OK  {len(capabilities)} capacités V7 classées PRESERVED/IMPROVED/REPLACED")
-    print("OK  manifeste strict + classification/criticité + migrations")
+    print("OK  manifeste strict + classification/criticité + migrations transactionnelles")
+    print("OK  gates high/critical exécutables + séparation producer/reviewer")
     print("OK  Intake/sources + intégrité multi-phase")
     print("OK  pédagogie/accessibilité/publication/télémétrie/sécurité")
     print("Verdict: CONFORME")

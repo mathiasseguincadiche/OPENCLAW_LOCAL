@@ -5,7 +5,13 @@ from typing import Any
 
 from clawlocal import project_orchestrator as base
 from clawlocal.project_contracts import normalize_plan_payload, validate_project_manifest
-from clawlocal.project_governance import append_decision, append_risk
+from clawlocal.project_governance import (
+    append_decision,
+    append_risk,
+    assert_transition_criticality_gates,
+    record_criticality_gate,
+    required_criticality_gates,
+)
 from clawlocal.project_integrity import snapshot_integrity
 
 all_tasks_finished = base.all_tasks_finished
@@ -51,6 +57,39 @@ def store_plan(project: Path, payload: dict[str, Any]) -> Path:
     return base.store_plan(project, normalize_plan_payload(payload))
 
 
+def _record_automatic_gate_evidence(
+    project: Path,
+    target: str,
+    *,
+    actor: str,
+    human_approved: bool,
+) -> None:
+    required = required_criticality_gates(load_project_manifest(project))
+    if target == "VALIDATING" and "evidence_required" in required:
+        record_criticality_gate(
+            project,
+            "evidence_required",
+            actor=actor,
+            evidence="task_assignments: toutes les tâches sont PASS",
+        )
+    if target == "REVIEW" and "independent_audit_required" in required:
+        record_criticality_gate(
+            project,
+            "independent_audit_required",
+            actor=actor,
+            evidence="validation.json: verdict PASS avant REVIEW",
+        )
+    if target == "COMPLETE" and "human_final_approval_required" in required:
+        if human_approved:
+            record_criticality_gate(
+                project,
+                "human_final_approval_required",
+                actor="human",
+                evidence="approbation humaine finale avant COMPLETE",
+                human_approved=True,
+            )
+
+
 def transition_project(
     project: Path,
     target: str,
@@ -60,6 +99,14 @@ def transition_project(
     human_approved: bool = False,
 ) -> dict[str, Any]:
     validate_project_manifest(base.load_project_manifest(project))
+    base._assert_transition_gates(project, target, human_approved=human_approved)
+    _record_automatic_gate_evidence(
+        project,
+        target,
+        actor=actor,
+        human_approved=human_approved,
+    )
+    assert_transition_criticality_gates(project, target)
     result = base.transition_project(
         project,
         target,
