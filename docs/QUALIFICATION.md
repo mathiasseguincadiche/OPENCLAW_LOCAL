@@ -11,7 +11,7 @@ Cette procédure transforme les modèles/backends déclarés `candidate` en déc
 - aucune promotion automatique ;
 - résultats bruts conservés hors Git ;
 - modèles requis évalués séparément ;
-- LOCAL_DEEP et spécialistes optionnels tant qu'ils ne sont pas importés/validés ;
+- LOCAL_SPECIALIST, LOCAL_DEEP et LOCAL_MAX restent optionnels tant qu'ils ne sont pas installés/validés ;
 - toute dérive OpenClaw, backend ou pilote GPU invalide la réutilisation automatique d'une ancienne preuve.
 
 ## Préparation reproductible
@@ -24,7 +24,11 @@ Cette procédure transforme les modèles/backends déclarés `candidate` en déc
 .\menu.ps1 -Action verify
 ```
 
-Le téléchargement des modèles requis a lieu avant le protocole afin d'éviter une mutation réseau inattendue pendant les mesures.
+Le téléchargement des modèles requis a lieu avant le protocole afin d'éviter une mutation réseau inattendue pendant les mesures. Les candidats optionnels peuvent être préchargés séparément avec :
+
+```powershell
+.\scripts\windows\03_pull_models.ps1 -IncludeOptionalOllama
+```
 
 ## Gate OpenClaw E2E réel
 
@@ -44,7 +48,7 @@ Cette étape vérifie :
 
 La preuve E2E reste sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
 
-## Qualification automatique
+## Qualification automatique des modèles requis
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
@@ -63,19 +67,45 @@ Le parcours V0.2 enchaîne :
 
 Les preuves sont écrites dans `benchmarks/results/`.
 
-## LOCAL_DEEP
+## Qualification de la flotte performance août 2026
 
-Le candidat `qwen-deep` peut être ajouté explicitement :
+Les trois classes optionnelles peuvent être ajoutées séparément ou ensemble :
 
 ```powershell
+.\scripts\windows\07_run_qualification.ps1 -IncludeSpecialist
 .\scripts\windows\07_run_qualification.ps1 -IncludeDeep
+.\scripts\windows\07_run_qualification.ps1 -IncludeMax
+
+# Passe complète des candidats Ollama
+.\scripts\windows\07_run_qualification.ps1 `
+  -IncludeSpecialist `
+  -IncludeDeep `
+  -IncludeMax
+```
+
+Les alias sont sélectionnés depuis les contrats, pas hardcodés dans le runner :
+
+```text
+LOCAL_SPECIALIST -> devstral-devops -> devstral-small-2:24b
+LOCAL_DEEP       -> gemma-deep      -> gemma4:26b
+LOCAL_MAX        -> qwen-max        -> qwen3.8:27b
 ```
 
 Cette option n'implique aucune promotion. Elle sert uniquement à mesurer si le gain qualitatif justifie l'offload, la RAM et la latence supplémentaires.
 
-## Spécialiste DevOps
+## SERA
 
-SERA reste optionnel tant que son provider réel n'a pas été importé et qualifié. Le runner doit échouer explicitement plutôt que simuler sa disponibilité.
+SERA est conservé comme candidat historique mais reste hors routage actif. Son provider `custom_gguf` ne doit pas être simulé par le runner Ollama. Une réactivation future exigerait import du backend correspondant, benchmark séparé et revue explicite.
+
+## Activation après qualification
+
+Après validation réelle d'un candidat sur la workstation, l'état runtime local peut exposer les alias qualifiés :
+
+```powershell
+$env:OPENCLAW_LOCAL_QUALIFIED_MODELS = 'qwen-max,gemma-deep,devstral-devops'
+```
+
+Le routeur peut alors sélectionner automatiquement le meilleur tier préféré par rôle. Cette variable ne constitue pas elle-même une preuve : elle doit refléter une qualification déjà effectuée et revue.
 
 ## Comparaison des backends Intel Arc
 
