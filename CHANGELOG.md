@@ -31,7 +31,12 @@ Keep a Changelog et le versionnage suit SemVer.
 - **Artifact Exchange** versionné entre tâches : self-history par tentative, propagation des sorties `PASS` aux dépendants directs/transitifs, provenance et SHA-256 ;
 - resynchronisation ciblée des workspaces agents après chaque tentative afin que les consommateurs voient automatiquement les sorties amont ;
 - CLI `42_project_ingest.py` et `43_project_exchange.py` pour reconstruire/valider l'ingestion et auditer les échanges ;
-- validateur anti-régression `44_validate_document_flow.py`, exécuté par CI et Release.
+- validateur anti-régression `44_validate_document_flow.py`, exécuté par CI et Release ;
+- flotte locale performance août 2026 avec `devstral-small-2:24b` en LOCAL_SPECIALIST, `gemma4:26b` en LOCAL_DEEP et `qwen3.8:27b` en LOCAL_MAX ;
+- routage automatique vers le meilleur tier local qualifié via `OPENCLAW_LOCAL_QUALIFIED_MODELS`, avec fallback fail-safe vers les modèles fast requis ;
+- indépendance renforcée de l'Auditeur par séparation de famille Gemma/Qwen lorsqu'elle est praticable ;
+- benchmark séparé des classes LOCAL_SPECIALIST, LOCAL_DEEP et LOCAL_MAX et verdict individuel des candidats optionnels ;
+- validateur anti-régression `45_validate_model_fleet.py`, exécuté par CI et Release.
 
 ### Changed
 
@@ -46,7 +51,11 @@ Keep a Changelog et le versionnage suit SemVer.
 - le patch OpenClaw configure explicitement `imageModel`, `pdfModel`, `pdfMaxBytesMb` et `pdfMaxPages` sur les modèles locaux ;
 - l'analyse projet vérifie l'index d'ingestion et refuse une couverture documentaire incomplète ;
 - les phases de validation, revue, packaging et completion refusent de progresser lorsque l'Artifact Exchange attendu est absent ou altéré ;
-- les prompts contractuels des huit rôles distinguent désormais originaux, représentations dérivées et artefacts échangés en lecture seule.
+- les prompts contractuels des huit rôles distinguent désormais originaux, représentations dérivées et artefacts échangés en lecture seule ;
+- `qwen3.5:27b` n'est plus le candidat deep actif : `qwen3.8:27b` devient le candidat LOCAL_MAX généraliste ;
+- SERA reste conservé comme candidat historique mais sort du routage actif tant que son backend GGUF dédié n'est pas qualifié ;
+- le DevOps privilégie Devstral Small 2 après qualification, l'Architecte/Rédacteur/Auditeur Gemma 4 26B, et le Chef/Recherche/Sécurité Qwen3.8 27B ;
+- la qualification des candidats optionnels produit désormais un verdict par modèle sans casser le gate global des modèles fast requis.
 
 ### Security
 
@@ -58,7 +67,9 @@ Keep a Changelog et le versionnage suit SemVer.
 - les bundles d'échange sont hashés, versionnés et ne peuvent pas être modifiés silencieusement par les consommateurs ;
 - l'ingestion documentaire n'active aucun service cloud ;
 - la télémétrie refuse les contenus privés et les métriques négatives/fabriquées ;
-- les publications distantes restent soumises à approbation humaine et preuves observées.
+- les publications distantes restent soumises à approbation humaine et preuves observées ;
+- aucun modèle lourd optionnel ne devient automatiquement nominal sans qualification locale explicite ;
+- l'activation des tiers performance ne réactive jamais le cloud et ne contourne pas les gates FinOps/humains.
 
 ## [0.2.0] - 2026-08-27
 
