@@ -1,0 +1,46 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+enabled_by_default: true
+storage:
+  relative_path: state/telemetry/events.jsonl
+  commit_to_git: false
+  retention_days: 90
+privacy:
+  record_prompt_content: false
+  record_response_content: false
+  record_source_documents: false
+  record_secrets: false
+  project_id_allowed: true
+required_fields:
+  - timestamp
+  - event_type
+optional_fields:
+  - project_id
+  - task_id
+  - agent
+  - model
+  - backend
+  - route_kind
+  - ttft_ms
+  - duration_ms
+  - prompt_tokens
+  - generated_tokens
+  - tokens_per_second
+  - vram_mb
+  - ram_mb
+  - tool_calls
+  - retries
+  - local_to_deep_transition
+  - cloud_escalation
+  - cloud_cost_eur
+validation:
+  reject_negative_metrics: true
+  cloud_cost_requires_cloud_escalation: true
+  no_fabricated_hardware_metrics: true
+aggregation:
+  by_agent: true
+  by_model: true
+  by_backend: true
+  by_project: true
+  compare_local_vs_cloud: true
+  compare_fast_vs_deep: true
