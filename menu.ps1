@@ -28,7 +28,13 @@ function Show-Title {
     Write-Host ' Cloud   : escalade optionnelle, jamais fallback silencieux'
 }
 
-function Invoke-Action([string]$Name) {
+function Invoke-Action {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
+        [switch]$DryRunMode
+    )
+
     if ($Name -eq 'docs') {
         Write-Host (Join-Path $RepoRoot 'docs\README.md')
         return
@@ -45,7 +51,7 @@ function Invoke-Action([string]$Name) {
         throw "Script introuvable pour l'action '$Name' : $Script"
     }
 
-    & $Script -DryRun:$DryRun
+    & $Script -DryRun:$DryRunMode
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
         throw "Action '$Name' en échec (code $LASTEXITCODE)."
     }
@@ -53,7 +59,7 @@ function Invoke-Action([string]$Name) {
 
 if ($Action -ne 'menu') {
     Show-Title
-    Invoke-Action $Action
+    Invoke-Action -Name $Action -DryRunMode:$DryRun
     exit 0
 }
 
@@ -73,15 +79,15 @@ while ($true) {
 '@ | Write-Host
 
     switch (Read-Host 'Choix') {
-        '1' { Invoke-Action 'audit' }
-        '2' { Invoke-Action 'configure-local' }
-        '3' { Invoke-Action 'models' }
-        '4' { Invoke-Action 'verify' }
-        '5' { Invoke-Action 'benchmark' }
-        '6' { Invoke-Action 'inventory' }
-        '7' { Invoke-Action 'qualification' }
-        '8' { Invoke-Action 'team' }
-        '9' { Invoke-Action 'docs' }
+        '1' { Invoke-Action -Name 'audit' -DryRunMode:$DryRun }
+        '2' { Invoke-Action -Name 'configure-local' -DryRunMode:$DryRun }
+        '3' { Invoke-Action -Name 'models' -DryRunMode:$DryRun }
+        '4' { Invoke-Action -Name 'verify' -DryRunMode:$DryRun }
+        '5' { Invoke-Action -Name 'benchmark' -DryRunMode:$DryRun }
+        '6' { Invoke-Action -Name 'inventory' -DryRunMode:$DryRun }
+        '7' { Invoke-Action -Name 'qualification' -DryRunMode:$DryRun }
+        '8' { Invoke-Action -Name 'team' -DryRunMode:$DryRun }
+        '9' { Invoke-Action -Name 'docs' -DryRunMode:$DryRun }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }

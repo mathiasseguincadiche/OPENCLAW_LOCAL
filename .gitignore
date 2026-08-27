@@ -4,6 +4,9 @@
 !.env.example
 *.key
 *.pem
+*.p12
+*.pfx
+*.jks
 
 # Python
 __pycache__/
@@ -13,6 +16,8 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+dist/
+build/
 
 # Runtime local IA
 state/

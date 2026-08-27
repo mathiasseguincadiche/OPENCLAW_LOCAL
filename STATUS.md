@@ -24,6 +24,21 @@
 - orchestrateur PowerShell de qualification complète ;
 - tests unitaires du moteur d'évaluation.
 
+## Phase 2.5 — durcissement GitHub implémenté dans le dépôt
+
+- CI sur actions GitHub compatibles Node 24 ;
+- validation explicite de PowerShell 7 ;
+- PSScriptAnalyzer avec politique versionnée ;
+- tests Pester ciblés ;
+- CodeQL pour Python ;
+- Dependency Review sur les Pull Requests ;
+- validation SemVer entre `VERSION`, `pyproject.toml`, changelog et tag ;
+- workflow Release avec wheel, sdist et sommes SHA-256 ;
+- badges de qualité et de version ;
+- documentation de gouvernance GitHub, protection de `main` et métadonnées attendues.
+
+Les réglages administratifs GitHub eux-mêmes (ruleset/protection de `main`, description et topics) doivent être appliqués dans les paramètres du dépôt avec les valeurs documentées dans `docs/GITHUB_GOVERNANCE.md`.
+
 ## Candidat / à exécuter sur matériel réel
 
 - Qwen 3.5 9B comme généraliste local ;

@@ -1,5 +1,12 @@
 # OPENCLAW_LOCAL
 
+[![CI](https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL/actions/workflows/ci.yml/badge.svg)](https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL/actions/workflows/codeql.yml/badge.svg)](https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL/actions/workflows/codeql.yml)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](VERSION)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PowerShell 7](https://img.shields.io/badge/PowerShell-7%2B-blue.svg)](https://learn.microsoft.com/powershell/)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](pyproject.toml)
+
 Plateforme IA **local-first, multi-agents et multi-modèles** pour Windows 11 Pro x64.
 
 Le principe est simple : **le local absorbe le volume de travail ; le cloud devient une escalade explicite** pour les cas qui exigent recherche fraîche, contexte très large, arbitrage de haut niveau ou contrôle indépendant renforcé.
@@ -106,15 +113,29 @@ La version actuelle est un **socle de production contrôlé avec outillage de qu
 - [Opérations](docs/OPERATIONS.md)
 - [Sécurité](docs/SECURITY.md)
 - [Benchmark](docs/BENCHMARK.md)
+- [Gouvernance GitHub](docs/GITHUB_GOVERNANCE.md)
 
-## Qualité
+## Qualité et sécurité
+
+La CI vérifie Python **et** PowerShell 7. Le code Python passe les validateurs, Ruff, Pytest et CodeQL ; les scripts Windows passent le parseur PowerShell, PSScriptAnalyzer et Pester. Les changements de dépendances sont contrôlés par Dependency Review.
 
 ```powershell
 python scripts/21_validate_repository.py
 python scripts/22_validate_configs.py
+python scripts/24_validate_release.py
 ruff check src tests scripts
 pytest -q
+
+Invoke-ScriptAnalyzer -Path .\scripts\windows -Recurse `
+  -Settings .\.github\powershell\PSScriptAnalyzerSettings.psd1
+Invoke-Pester -Path .\tests\powershell -CI
 ```
+
+## Releases
+
+Le versionnage suit SemVer. `VERSION`, `pyproject.toml` et `CHANGELOG.md` doivent rester cohérents. Un tag `v<VERSION>` déclenche le workflow `Release`, qui revalide le dépôt avant de publier les artefacts Python et leurs sommes SHA-256.
+
+La version `1.0.0` reste réservée à un parcours local réellement qualifié sur la workstation cible.
 
 ## Licence
 

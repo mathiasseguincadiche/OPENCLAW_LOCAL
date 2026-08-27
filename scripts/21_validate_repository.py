@@ -13,7 +13,11 @@ REQUIRED = {
     "SECURITY.md",
     "pyproject.toml",
     "menu.ps1",
+    ".github/powershell/PSScriptAnalyzerSettings.psd1",
     ".github/workflows/ci.yml",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/dependency-review.yml",
+    ".github/workflows/release.yml",
     "config/v1/platform.yaml",
     "config/v1/model_catalog.yaml",
     "config/v1/model_routing.yaml",
@@ -28,8 +32,10 @@ REQUIRED = {
     "docs/ROUTAGE_HYBRIDE.md",
     "docs/BENCHMARK.md",
     "docs/QUALIFICATION.md",
+    "docs/GITHUB_GOVERNANCE.md",
     "scripts/benchmark_local.py",
     "scripts/23_evaluate_benchmark.py",
+    "scripts/24_validate_release.py",
     "scripts/windows/01_audit_host.ps1",
     "scripts/windows/02_configure_local.ps1",
     "scripts/windows/03_pull_models.ps1",
@@ -37,9 +43,20 @@ REQUIRED = {
     "scripts/windows/05_benchmark.ps1",
     "scripts/windows/06_collect_inventory.ps1",
     "scripts/windows/07_run_qualification.ps1",
+    "src/clawlocal/versioning.py",
+    "tests/test_versioning.py",
+    "tests/powershell/Repository.Tests.ps1",
 }
 
-FORBIDDEN_SUFFIXES = {".gguf", ".safetensors", ".key", ".pem"}
+FORBIDDEN_SUFFIXES = {
+    ".gguf",
+    ".safetensors",
+    ".key",
+    ".pem",
+    ".p12",
+    ".pfx",
+    ".jks",
+}
 AGENTS = {
     "chef-operations",
     "expert-recherche",
