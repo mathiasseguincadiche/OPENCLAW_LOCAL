@@ -17,15 +17,35 @@ def test_local_route_is_default_and_command_targets_agent() -> None:
     assert decision.route_kind == "local_primary"
     assert resolved == "ollama/qwen3.5:9b"
     command = build_openclaw_agent_command(decision, resolved, "diagnostic")
-    assert command[:5] == ["openclaw", "agent", "--agent", "ingenieur-devops", "--model"]
+    assert command[:5] == [
+        "openclaw",
+        "agent",
+        "--agent",
+        "ingenieur-devops",
+        "--model",
+    ]
     assert command[5] == "ollama/qwen3.5:9b"
     assert command[-1] == "--json"
 
 
 def test_cloud_route_requires_enable_budget_reason_and_precondition() -> None:
     with pytest.raises(PermissionError):
-        route_request("expert-recherche", request_cloud=True, reason="deep_web_research", cloud_enabled=False, budget_ok=True, local_web_attempted=True)
-    decision, resolved = route_request("expert-recherche", request_cloud=True, reason="deep_web_research", cloud_enabled=True, budget_ok=True, local_web_attempted=True)
+        route_request(
+            "expert-recherche",
+            request_cloud=True,
+            reason="deep_web_research",
+            cloud_enabled=False,
+            budget_ok=True,
+            local_web_attempted=True,
+        )
+    decision, resolved = route_request(
+        "expert-recherche",
+        request_cloud=True,
+        reason="deep_web_research",
+        cloud_enabled=True,
+        budget_ok=True,
+        local_web_attempted=True,
+    )
     assert decision.route_kind == "cloud_escalation"
     assert resolved == "openrouter/perplexity/sonar-pro-search"
 
