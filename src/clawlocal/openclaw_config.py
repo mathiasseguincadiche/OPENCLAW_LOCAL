@@ -55,6 +55,7 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
     gemma = catalog["models"]["gemma-review"]["runtime_id"]
 
     return {
+        "gateway": {"mode": "local", "bind": "loopback"},
         "models": {
             "providers": {
                 "ollama": {
