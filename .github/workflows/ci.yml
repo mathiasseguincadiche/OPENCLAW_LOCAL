@@ -97,10 +97,17 @@ jobs:
               [ref]$null,
               [ref]$parseErrors
             )
-            $allErrors += @($parseErrors)
+            foreach ($parseError in @($parseErrors)) {
+              $allErrors += [pscustomobject]@{
+                File = $_.FullName
+                ErrorId = $parseError.ErrorId
+                Message = $parseError.Message
+                Extent = $parseError.Extent.Text
+              }
+            }
           }
           if ($allErrors) {
-            $allErrors | Format-List
+            $allErrors | Format-Table -AutoSize -Wrap
             throw "Erreurs de parsing PowerShell: $($allErrors.Count)"
           }
       - name: PSScriptAnalyzer
