@@ -14,8 +14,8 @@ from clawlocal.project_governance import (
     cloud_policy_for_project,
     required_criticality_gates,
 )
-from clawlocal.project_integrity import snapshot_integrity, verify_integrity_snapshot
 from clawlocal.project_intake import create_project
+from clawlocal.project_integrity import snapshot_integrity, verify_integrity_snapshot
 from clawlocal.project_learning import (
     add_learning_objective,
     record_learning_evidence,
@@ -95,13 +95,19 @@ def test_sources_are_secret_scanned_and_inventoried(tmp_path: Path) -> None:
 
 
 def test_integrity_snapshot_detects_mutation(tmp_path: Path) -> None:
-    project = create_project(tmp_path / "platform", "integrity-demo", "Integrity Demo")
+    project = create_project(
+        tmp_path / "platform",
+        "integrity-demo",
+        "Integrity Demo",
+    )
     file = project / "deliverables" / "result.txt"
     file.write_text("v1", encoding="utf-8")
     snapshot = snapshot_integrity(project, "DELIVERY", roots=["deliverables"])
     assert verify_integrity_snapshot(project, snapshot) == []
     file.write_text("v2", encoding="utf-8")
-    assert verify_integrity_snapshot(project, snapshot) == ["modifié: deliverables/result.txt"]
+    assert verify_integrity_snapshot(project, snapshot) == [
+        "modifié: deliverables/result.txt"
+    ]
 
 
 def test_classification_and_action_gates() -> None:
@@ -132,8 +138,16 @@ def test_classification_and_action_gates() -> None:
 
 
 def test_learning_contract_has_distinct_verdict(tmp_path: Path) -> None:
-    project = create_project(tmp_path / "platform", "learning-contract", "Learning")
-    add_learning_objective(project, objective="Expliquer Terraform plan", skill="terraform")
+    project = create_project(
+        tmp_path / "platform",
+        "learning-contract",
+        "Learning",
+    )
+    add_learning_objective(
+        project,
+        objective="Expliquer Terraform plan",
+        skill="terraform",
+    )
     record_learning_evidence(project, evidence="terraform plan interprété")
     set_learning_verdict(project, "ACQUIS_AVEC_RESERVES")
     contract = json.loads(
@@ -146,8 +160,14 @@ def test_learning_contract_has_distinct_verdict(tmp_path: Path) -> None:
     assert contract["target_skills"] == ["terraform"]
 
 
-def test_legacy_project_migration_is_backed_up_and_idempotent(tmp_path: Path) -> None:
-    project = create_project(tmp_path / "platform", "migration-demo", "Migration")
+def test_legacy_project_migration_is_backed_up_and_idempotent(
+    tmp_path: Path,
+) -> None:
+    project = create_project(
+        tmp_path / "platform",
+        "migration-demo",
+        "Migration",
+    )
     manifest_path = project / "project.json"
     current = json.loads(manifest_path.read_text(encoding="utf-8"))
     legacy = {
@@ -166,14 +186,18 @@ def test_legacy_project_migration_is_backed_up_and_idempotent(tmp_path: Path) ->
     assert apply_project_migrations(project) == ["1.1.0->2.0.0"]
     assert apply_project_migrations(project) == []
     assert (project / ".migrations" / "ledger.jsonl").is_file()
-    assert json.loads(manifest_path.read_text(encoding="utf-8"))["schema_version"] == "2.0.0"
+    migrated = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert migrated["schema_version"] == "2.0.0"
 
 
 def test_support_bundle_redacts_and_excludes_private_inputs(tmp_path: Path) -> None:
     project = create_project(tmp_path / "platform", "support-demo", "Support")
     evidence = project / "evidence" / "orchestration"
     evidence.mkdir(parents=True)
-    (evidence / "log.txt").write_text("api_key=supersecretvalue", encoding="utf-8")
+    (evidence / "log.txt").write_text(
+        "api_key=supersecretvalue",
+        encoding="utf-8",
+    )
     output = tmp_path / "support.zip"
     build_support_bundle(project, output)
     with zipfile.ZipFile(output) as archive:
@@ -186,7 +210,11 @@ def test_support_bundle_redacts_and_excludes_private_inputs(tmp_path: Path) -> N
 
 
 def test_automatic_telemetry_records_observed_only(tmp_path: Path) -> None:
-    project = create_project(tmp_path / "platform", "telemetry-auto", "Telemetry")
+    project = create_project(
+        tmp_path / "platform",
+        "telemetry-auto",
+        "Telemetry",
+    )
     with automatic_run_telemetry(
         project,
         project_id="telemetry-auto",

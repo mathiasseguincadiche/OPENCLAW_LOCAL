@@ -63,7 +63,15 @@ def snapshot_integrity(
     normalized = phase.strip().upper()
     if not _PHASE_RE.fullmatch(normalized):
         raise ValueError(f"phase d'intégrité invalide: {phase}")
-    scope = roots or ["project.json", "intake", "sources", "context", "work", "deliverables", "diagrams"]
+    scope = roots or [
+        "project.json",
+        "intake",
+        "sources",
+        "context",
+        "work",
+        "deliverables",
+        "diagrams",
+    ]
     records: list[dict[str, Any]] = []
     aggregate = hashlib.sha256()
     for path in _iter_scope_files(project, scope):
@@ -83,7 +91,10 @@ def snapshot_integrity(
     }
     target = project / "evidence" / "integrity" / f"{_stamp()}-{normalized}.json"
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    target.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return target
 
 
@@ -116,5 +127,7 @@ def latest_integrity_snapshot(project: Path, phase: str | None = None) -> Path |
     if not root.is_dir():
         return None
     suffix = f"-{phase.strip().upper()}.json" if phase else ".json"
-    candidates = sorted(path for path in root.glob("*.json") if path.name.endswith(suffix))
+    candidates = sorted(
+        path for path in root.glob("*.json") if path.name.endswith(suffix)
+    )
     return candidates[-1] if candidates else None

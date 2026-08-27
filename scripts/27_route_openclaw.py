@@ -35,7 +35,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--agent", required=True)
     parser.add_argument("--message", required=True)
-    parser.add_argument("--cloud", action="store_true", help="Demande une escalade cloud explicite.")
+    parser.add_argument(
+        "--cloud",
+        action="store_true",
+        help="Demande une escalade cloud explicite.",
+    )
     parser.add_argument("--reason", help="Motif versionné dans escalation_policy.yaml.")
     parser.add_argument("--specialist-available", action="store_true")
     parser.add_argument("--deep-local-available", action="store_true")
@@ -115,7 +119,9 @@ def main() -> int:
     if not args.execute:
         print(json.dumps(evidence, indent=2, ensure_ascii=False))
         return 0
-    if decision.route_kind == "cloud_escalation" and not os.environ.get("OPENROUTER_API_KEY"):
+    if decision.route_kind == "cloud_escalation" and not os.environ.get(
+        "OPENROUTER_API_KEY"
+    ):
         raise RuntimeError("OPENROUTER_API_KEY absent: escalade cloud refusée.")
 
     observed: dict[str, Any]

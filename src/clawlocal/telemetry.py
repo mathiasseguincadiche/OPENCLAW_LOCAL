@@ -2,14 +2,22 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from clawlocal.config import load_contract
 
-_REQUIRED = {"project_id", "agent", "model", "backend", "route_kind", "duration_ms"}
+_REQUIRED = {
+    "project_id",
+    "agent",
+    "model",
+    "backend",
+    "route_kind",
+    "duration_ms",
+}
 _NUMERIC_NONNEGATIVE = {
     "duration_ms",
     "ttft_ms",
@@ -22,7 +30,15 @@ _NUMERIC_NONNEGATIVE = {
     "retries",
     "cloud_cost_eur",
 }
-_FORBIDDEN_KEYS = {"prompt", "response", "content", "document", "secret", "api_key", "token_value"}
+_FORBIDDEN_KEYS = {
+    "prompt",
+    "response",
+    "content",
+    "document",
+    "secret",
+    "api_key",
+    "token_value",
+}
 
 
 def _now() -> str:
@@ -31,7 +47,10 @@ def _now() -> str:
 
 def telemetry_path(project: Path) -> Path:
     policy = load_contract("telemetry_policy.yaml")
-    relative = policy.get("storage", {}).get("relative_path", "evidence/telemetry/runs.jsonl")
+    relative = policy.get("storage", {}).get(
+        "relative_path",
+        "evidence/telemetry/runs.jsonl",
+    )
     return project / str(relative)
 
 
@@ -41,7 +60,9 @@ def _validate_measurement(payload: dict[str, Any]) -> None:
         raise ValueError("télémétrie incomplète: " + ", ".join(missing))
     forbidden = sorted(_FORBIDDEN_KEYS & set(payload))
     if forbidden:
-        raise ValueError("champs sensibles interdits en télémétrie: " + ", ".join(forbidden))
+        raise ValueError(
+            "champs sensibles interdits en télémétrie: " + ", ".join(forbidden)
+        )
     for key in _NUMERIC_NONNEGATIVE:
         value = payload.get(key)
         if value is None:
@@ -68,7 +89,11 @@ def append_telemetry(project: Path, measurement: dict[str, Any]) -> Path:
 def _find_numeric(value: Any, names: set[str]) -> float | int | None:
     if isinstance(value, dict):
         for key, child in value.items():
-            if key in names and isinstance(child, (int, float)) and not isinstance(child, bool):
+            if (
+                key in names
+                and isinstance(child, (int, float))
+                and not isinstance(child, bool)
+            ):
                 return child
         for child in value.values():
             found = _find_numeric(child, names)
@@ -87,7 +112,11 @@ def extract_observed_metrics(value: Any) -> dict[str, Any]:
         "ttft_ms": {"ttft_ms", "time_to_first_token_ms"},
         "tokens_per_second": {"tokens_per_second", "tps"},
         "prompt_tokens": {"prompt_tokens", "input_tokens"},
-        "generated_tokens": {"generated_tokens", "output_tokens", "completion_tokens"},
+        "generated_tokens": {
+            "generated_tokens",
+            "output_tokens",
+            "completion_tokens",
+        },
         "vram_mb": {"vram_mb"},
         "ram_mb": {"ram_mb"},
         "retries": {"retries", "retry_count"},
@@ -179,7 +208,9 @@ def summarize_telemetry(project: Path) -> dict[str, Any]:
         "duration_ms_total": sum(durations),
         "generated_tokens_total": sum(generated),
         "cloud_cost_eur_total": round(sum(cloud_costs), 6),
-        "cloud_escalations": sum(1 for row in rows if row.get("cloud_escalation") is True),
+        "cloud_escalations": sum(
+            1 for row in rows if row.get("cloud_escalation") is True
+        ),
         "local_to_deep_transitions": sum(
             1 for row in rows if row.get("local_to_deep_transition") is True
         ),

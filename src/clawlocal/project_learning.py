@@ -54,7 +54,10 @@ def _read_contract(project: Path) -> dict[str, Any]:
 
 def _write_contract(project: Path, payload: dict[str, Any]) -> Path:
     path = _contract_path(project)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return path
 
 
@@ -64,7 +67,10 @@ def set_learning_profile(project: Path, *, profile: str, mode: str) -> Path:
         raise FileNotFoundError(root)
     payload = _profile_payload(profile, mode)
     path = root / "learning_profile.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     contract = _read_contract(project)
     contract["profile"] = profile
     contract["mode"] = mode
@@ -146,9 +152,9 @@ def initialize_learning(
         )
     profile_path = root / "learning_profile.json"
     if not preserve_existing or not profile_path.exists():
+        profile_payload = _profile_payload(selected_profile, selected_mode)
         profile_path.write_text(
-            json.dumps(_profile_payload(selected_profile, selected_mode), ensure_ascii=False, indent=2)
-            + "\n",
+            json.dumps(profile_payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
 
@@ -170,7 +176,12 @@ def initialize_learning(
         )
 
 
-def add_learning_objective(project: Path, *, objective: str, skill: str | None = None) -> None:
+def add_learning_objective(
+    project: Path,
+    *,
+    objective: str,
+    skill: str | None = None,
+) -> None:
     contract = _read_contract(project)
     objectives = contract.setdefault("objectives", [])
     if objective not in objectives:
@@ -251,7 +262,12 @@ def update_skill(
     updated = False
     for row in rows:
         if row.get("skill") == skill:
-            row.update(status=status, evidence=evidence, last_review=now, next_review=next_review)
+            row.update(
+                status=status,
+                evidence=evidence,
+                last_review=now,
+                next_review=next_review,
+            )
             updated = True
             break
     if not updated:
