@@ -1,21 +1,53 @@
 {
-  // Exemple : à adapter au runtime OpenClaw réellement installé.
+  // Exemple lisible uniquement. La source de vérité exécutable est générée par
+  // scripts/26_render_openclaw_config.py à partir de config/v1/* et agents/*.
+  // N'ajoutez jamais de clé OpenRouter ou de token Gateway dans ce fichier.
+  gateway: {
+    mode: "local",
+    bind: "loopback",
+  },
   models: {
-    mode: "merge",
     providers: {
       ollama: {
         baseUrl: "http://127.0.0.1:11434",
         apiKey: "ollama-local",
         api: "ollama",
         timeoutSeconds: 300,
+        models: [
+          {
+            id: "qwen3.5:9b",
+            name: "qwen3.5:9b",
+            input: ["text"],
+            contextTokens: 16384,
+            params: { num_ctx: 16384, keep_alive: "15m" },
+          },
+          {
+            id: "gemma4",
+            name: "gemma4",
+            input: ["text"],
+            contextTokens: 16384,
+            params: { num_ctx: 16384, keep_alive: "15m" },
+          },
+        ],
       },
     },
   },
   agents: {
+    ownership: "explicit",
     defaults: {
+      skipBootstrap: true,
       model: {
         primary: "ollama/qwen3.5:9b",
+        fallbacks: ["ollama/gemma4"],
       },
     },
+    // Le renderer crée huit entrées complètes avec workspace et politique outils.
+    entries: {},
+  },
+  tools: {
+    profile: "coding",
+    fs: { workspaceOnly: true },
+    exec: { mode: "ask", applyPatch: { workspaceOnly: true } },
+    elevated: { enabled: false },
   },
 }
