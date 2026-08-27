@@ -126,16 +126,17 @@ def main() -> int:
     )
     if not {"write", "edit", "apply_patch"} <= security_tools:
         failures.append("ingénieur sécurité doit rester read-only sur les sources")
-    architect_denies = set(
-        tools.get("agents", {}).get("architecte-solutions", {}).get("deny", [])
-    )
-    if {"write", "edit", "apply_patch"} & architect_denies:
-        failures.append("architecte doit pouvoir produire ADR et schémas")
-    architect_scope = set(
-        tools.get("agents", {}).get("architecte-solutions", {}).get("write_scope", [])
-    )
-    if architect_scope != {"context", "diagrams"}:
-        failures.append("architecte: write_scope doit rester context/diagrams")
+
+    architect = tools.get("agents", {}).get("architecte-solutions", {})
+    architect_denies = set(architect.get("deny", []))
+    if not {"write", "edit", "apply_patch", "exec", "process"} <= architect_denies:
+        failures.append("architecte: les écritures génériques doivent rester interdites")
+    if architect.get("artifact_writer") != "architecture_scoped":
+        failures.append("architecte: writer d'artefacts contrôlé requis")
+    architect_scope = set(architect.get("write_scope", []))
+    if architect_scope != {"context/architecture", "diagrams"}:
+        failures.append("architecte: scope doit rester architecture/diagrams")
+
     security_forbidden = set(
         roles.get("roles", {}).get("ingenieur-securite", {}).get("forbidden", [])
     )
@@ -204,7 +205,7 @@ def main() -> int:
     print("OK  pédagogie efficient/balanced/intensive")
     print("OK  documentation progressive en quatre profondeurs")
     print("OK  publication projet gouvernée par machine d'états")
-    print("OK  permissions architecte/sécurité alignées")
+    print("OK  architecte writer borné + sécurité read-only")
     print("OK  télémétrie locale privacy-safe")
     print("Verdict: CONFORME")
     return 0
