@@ -19,11 +19,11 @@ Voir [Filiation V7 / Parity Plus](docs/V7_PARITY_PLUS.md).
 
 ```text
 Projet utilisateur
-(consignes / sources / livrables)
+(PDF / images / Office / code / sources / livrables)
            |
            v
- Project Intake durci
- secrets/symlinks/SHA-256/MIME/ACL
+ Project Intake durci + Document Ingestion
+ secrets/symlinks/SHA-256/MIME/ACL/source_coverage
            |
            v
    Project Orchestrator
@@ -33,39 +33,36 @@ Projet utilisateur
      |                    -> VALIDATE -> REVIEW -> PACKAGE       |
      +----------------------------------------------------------+
            |
-     +-----+----------------------+-------------------+
-     |                            |                   |
-     v                            v                   v
- apprentissage             documentation        publication
- efficient/balanced/       progressive          gouvernée
- intensive                  4 profondeurs        GitHub/GitLab
+     Artifact Exchange versionné entre tâches dépendantes
            |
            v
  OpenClaw / Gateway loopback
            |
      8 rôles spécialisés
            |
-   +-------+----------------------+------------------+
-   |                              |                  |
-   v                              v                  v
-LOCAL_FAST                  LOCAL + WEB        LOCAL_DEEP
-Qwen 3.5 9B                web_search/fetch   Qwen 3.5 27B (*)
-Gemma 4 12B                browser recherche  SERA 14B (*)
-   |                              |                  |
-   +------------------------------+------------------+
-                                  |
-                            insuffisant ?
-                           non /        \ oui
-                              v          v
-                         livrables   OpenRouter
-                                      sous politique
-                                      + budget FinOps
-                                  |
-                                  v
-                       télémétrie locale / preuves
+     +-----+------------------+----------------+----------------+
+     |                        |                |                |
+     v                        v                v                v
+ LOCAL_FAST             LOCAL_SPECIALIST  LOCAL_DEEP       LOCAL_MAX
+ Qwen 3.5 9B            Devstral 24B (*)  Gemma 4 26B (*) Qwen 3.8 27B (*)
+ Gemma 4 12B                 |                |                |
+     |                       +----------------+----------------+
+     |                                        |
+     +---------------- LOCAL + WEB -----------+
+                      web_search/fetch
+                              |
+                        insuffisant ?
+                       non /        \ oui démontré
+                          v          v
+                     livrables   OpenRouter
+                                  sous politique
+                                  + budget FinOps
+                              |
+                              v
+                   télémétrie locale / preuves
 ```
 
-`(*)` Les modèles `LOCAL_DEEP` sont des **candidats**. Ils ne deviennent actifs qu'après import/backend et qualification réelle.
+`(*)` Les modèles LOCAL_SPECIALIST/LOCAL_DEEP/LOCAL_MAX sont des **candidats optionnels**. Ils deviennent automatiquement sélectionnables par leur rôle uniquement après qualification réelle de la combinaison modèle + backend + workstation. Sans qualification, le routeur revient au modèle LOCAL_FAST requis ; il ne bascule jamais automatiquement vers le cloud.
 
 ## Principes de conception
 
@@ -80,7 +77,7 @@ Gemma 4 12B                browser recherche  SERA 14B (*)
 - **Cloud-on-demand** : activation, motif autorisé, préconditions, budget et éventuellement validation humaine.
 - **Fail closed** : aucun fallback cloud silencieux, aucune promotion automatique de modèle/backend.
 - **Huit rôles distincts** : orchestration, recherche, architecture, DevOps, sécurité, release, documentation, audit.
-- **Séparation producteur/auditeur** lorsque cela est praticable.
+- **Séparation producteur/auditeur** lorsque cela est praticable, avec changement de famille de modèle lorsque le producteur et le reviewer seraient sinon identiques.
 - **Architecture bornée** : l'Architecte produit ADR/schémas via un writer spécialisé, sans droits d'écriture génériques.
 - **Sécurité read-only** : l'Ingénieur sécurité audite et propose ; il ne corrige pas directement les sources.
 - **Pédagogie utile** : efficient/balanced/intensive sans bloquer la livraison.
@@ -119,16 +116,26 @@ COMPLETE
 
 Les retours `VALIDATING -> IN_PROGRESS` et `REVIEW -> IN_PROGRESS` sont utilisés lorsque des corrections sont nécessaires. Les tâches concernées et leurs dépendants transitifs sont rouverts sans effacer les tentatives précédentes.
 
-## Modèles candidats V0.2
+## Flotte modèles — août 2026
 
 | Alias | Runtime | Classe | Usage |
 |---|---|---|---|
-| `qwen-general` | `qwen3.5:9b` | LOCAL_FAST | généraliste, orchestration, DevOps courant |
-| `gemma-review` | `gemma4:12b` | LOCAL_FAST | rédaction, architecture, revue |
-| `qwen-deep` | `qwen3.5:27b` | LOCAL_DEEP | raisonnement plus lourd, optionnel |
-| `sera-devops` | `sera-14b` | LOCAL_DEEP | software engineering/DevOps spécialisé, import séparé |
+| `qwen-general` | `qwen3.5:9b` | LOCAL_FAST | généraliste rapide, orchestration et DevOps courant |
+| `gemma-review` | `gemma4:12b` | LOCAL_FAST | rédaction, architecture et revue rapide |
+| `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST | DevOps/code agentique après qualification |
+| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP | architecture, rédaction et audit complexes après qualification |
+| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX | raisonnement/orchestration/investigation maximale après qualification |
+| `sera-devops` | `sera-14b` | LEGACY_CANDIDATE | candidat historique hors routage actif |
 
-Le catalogue `config/v1/model_catalog.yaml` est la source de vérité. Les scripts Windows lisent le catalogue au lieu de recopier les identifiants de modèles.
+Le catalogue `config/v1/model_catalog.yaml` est la source de vérité. Les scripts Windows lisent le catalogue au lieu de recopier les identifiants de modèles. Les gros candidats sont évalués séparément et n'affectent pas artificiellement le gate global des deux modèles fast requis.
+
+Après qualification réelle, l'état runtime local expose uniquement les alias approuvés :
+
+```powershell
+$env:OPENCLAW_LOCAL_QUALIFIED_MODELS = 'qwen-max,gemma-deep,devstral-devops'
+```
+
+Cette variable reflète une qualification déjà produite ; elle n'est pas une preuve à elle seule.
 
 ## Backends locaux
 
@@ -152,6 +159,16 @@ Prérequis utilisateur : **Windows 11 Pro x64, PowerShell 7 et WinGet**.
 .\menu.ps1 -Action e2e
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
+```
+
+Pour mesurer la flotte performance optionnelle une fois les modèles téléchargés :
+
+```powershell
+.\scripts\windows\03_pull_models.ps1 -IncludeOptionalOllama
+.\scripts\windows\07_run_qualification.ps1 `
+  -IncludeSpecialist `
+  -IncludeDeep `
+  -IncludeMax
 ```
 
 ## Prendre en charge un projet
@@ -363,6 +380,8 @@ python .\scripts\27_route_openclaw.py `
   --message 'Analyse ce problème Kubernetes.'
 ```
 
+Si `devstral-devops` a été réellement qualifié et déclaré dans `OPENCLAW_LOCAL_QUALIFIED_MODELS`, cette route privilégie automatiquement le spécialiste DevOps ; sinon elle reste sur `qwen-general`.
+
 Escalade de recherche après tentative Web locale :
 
 ```powershell
@@ -395,7 +414,7 @@ Voir [FinOps](docs/FINOPS.md).
 
 La suite active est **`devops-v2`**. Elle couvre notamment analyse de projet, GitLab CI, Kubernetes, Terraform multi-fichiers, Ansible, sécurité, documentation, diagrammes, Web, discipline agentique et contexte long.
 
-Un gate automatique réussi signifie au mieux `READY_FOR_MANUAL_QUALIFICATION`. La promotion exige toujours E2E OpenClaw, stabilité, qualification matérielle B580 et revue humaine.
+Un gate automatique réussi signifie au mieux `READY_FOR_MANUAL_QUALIFICATION`. Les modèles LOCAL_SPECIALIST/LOCAL_DEEP/LOCAL_MAX reçoivent leur propre verdict de benchmark et leur échec ne transforme pas artificiellement les modèles fast requis en échec. La promotion exige toujours E2E OpenClaw, stabilité, qualification matérielle B580 et revue humaine.
 
 ## Qualité et sécurité
 
@@ -406,6 +425,9 @@ Python 3.12 + 3.13
 validate_repository
 validate_configs
 validate_v7_parity
+validate_v7_superset
+validate_document_flow
+validate_model_fleet
 validate_release
 Ruff
 mypy
@@ -417,7 +439,7 @@ CodeQL
 Dependency Review / pip-audit fallback
 ```
 
-Les validateurs vérifient notamment Project Intake / Project Orchestrator, machine d'états, gates humains, Web local-first, FinOps, backends, tags explicites des modèles Ollama, absence de modèles recopiés en dur, Intake immuable, pédagogie, accessibilité, publication, télémétrie et séparation Architecte/Sécurité.
+Les validateurs vérifient notamment Project Intake / Project Orchestrator, machine d'états, gates humains, Web local-first, FinOps, backends, tags explicites des modèles Ollama, flotte août 2026, qualification obligatoire des gros candidats, absence de modèles recopiés en dur, Intake immuable, pédagogie, accessibilité, publication, télémétrie et séparation Architecte/Sécurité/Auditeur.
 
 ## Documentation
 
