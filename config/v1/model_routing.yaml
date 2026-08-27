@@ -9,12 +9,17 @@ agents:
     local_max: qwen-max
     local_fallback: gemma-review
     cloud_escalation: frontier-reasoning
+    phase_preferences:
+      analyze: primary
+      plan: max
 
   expert-recherche:
     local_primary: qwen-general
     local_max: qwen-max
     local_fallback: gemma-review
     cloud_escalation: research
+    phase_preferences:
+      execute: max
 
   architecte-solutions:
     local_primary: gemma-review
@@ -22,6 +27,8 @@ agents:
     local_max: qwen-max
     local_fallback: qwen-general
     cloud_escalation: frontier-review
+    phase_preferences:
+      execute: deep
 
   ingenieur-devops:
     local_primary: qwen-general
@@ -29,24 +36,32 @@ agents:
     local_max: qwen-max
     local_fallback: gemma-review
     cloud_escalation: frontier-reasoning
+    phase_preferences:
+      execute: specialist
 
   ingenieur-securite:
     local_primary: qwen-general
     local_max: qwen-max
     local_fallback: gemma-review
     cloud_escalation: frontier-review
+    phase_preferences:
+      execute: max
 
   ingenieur-release-forges:
     local_primary: qwen-general
     local_max: qwen-max
     local_fallback: gemma-review
     cloud_escalation: frontier-reasoning
+    phase_preferences:
+      execute: primary
 
   redacteur-technique:
     local_primary: gemma-review
     local_deep: gemma-deep
     local_fallback: qwen-general
     cloud_escalation: frontier-review
+    phase_preferences:
+      execute: deep
 
   auditeur-qualite:
     local_primary: gemma-review
@@ -55,3 +70,6 @@ agents:
     independent_alternative: qwen-max
     cloud_escalation: frontier-review
     independence_rule: reviewer_family_must_differ_from_producer_when_practical
+    phase_preferences:
+      validate: deep
+      review: deep
