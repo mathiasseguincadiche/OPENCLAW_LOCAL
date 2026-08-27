@@ -11,6 +11,11 @@ required_directories:
   - diagrams
 manifest: project.json
 orchestrator_contract: config/v1/orchestration_policy.yaml
+intake_contract: config/v1/intake_policy.yaml
+pedagogy_contract: config/v1/pedagogy_policy.yaml
+accessibility_contract: config/v1/accessibility_policy.yaml
+publication_contract: config/v1/publication_policy.yaml
+telemetry_contract: config/v1/telemetry_policy.yaml
 status_flow:
   - INTAKE_READY
   - ANALYZED
@@ -26,8 +31,13 @@ rules:
   overwrite_existing_project: false
   copy_inputs_into_managed_project: true
   secrets_in_intake_forbidden: true
+  intake_integrity_required: true
+  intake_immutable_after_creation: true
   source_repository_is_ground_truth: true
   rag_does_not_replace_file_reading: true
   agent_context_mode: workspace_snapshot
   state_changes_require_evidence: true
   final_completion_requires_human_approval: true
+  learning_support_enabled_by_default: true
+  publication_governed_by_state_machine: true
+  operational_telemetry_local_only: true
