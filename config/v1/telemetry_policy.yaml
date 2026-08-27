@@ -1,0 +1,45 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+default_enabled: true
+local_only: true
+
+storage:
+  relative_path: evidence/telemetry/runs.jsonl
+  commit_to_git: false
+  append_only: true
+
+fields:
+  required:
+    - timestamp
+    - project_id
+    - agent
+    - model
+    - backend
+    - route_kind
+    - duration_ms
+  optional:
+    - ttft_ms
+    - tokens_per_second
+    - prompt_tokens
+    - generated_tokens
+    - vram_mb
+    - ram_mb
+    - tool_calls
+    - retries
+    - local_to_deep_transition
+    - cloud_escalation
+    - cloud_cost_eur
+    - success
+    - error_class
+
+privacy:
+  record_prompts: false
+  record_responses: false
+  record_secrets: false
+  record_private_documents: false
+
+quality:
+  no_fabricated_measurements: true
+  unknown_metrics_must_be_null_or_omitted: true
+  monotonic_duration_required: true
+  project_scoped: true
