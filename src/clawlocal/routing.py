@@ -100,9 +100,8 @@ def _select_local(
             reviewer_family = _family(selected, catalog)
             if producer_family and producer_family == reviewer_family:
                 independent = route.get("independent_alternative")
-                if independent and (
-                    explicit_tier
-                    or _is_qualified(str(independent), catalog, qualified_models)
+                if independent and _is_qualified(
+                    str(independent), catalog, qualified_models
                 ):
                     return RouteDecision(
                         agent,
