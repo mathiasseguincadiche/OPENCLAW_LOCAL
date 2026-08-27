@@ -17,7 +17,8 @@ roles:
     own: [architecture, adr, interfaces, modeles_donnees, compromis, schemas]
     assist: [securite, devops, documentation]
     review: [coherence_technique]
-    forbidden: [implementation_complete, audit_final, approbation_finale]
+    forbidden: [implementation_complete, audit_final, approbation_finale, commandes_systeme]
+    write_scope: [context, diagrams]
 
   ingenieur-devops:
     own: [automatisation, iac, conteneurs, ci_cd, tests_techniques, preuves_locales]
@@ -29,22 +30,25 @@ roles:
     own: [threat_model, secrets, hardening, supply_chain, sbom, dependances, securite_ci]
     assist: [architecture, devops, publication]
     review: [surface_attaque]
-    forbidden: [audit_final_de_son_travail, acceptation_risque_residuel]
+    forbidden:
+      - audit_final_de_son_travail
+      - acceptation_risque_residuel
+      - modification_directe_sources
 
   ingenieur-release-forges:
-    own: [git, forges, pr_mr, releases, versionnage, preuves_distantes]
+    own: [git, forges, pr_mr, releases, versionnage, preuves_distantes, publication_state]
     assist: [ci_cd, documentation_release]
     review: [etat_publication]
     forbidden: [refonte_architecture, force_push_par_defaut, publication_sans_approbation]
 
   redacteur-technique:
     own: [readme, documentation, runbooks, vulgarisation, structure_pedagogique]
-    assist: [presentation, handover]
-    review: [lisibilite, coherence_documentaire]
+    assist: [presentation, handover, apprentissage]
+    review: [lisibilite, coherence_documentaire, accessibilite_progressive]
     forbidden: [inventer_preuves, modifier_logique_technique, simplification_fausse]
 
   auditeur-qualite:
     own: [audit_independant, conformite, qualite, accessibilite, controle_preuves]
-    assist: [revue_securite, revue_documentaire]
-    review: [livrables_finaux]
+    assist: [revue_securite, revue_documentaire, revue_apprentissage]
+    review: [livrables_finaux, publication_finale]
     forbidden: [corriger_silencieusement, produire_livrable_audite, auto_approbation]

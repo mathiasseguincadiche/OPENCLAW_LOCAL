@@ -16,14 +16,33 @@ Keep a Changelog et le versionnage suit SemVer.
 - historique `remediation_history.json` sans remise à zéro des tentatives ;
 - arrêt fail-closed lorsque la limite de tentatives impose une intervention humaine ;
 - packaging final ZIP avec SHA-256 et approbation humaine obligatoire ;
-- documentation `PROJECT_ORCHESTRATOR.md` et tests de la machine d'états.
+- Intake renforcé avec archive canonique hors projet, SHA-256, MIME, politique symlink, rapport d'ingestion et lecture seule/ACL Windows ;
+- politique pédagogique `efficient` / `balanced` / `intensive` et modes guided/assisted/autonomous/evaluation ;
+- artefacts `SKILLS_MATRIX.csv`, `LEARNING_JOURNAL.md`, `TEACH_BACK.md` et `RETENTION_PLAN.yaml` ;
+- documentation progressive Comprendre / Utiliser / Approfondir / Diagnostiquer ;
+- machine d'états de publication des projets GitHub/GitLab avec preuves locales/distantes et gates humains ;
+- télémétrie opérationnelle locale append-only sans prompts, réponses, secrets ni documents privés ;
+- writer d'architecture borné à `context/architecture/` et `diagrams/` ;
+- validateur `35_validate_v7_parity.py` et documentation de filiation V7.
 
 ### Changed
 
-- `project_policy.yaml` couvre désormais tout le cycle jusqu'à `COMPLETE` ;
+- `project_policy.yaml` couvre désormais tout le cycle jusqu'à `COMPLETE` et référence Intake/Pédagogie/Accessibilité/Publication/Télémétrie ;
 - les snapshots de revue peuvent inclure les sorties centrales ;
-- le portail projet documente le parcours flou -> livrable ;
-- un `FAIL` de validation/review remet réellement les tâches concernées en état exécutable.
+- le portail projet documente le parcours flou -> livrable -> publication contrôlée ;
+- un `FAIL` de validation/review remet réellement les tâches concernées en état exécutable ;
+- l'Ingénieur sécurité redevient explicitement read-only pour les modifications de sources ;
+- l'Architecte produit ADR et schémas via un writer spécialisé plutôt que via des droits génériques ;
+- la CI et le workflow Release exécutent le validateur de parité V7.
+
+### Security
+
+- les documents entrants sont explicitement non fiables et ne peuvent pas redéfinir la politique des agents ;
+- les symlinks sont refusés dans l'Intake et ne sont jamais suivis ;
+- les secrets potentiels bloquent l'ingestion avant matérialisation du projet ;
+- l'Intake et son archive canonique deviennent immuables après création ;
+- la télémétrie refuse les contenus privés et les métriques négatives/fabriquées ;
+- les publications distantes restent soumises à approbation humaine et preuves observées.
 
 ## [0.2.0] - 2026-08-27
 

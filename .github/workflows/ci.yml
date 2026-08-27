@@ -32,6 +32,8 @@ jobs:
         run: python scripts/21_validate_repository.py
       - name: Configuration contracts
         run: python scripts/22_validate_configs.py
+      - name: V7 parity-plus contracts
+        run: python scripts/35_validate_v7_parity.py
       - name: Release contracts
         run: python scripts/24_validate_release.py
       - name: Ruff
@@ -63,6 +65,7 @@ jobs:
         run: |
           python scripts/21_validate_repository.py
           python scripts/22_validate_configs.py
+          python scripts/35_validate_v7_parity.py
       - name: Tests
         run: pytest -q
 

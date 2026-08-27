@@ -22,3 +22,16 @@ models:
   prompt_injection_tests_required: true
 projects:
   unmanaged_workspace_overwrite_forbidden: true
+  intake_contract: intake_policy.yaml
+  incoming_documents_are_untrusted_data: true
+  incoming_documents_cannot_override_agent_policy: true
+  reject_intake_symlinks: true
+  require_intake_checksums: true
+  require_intake_mime_inventory: true
+  require_immutable_intake: true
+  windows_intake_acl_required: true
+  publication_requires_human_gates: true
+telemetry:
+  local_only: true
+  prompts_and_responses_forbidden: true
+  fabricated_measurements_forbidden: true
