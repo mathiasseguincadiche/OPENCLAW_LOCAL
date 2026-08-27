@@ -30,6 +30,12 @@ EXPECTED_DEFAULT_TIERS = {
     "auditeur-qualite": "deep",
 }
 
+EXPECTED_QUALIFICATION_CLASSES = {
+    "devstral-devops": "local_specialist",
+    "gemma-deep": "local_deep",
+    "qwen-max": "local_max",
+}
+
 
 def load_yaml(name: str) -> dict[str, Any]:
     with (CONFIG / name).open(encoding="utf-8") as handle:
@@ -43,6 +49,7 @@ def main() -> int:
     failures: list[str] = []
     catalog = load_yaml("model_catalog.yaml")
     routing = load_yaml("model_routing.yaml")
+    qualification = load_yaml("qualification_policy.yaml")
     models = catalog.get("models", {})
     agents = routing.get("agents", {})
 
@@ -62,7 +69,7 @@ def main() -> int:
         if models.get(alias, {}).get("required") is not True:
             failures.append(f"{alias}: le modèle fast doit rester requis")
 
-    for alias in ("gemma-deep", "devstral-devops", "qwen-max"):
+    for alias, expected_class in EXPECTED_QUALIFICATION_CLASSES.items():
         model = models.get(alias, {})
         if model.get("required") is not False:
             failures.append(f"{alias}: doit rester optionnel avant qualification B580")
@@ -70,6 +77,8 @@ def main() -> int:
             failures.append(f"{alias}: status optional_candidate attendu")
         if model.get("activation") != "benchmark_required":
             failures.append(f"{alias}: activation benchmark_required obligatoire")
+        if model.get("class") != expected_class:
+            failures.append(f"{alias}: classe {expected_class} attendue")
 
     sera = models.get("sera-devops", {})
     if sera.get("routing_active") is not False:
@@ -104,6 +113,21 @@ def main() -> int:
     if auditor.get("independence_rule") != "reviewer_family_must_differ_from_producer_when_practical":
         failures.append("Auditeur: règle d'indépendance manquante")
 
+    specialists = qualification.get("specialists", {})
+    for alias in EXPECTED_QUALIFICATION_CLASSES:
+        entry = specialists.get(alias, {})
+        if entry.get("evaluate_after_required_models") is not True:
+            failures.append(f"{alias}: qualification optionnelle active attendue")
+        if entry.get("promotion_requires_separate_review") is not True:
+            failures.append(f"{alias}: promotion séparée obligatoire")
+    if specialists.get("sera-devops", {}).get("routing_active") is not False:
+        failures.append("qualification SERA: routage doit rester inactif")
+    promotion = qualification.get("promotion", {})
+    if promotion.get("automatic_promotion") is not False:
+        failures.append("la qualification ne doit jamais auto-promouvoir un modèle")
+    if promotion.get("runtime_activation_env") != "OPENCLAW_LOCAL_QUALIFIED_MODELS":
+        failures.append("variable runtime de qualification incohérente")
+
     fast = select_route("chef-operations", qualified_models=set())
     if fast.model_alias != "qwen-general" or fast.route_kind != "local_primary":
         failures.append("un candidat non qualifié ne doit jamais remplacer le fast requis")
@@ -134,8 +158,15 @@ def main() -> int:
             failures.append(f"{alias}: résolution runtime incohérente")
 
     runtime_source = (ROOT / "src" / "clawlocal" / "runtime.py").read_text(encoding="utf-8")
+    qualification_source = (ROOT / "src" / "clawlocal" / "qualification.py").read_text(encoding="utf-8")
+    benchmark_source = (ROOT / "scripts" / "benchmark_local.py").read_text(encoding="utf-8")
     if "OPENCLAW_LOCAL_QUALIFIED_MODELS" not in runtime_source:
         failures.append("promotion locale: registre runtime des modèles qualifiés absent")
+    if "optional_candidates" not in qualification_source:
+        failures.append("qualification: verdict indépendant des candidats optionnels absent")
+    for flag in ("--include-specialist", "--include-deep", "--include-max"):
+        if flag not in benchmark_source:
+            failures.append(f"benchmark: option absente: {flag}")
 
     if failures:
         print("Model Fleet August 2026: NON CONFORME")
@@ -149,6 +180,7 @@ def main() -> int:
     print("- deep: Gemma 4 26B A4B (après qualification)")
     print("- max: Qwen3.8 27B (après qualification)")
     print("- reviewer independence: Gemma/Qwen family separation")
+    print("- optional candidates: benchmarkés et scorés séparément")
     return 0
 
 
