@@ -12,7 +12,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $LockPath = Join-Path $RepoRoot 'config\v1\runtime_versions.json'
 $Lock = Get-Content -Raw -LiteralPath $LockPath | ConvertFrom-Json
 
-function Stop-Bootstrap([string]$Message) {
+function Write-BootstrapFailure([string]$Message) {
     throw "STOP: $Message"
 }
 
@@ -34,7 +34,7 @@ function Invoke-NativeChecked {
     )
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        Stop-Bootstrap "$Description (code $LASTEXITCODE)."
+        Write-BootstrapFailure "$Description (code $LASTEXITCODE)."
     }
 }
 
@@ -55,11 +55,11 @@ function Test-PythonPreferred {
 function Invoke-PreferredPython {
     param([Parameter(Mandatory)][string[]]$Arguments)
     if (-not (Test-PythonPreferred)) {
-        Stop-Bootstrap "Python $($Lock.python.preferred) exact est requis."
+        Write-BootstrapFailure "Python $($Lock.python.preferred) exact est requis."
     }
     & py.exe -3.13 @Arguments
     if ($LASTEXITCODE -ne 0) {
-        Stop-Bootstrap "Python a échoué (code $LASTEXITCODE)."
+        Write-BootstrapFailure "Python a échoué (code $LASTEXITCODE)."
     }
 }
 
@@ -69,7 +69,7 @@ function Install-PythonPreferred {
         return
     }
     if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
-        Stop-Bootstrap 'WinGet est requis pour installer Python de façon reproductible.'
+        Write-BootstrapFailure 'WinGet est requis pour installer Python de façon reproductible.'
     }
     Invoke-NativeChecked -Command 'winget.exe' -Arguments @(
         'install', '--id', 'Python.Python.3.13', '--exact',
@@ -77,7 +77,7 @@ function Install-PythonPreferred {
         '--scope', 'user', '--silent', '--accept-package-agreements', '--accept-source-agreements'
     ) -Description "Installation de Python $($Lock.python.preferred)"
     if (-not (Test-PythonPreferred)) {
-        Stop-Bootstrap "Python $($Lock.python.preferred) reste introuvable après installation."
+        Write-BootstrapFailure "Python $($Lock.python.preferred) reste introuvable après installation."
     }
 }
 
@@ -107,7 +107,7 @@ function Install-NodePreferred([string]$RuntimeHome) {
         $ActualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Archive).Hash.ToLowerInvariant()
         $ExpectedHash = ([string]$Lock.node.sha256_win_x64_zip).ToLowerInvariant()
         if ($ActualHash -ne $ExpectedHash) {
-            Stop-Bootstrap 'Archive Node.js rejetée: SHA256 différent du runtime lock.'
+            Write-BootstrapFailure 'Archive Node.js rejetée: SHA256 différent du runtime lock.'
         }
         Expand-Archive -LiteralPath $Archive -DestinationPath $Temp
         $Expanded = Join-Path $Temp "node-v$Version-win-x64"
@@ -123,7 +123,7 @@ function Install-NodePreferred([string]$RuntimeHome) {
         }
     }
     if (-not (Test-NodePreferred $NodeHome)) {
-        Stop-Bootstrap 'Node.js n’est pas conforme après installation.'
+        Write-BootstrapFailure 'Node.js n’est pas conforme après installation.'
     }
 }
 
@@ -152,11 +152,11 @@ function Install-OpenClawPreferred([string]$RuntimeHome) {
         $PackOutput = & $Npm pack "openclaw@$($Lock.openclaw.preferred)" `
             --ignore-scripts --pack-destination $Temp --json
         if ($LASTEXITCODE -ne 0) {
-            Stop-Bootstrap 'npm pack OpenClaw a échoué.'
+            Write-BootstrapFailure 'npm pack OpenClaw a échoué.'
         }
         $PackInfo = @(($PackOutput -join [Environment]::NewLine) | ConvertFrom-Json)
         if ($PackInfo.Count -ne 1 -or -not $PackInfo[0].filename) {
-            Stop-Bootstrap 'Réponse npm pack invalide.'
+            Write-BootstrapFailure 'Réponse npm pack invalide.'
         }
         $Tarball = Join-Path $Temp ([string]$PackInfo[0].filename)
         $Stream = [IO.File]::OpenRead($Tarball)
@@ -170,7 +170,7 @@ function Install-OpenClawPreferred([string]$RuntimeHome) {
         }
         $ActualIntegrity = 'sha512-' + [Convert]::ToBase64String($Digest)
         if ($ActualIntegrity -ne [string]$Lock.openclaw.integrity) {
-            Stop-Bootstrap 'Tarball OpenClaw rejeté: intégrité SRI différente du runtime lock.'
+            Write-BootstrapFailure 'Tarball OpenClaw rejeté: intégrité SRI différente du runtime lock.'
         }
         if (Test-Path -LiteralPath $NpmPrefix) {
             Remove-Item -Recurse -Force -LiteralPath $NpmPrefix
@@ -186,7 +186,7 @@ function Install-OpenClawPreferred([string]$RuntimeHome) {
         }
     }
     if (-not (Test-OpenClawPreferred $NpmPrefix)) {
-        Stop-Bootstrap 'OpenClaw n’est pas conforme après installation.'
+        Write-BootstrapFailure 'OpenClaw n’est pas conforme après installation.'
     }
 }
 
@@ -203,21 +203,23 @@ function Get-OllamaVersion {
 }
 
 function Install-OllamaPreferred {
+    param([switch]$AllowDrift)
+
     $Installed = Get-OllamaVersion
     $Preferred = [string]$Lock.ollama.preferred
     if ($Installed -eq $Preferred) {
         Write-Host "OK  Ollama $Preferred déjà présent."
         return
     }
-    if ($Installed -and $AllowRuntimeDrift) {
+    if ($Installed -and $AllowDrift) {
         Write-Warning "Ollama $Installed conservé car -AllowRuntimeDrift est actif; qualification obligatoire."
         return
     }
     if ($Installed) {
-        Stop-Bootstrap "Ollama $Installed détecté, mais le lock demande $Preferred. Utilisez -AllowRuntimeDrift pour le conserver explicitement."
+        Write-BootstrapFailure "Ollama $Installed détecté, mais le lock demande $Preferred. Utilisez -AllowRuntimeDrift pour le conserver explicitement."
     }
     if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
-        Stop-Bootstrap 'WinGet est requis pour installer Ollama.'
+        Write-BootstrapFailure 'WinGet est requis pour installer Ollama.'
     }
     Invoke-NativeChecked -Command 'winget.exe' -Arguments @(
         'install', '--id', [string]$Lock.ollama.winget_id, '--exact',
@@ -240,7 +242,7 @@ function Install-ClawLocalPackage([string]$RuntimeHome) {
     ) -Description 'Installation de clawlocal'
 }
 
-function Set-LocalEnvironment([string]$PlatformRoot, [string]$RuntimeHome) {
+function Invoke-LocalEnvironmentSetup([string]$PlatformRoot, [string]$RuntimeHome) {
     $StateDir = Join-Path $PlatformRoot 'state'
     $NodeHome = Join-Path $RuntimeHome 'node'
     $NpmPrefix = Join-Path $RuntimeHome 'npm-global'
@@ -271,17 +273,17 @@ function Set-LocalEnvironment([string]$PlatformRoot, [string]$RuntimeHome) {
 }
 
 if (-not $IsWindows) {
-    Stop-Bootstrap 'Windows est requis.'
+    Write-BootstrapFailure 'Windows est requis.'
 }
 if ($PSVersionTable.PSVersion.Major -lt [int]$Lock.powershell.minimum_major) {
-    Stop-Bootstrap "PowerShell $($Lock.powershell.minimum_major)+ est requis."
+    Write-BootstrapFailure "PowerShell $($Lock.powershell.minimum_major)+ est requis."
 }
 $Os = Get-CimInstance Win32_OperatingSystem
 if ($Os.Caption -notmatch 'Windows 11') {
-    Stop-Bootstrap "Windows 11 requis, détecté: $($Os.Caption)"
+    Write-BootstrapFailure "Windows 11 requis, détecté: $($Os.Caption)"
 }
 if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') {
-    Stop-Bootstrap 'Architecture x64 requise.'
+    Write-BootstrapFailure 'Architecture x64 requise.'
 }
 
 $PlatformRoot = Get-PlatformRoot
@@ -302,9 +304,9 @@ New-Item -ItemType Directory -Path $RuntimeHome -Force | Out-Null
 Install-PythonPreferred
 Install-NodePreferred -RuntimeHome $RuntimeHome
 Install-OpenClawPreferred -RuntimeHome $RuntimeHome
-Install-OllamaPreferred
+Install-OllamaPreferred -AllowDrift:$AllowRuntimeDrift
 Install-ClawLocalPackage -RuntimeHome $RuntimeHome
-Set-LocalEnvironment -PlatformRoot $PlatformRoot -RuntimeHome $RuntimeHome
+Invoke-LocalEnvironmentSetup -PlatformRoot $PlatformRoot -RuntimeHome $RuntimeHome
 
 Write-Host 'OK  Bootstrap OPENCLAW_LOCAL terminé.'
 Write-Host 'Fermez puis rouvrez PowerShell pour récupérer le PATH utilisateur dans les nouveaux shells.'
