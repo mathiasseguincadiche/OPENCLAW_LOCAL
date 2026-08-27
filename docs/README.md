@@ -5,7 +5,11 @@
 | comprendre le système | [Architecture](ARCHITECTURE.md) |
 | installer/reproduire le runtime Windows | [Installation Windows 11](INSTALLATION_WINDOWS_11.md) |
 | fournir consignes, sources et livrables à OpenClaw | [Project Intake](PROJECT_INTAKE.md) |
+| vérifier l'intégrité et l'immutabilité des entrées | [Intake Integrity](INTAKE_INTEGRITY.md) |
 | transformer un projet flou en projet planifié, vérifié et packagé | [Project Orchestrator](PROJECT_ORCHESTRATOR.md) |
+| produire tout en comprenant et en préparant la soutenance | [Learning & Accessibility](LEARNING_AND_ACCESSIBILITY.md) |
+| publier un projet utilisateur sur GitHub/GitLab avec preuves | [Publication projet](PROJECT_PUBLICATION.md) |
+| mesurer agents, modèles, backends, RAM/VRAM et escalades | [Télémétrie](TELEMETRY.md) |
 | comprendre la flotte OpenClaw et le routage runtime | [Intégration OpenClaw](OPENCLAW_INTEGRATION.md) |
 | utiliser Internet sans basculer automatiquement dans le cloud | [Recherche Web Local-First](WEB_LOCAL_FIRST.md) |
 | comprendre Ollama/Vulkan et les candidats llama.cpp | [Backends locaux](RUNTIME_BACKENDS.md) |
@@ -26,16 +30,19 @@
 ```text
 1. installer / auditer Windows
 2. qualifier le runtime local
-3. créer un Project Intake
-4. ANALYZE : transformer les sources en compréhension structurée
-5. CLARIFY : faire trancher les ambiguïtés bloquantes par l'humain
-6. PLAN + ASSIGN : créer les tâches et les confier aux rôles OpenClaw
-7. EXECUTE : travailler principalement avec les modèles locaux
-8. utiliser le Web pour les faits récents
-9. passer en LOCAL_DEEP si une tâche le justifie et si le modèle est qualifié
-10. VALIDATE + REVIEW : auditer indépendamment les résultats
-11. PACKAGE : produire le ZIP et les hashes
-12. COMPLETE : validation humaine finale
+3. créer un Project Intake vérifié (secrets, symlinks, SHA-256, MIME, ACL)
+4. choisir le profil pédagogique : efficient / balanced / intensive
+5. ANALYZE : transformer les sources en compréhension structurée
+6. CLARIFY : faire trancher les ambiguïtés bloquantes par l'humain
+7. PLAN + ASSIGN : créer les tâches et les confier aux rôles OpenClaw
+8. EXECUTE : travailler principalement avec les modèles locaux
+9. utiliser le Web pour les faits récents
+10. passer en LOCAL_DEEP si une tâche le justifie et si le modèle est qualifié
+11. VALIDATE + REVIEW : auditer indépendamment les résultats
+12. PACKAGE : produire le ZIP et les hashes
+13. COMPLETE : validation humaine finale du projet local
+14. si publication : suivre LOCAL_VALIDATED -> PR/MR -> CI -> clean clone -> audit -> publication vérifiée
+15. exploiter la télémétrie pour comparer agents, modèles et backends
 ```
 
 OpenRouter reste hors du parcours automatique : une escalade cloud éventuelle doit continuer à respecter la politique d'escalade et FinOps.
