@@ -33,6 +33,11 @@ REQUIRED = {
     "config/v1/web_policy.yaml",
     "config/v1/budget_policy.yaml",
     "config/v1/diagram_policy.yaml",
+    "config/v1/intake_policy.yaml",
+    "config/v1/pedagogy_policy.yaml",
+    "config/v1/accessibility_policy.yaml",
+    "config/v1/publication_policy.yaml",
+    "config/v1/telemetry_policy.yaml",
     "benchmarks/suites/devops_v1.yaml",
     "benchmarks/suites/devops_v2.yaml",
     "docs/ARCHITECTURE.md",
@@ -51,6 +56,10 @@ REQUIRED = {
     "docs/RUNTIME_BACKENDS.md",
     "docs/FINOPS.md",
     "docs/DIAGRAMMES.md",
+    "docs/INTAKE_INTEGRITY.md",
+    "docs/LEARNING_AND_ACCESSIBILITY.md",
+    "docs/PROJECT_PUBLICATION.md",
+    "docs/TELEMETRY.md",
     "scripts/20_list_models.py",
     "scripts/21_validate_repository.py",
     "scripts/22_validate_configs.py",
@@ -64,6 +73,10 @@ REQUIRED = {
     "scripts/30_record_cloud_cost.py",
     "scripts/31_sync_project_context.py",
     "scripts/32_orchestrate_project.py",
+    "scripts/33_project_learning.py",
+    "scripts/34_project_publication.py",
+    "scripts/35_telemetry.py",
+    "scripts/36_validate_v7_parity.py",
     "scripts/benchmark_local.py",
     "scripts/windows/00_bootstrap.ps1",
     "scripts/windows/01_audit_host.ps1",
@@ -84,6 +97,10 @@ REQUIRED = {
     "src/clawlocal/project_intake.py",
     "src/clawlocal/project_context.py",
     "src/clawlocal/project_orchestrator.py",
+    "src/clawlocal/project_remediation.py",
+    "src/clawlocal/project_learning.py",
+    "src/clawlocal/project_publication.py",
+    "src/clawlocal/telemetry.py",
     "src/clawlocal/finops.py",
     "tests/test_openclaw_config.py",
     "tests/test_runtime.py",
@@ -91,6 +108,10 @@ REQUIRED = {
     "tests/test_project_intake.py",
     "tests/test_project_context.py",
     "tests/test_project_orchestrator.py",
+    "tests/test_project_remediation.py",
+    "tests/test_project_learning.py",
+    "tests/test_project_publication.py",
+    "tests/test_telemetry.py",
     "tests/test_finops.py",
     "tests/test_sbom.py",
     "tests/test_versioning.py",
@@ -130,15 +151,11 @@ def main() -> int:
         directory = ROOT / "agents" / agent
         for filename in ("IDENTITY.md", "SOUL.md", "AGENTS.md"):
             if not (directory / filename).is_file():
-                failures.append(
-                    f"contrat agent absent: agents/{agent}/{filename}"
-                )
+                failures.append(f"contrat agent absent: agents/{agent}/{filename}")
 
     for path in ROOT.rglob("*"):
         if path.is_file() and path.suffix.lower() in FORBIDDEN_SUFFIXES:
-            failures.append(
-                f"artefact interdit dans Git: {path.relative_to(ROOT)}"
-            )
+            failures.append(f"artefact interdit dans Git: {path.relative_to(ROOT)}")
 
     if (ROOT / ".env").exists():
         failures.append(".env réel présent dans le dépôt")
@@ -153,6 +170,7 @@ def main() -> int:
     print(f"OK  équipe IA ({len(AGENTS)} rôles)")
     print("OK  Project Orchestrator fail-closed présent")
     print("OK  Project/Web/FinOps/backends/diagrammes présents")
+    print("OK  Intake/Learning/Accessibility/Publication/Telemetry présents")
     print("Verdict: CONFORME")
     return 0
 
