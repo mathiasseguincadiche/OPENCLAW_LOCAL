@@ -283,6 +283,49 @@ def _set_read_only(root: Path) -> None:
         _set_posix_read_only(root)
 
 
+def _restore_posix_writable(root: Path) -> None:
+    if not root.exists():
+        return
+    for path in root.rglob("*"):
+        if path.is_file() and not path.is_symlink():
+            path.chmod(0o644)
+
+
+def _restore_windows_writable(root: Path) -> None:
+    if not root.exists():
+        return
+    identity_result = subprocess.run(
+        ["whoami.exe"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    identity = identity_result.stdout.strip()
+    if identity_result.returncode != 0 or not identity:
+        return
+    subprocess.run(
+        [
+            "icacls.exe",
+            str(root),
+            "/inheritancelevel:e",
+            "/grant:r",
+            f"{identity}:(OI)(CI)F",
+            "/T",
+            "/Q",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _restore_writable(root: Path) -> None:
+    if os.name == "nt":
+        _restore_windows_writable(root)
+    else:
+        _restore_posix_writable(root)
+
+
 def _archive_intake(
     platform_root: Path,
     project_id: str,
@@ -384,6 +427,10 @@ def create_project(
         _set_read_only(archive)
         return destination
     except Exception:
+        _restore_writable(destination / "intake")
+        _restore_writable(archive)
         if destination.exists():
             shutil.rmtree(destination, ignore_errors=True)
+        if archive.exists():
+            shutil.rmtree(archive, ignore_errors=True)
         raise
