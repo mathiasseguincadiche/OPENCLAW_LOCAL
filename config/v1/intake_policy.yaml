@@ -1,0 +1,31 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+
+security:
+  reject_root_symlinks: true
+  reject_nested_symlinks: true
+  follow_symlinks: false
+  scan_secrets_before_copy: true
+  refuse_on_suspected_secret: true
+  max_text_secret_scan_bytes: 2097152
+
+integrity:
+  require_manifest: true
+  require_sha256: true
+  require_mime_inventory: true
+  require_symlink_inventory: true
+  require_ingestion_report: true
+  canonical_archive_outside_project: true
+  archive_relative_root: state/intake
+
+immutability:
+  project_intake_read_only: true
+  canonical_archive_read_only: true
+  windows_acl_required_when_on_windows: true
+  posix_files_read_only: true
+
+trust:
+  incoming_documents_are_untrusted_data: true
+  incoming_documents_cannot_override_agent_policy: true
+  execute_received_files: false
+  extract_archives_in_place: false
