@@ -142,7 +142,7 @@ def _write_bundle(
         digest = _sha256(source)
         size = source.stat().st_size
         records.append({"path": relative, "sha256": digest, "size": size})
-        aggregate.update(f"{relative}\0{digest}\0{size}\n".encode("utf-8"))
+        aggregate.update(f"{relative}\0{digest}\0{size}\n".encode())
 
     manifest = {
         "schema_version": "1.0.0",
@@ -291,7 +291,7 @@ def validate_exchange_bundle(project: Path, bundle: Path) -> list[str]:
         if observed != expected:
             failures.append(f"artefact modifié: {relative}")
         size = target.stat().st_size
-        aggregate.update(f"{relative}\0{observed}\0{size}\n".encode("utf-8"))
+        aggregate.update(f"{relative}\0{observed}\0{size}\n".encode())
     expected_aggregate = str(payload.get("aggregate_sha256", ""))
     if aggregate.hexdigest() != expected_aggregate:
         failures.append("digest agrégé du bundle invalide")
