@@ -1,0 +1,48 @@
+schema_version: "1.0.0"
+platform_version: "0.1.0"
+
+security_defaults:
+  profile: coding
+  fs_workspace_only: true
+  exec_mode: ask
+  elevated_enabled: false
+  cloud_tools_without_explicit_escalation: false
+
+agents:
+  chef-operations:
+    profile: coding
+    deny: [write, edit, apply_patch, exec, process]
+
+  expert-recherche:
+    profile: coding
+    deny: [write, edit, apply_patch, exec, process]
+
+  architecte-solutions:
+    profile: coding
+    deny: [write, edit, apply_patch, exec, process]
+
+  ingenieur-devops:
+    profile: coding
+    deny: []
+
+  ingenieur-securite:
+    profile: coding
+    deny: []
+
+  ingenieur-release-forges:
+    profile: coding
+    deny: []
+
+  redacteur-technique:
+    profile: coding
+    deny: [exec, process]
+
+  auditeur-qualite:
+    profile: coding
+    deny: [write, edit, apply_patch, exec, process]
+
+notes:
+  - "Les outils de fichiers restent bornés au workspace de chaque agent."
+  - "Toute commande exec hors allowlist requiert une approbation humaine avec exec_mode=ask."
+  - "Le mode elevated reste désactivé."
+  - "Les rôles de revue ne peuvent pas modifier silencieusement le livrable qu'ils auditent."

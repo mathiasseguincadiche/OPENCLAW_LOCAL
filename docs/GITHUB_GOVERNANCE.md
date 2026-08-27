@@ -23,7 +23,7 @@ Topics recommandés :
 
 ## Protection de `main`
 
-Le dépôt est maintenu par un propriétaire unique. La protection doit donc imposer le passage par Pull Request et les contrôles automatiques sans exiger l'approbation d'un second mainteneur qui n'existe pas.
+Le dépôt est maintenu par un propriétaire unique. La protection doit imposer le passage par Pull Request et les contrôles automatiques sans exiger l'approbation d'un second mainteneur qui n'existe pas.
 
 Cible recommandée pour un ruleset GitHub appliqué à `main` :
 
@@ -33,9 +33,19 @@ Cible recommandée pour un ruleset GitHub appliqué à `main` :
 - ne pas imposer d'approbation humaine tant que le dépôt reste mono-mainteneur ;
 - imposer la résolution des conversations avant fusion ;
 - imposer une branche à jour avant fusion lorsque GitHub peut l'évaluer ;
-- imposer les checks `quality`, `windows-contract`, `Dependency Review` et `CodeQL / Python` après leur première exécution réussie ;
-- conserver une histoire linéaire et privilégier le squash merge ;
+- imposer une histoire linéaire et privilégier le squash merge ;
 - ne pas autoriser de bypass permanent du propriétaire sur le parcours normal.
+
+Checks requis après leur première exécution réussie :
+
+```text
+quality
+python-3.12
+python-3.13
+windows-contract
+Dependency Review
+CodeQL / Python
+```
 
 Les règles qui exigent un deuxième approbateur ne doivent être activées qu'après ajout d'un mainteneur distinct.
 
@@ -46,14 +56,15 @@ Chaque changement significatif doit suivre :
 ```text
 branche dédiée
     -> Pull Request
-    -> CI Python
+    -> quality : validateurs + Ruff + mypy + coverage
+    -> Python 3.12 / 3.13
     -> PowerShell 7 / PSScriptAnalyzer / Pester
     -> Dependency Review
     -> CodeQL Python
     -> squash merge vers main
 ```
 
-Les résultats matériels B580 ne sont jamais simulés dans GitHub Actions. Ils restent qualifiés sur la workstation réelle puis synthétisés dans une PR séparée.
+Les résultats matériels B580 et les preuves E2E avec modèles locaux ne sont jamais simulés dans GitHub Actions. Ils sont produits sur la workstation réelle puis synthétisés dans une Pull Request séparée.
 
 ## Sécurité
 
@@ -61,10 +72,11 @@ Les résultats matériels B580 ne sont jamais simulés dans GitHub Actions. Ils 
 - aucun modèle `.gguf` ou `.safetensors` dans Git ;
 - aucun certificat ou keystore privé (`.key`, `.pem`, `.p12`, `.pfx`, `.jks`) ;
 - CodeQL analyse le code Python ; PowerShell est contrôlé par PSScriptAnalyzer et Pester ;
-- le **GitHub Dependency Graph doit être activé** dans les paramètres du dépôt pour que `actions/dependency-review-action` compare précisément les dépendances ajoutées par une Pull Request ;
+- le **GitHub Dependency Graph doit être activé** pour que `actions/dependency-review-action` compare précisément les dépendances ajoutées par une Pull Request ;
 - lorsque le Dependency Graph est disponible, Dependency Review bloque les nouvelles dépendances présentant une vulnérabilité de sévérité `moderate` ou supérieure ;
-- tant que le Dependency Graph n'est pas activé, le workflow reste fail-closed sur les dépendances Python installées grâce à un fallback `pip-audit`, et signale explicitement que le contrôle différentiel GitHub n'est pas disponible ;
-- Dependabot suit `pip` et GitHub Actions.
+- tant que le Dependency Graph n'est pas activé, le workflow reste fail-closed sur les dépendances Python installées grâce à un fallback `pip-audit` et signale que le contrôle différentiel GitHub n'est pas disponible ;
+- Dependabot suit `pip` et GitHub Actions ;
+- les résultats runtime (`benchmarks/results`, `proofs`, `state`, `logs`, modèles) restent hors Git.
 
 ## Releases
 
@@ -83,7 +95,25 @@ VERSION = 0.1.0
 Tag     = v0.1.0
 ```
 
-Le workflow `Release` revalide le dépôt, le SemVer, les tests Python, PSScriptAnalyzer et Pester avant de publier une GitHub Release contenant le wheel, le sdist et leurs sommes SHA-256.
+Le workflow `Release` revalide le dépôt, le SemVer, Ruff, mypy, coverage, les tests Python, PSScriptAnalyzer et Pester, puis produit :
+
+- wheel ;
+- sdist ;
+- `sbom.cdx.json` CycloneDX ;
+- sommes SHA-256 ;
+- attestation GitHub de provenance des artefacts ;
+- attestation GitHub liant le SBOM aux artefacts.
+
+Les permissions d'écriture et d'attestation sont limitées au job `publish`, après les jobs de validation.
+
+## Réglages administratifs à contrôler après évolution de la CI
+
+À chaque ajout/renommage d'un check :
+
+1. laisser la Pull Request exécuter le nouveau check au moins une fois ;
+2. vérifier son nom exact dans GitHub Actions ;
+3. mettre à jour le ruleset `main` ;
+4. vérifier que le merge est réellement bloqué lorsqu'un check requis échoue.
 
 ## Version 1.0.0
 

@@ -5,11 +5,11 @@
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](VERSION)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PowerShell 7](https://img.shields.io/badge/PowerShell-7%2B-blue.svg)](https://learn.microsoft.com/powershell/)
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](pyproject.toml)
+[![Python 3.12-3.13](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue.svg)](pyproject.toml)
 
 Plateforme IA **local-first, multi-agents et multi-modèles** pour Windows 11 Pro x64.
 
-Le principe est simple : **le local absorbe le volume de travail ; le cloud devient une escalade explicite** pour les cas qui exigent recherche fraîche, contexte très large, arbitrage de haut niveau ou contrôle indépendant renforcé.
+Le local absorbe le parcours nominal. Le cloud n'est jamais un fallback silencieux : il n'est accessible qu'après une décision d'escalade explicite, un motif autorisé et une activation volontaire.
 
 ## Architecture
 
@@ -17,114 +17,162 @@ Le principe est simple : **le local absorbe le volume de travail ; le cloud devi
 Utilisateur
    |
    v
-OpenClaw ------------------------------+
-   |                                    |
-   |                                    +--> Cloud optionnel
-   |                                         OpenRouter
-   |                                         - recherche fraîche
-   v                                         - arbitrage complexe
-Ollama natif Windows                         - dernier recours
+OpenClaw / Gateway loopback
    |
-   +--> Qwen 3.5 9B        généraliste
-   +--> Gemma 4            rédaction / seconde opinion
-   +--> SERA 14B (*)       candidat spécialiste code/DevOps
+   +--> 8 agents réellement matérialisés
+   |      +-- workspaces séparés
+   |      +-- politiques outils par rôle
+   |      +-- fallbacks persistants uniquement locaux
    |
-   v
-8 agents spécialisés
+   +--> Ollama natif Windows
+   |      +-- Qwen 3.5 9B
+   |      +-- Gemma 4
+   |      +-- SERA 14B (*) candidat optionnel
    |
-   +--> contrats / routage / escalade / preuves
-        gérés par `clawlocal`
+   +--> clawlocal
+          +-- renderer OpenClaw
+          +-- routage local/cloud explicite
+          +-- benchmark / qualification / preuves
+          |
+          +--> OpenRouter uniquement sur escalade autorisée
 ```
 
-> `(*)` SERA 14B est déclaré comme candidat local optionnel : il doit être importé et validé sur la machine cible avant d'être activé comme route de production.
+> `(*)` SERA 14B n'est pas activé automatiquement : son import/backend et sa qualification sont séparés.
 
 ## Principes de conception
 
-- **Windows natif** pour OpenClaw, le Gateway et les moteurs IA locaux ; WSL2 reste un backend DevOps externe et facultatif.
+- **Windows natif** pour OpenClaw, Gateway, Ollama et les modèles ; WSL2 reste externe/facultatif.
+- **Installation reproductible** : versions runtime centralisées dans `config/v1/runtime_versions.json`.
+- **Intégrité vérifiée** : Node.js par SHA-256 et package OpenClaw par SHA-512/SRI.
 - **Local-first** : aucune dépendance cloud n'est requise pour le parcours nominal.
-- **Cloud-on-demand** : les routes cloud sont désactivées tant qu'elles ne sont pas explicitement activées et configurées.
-- **Séparation des responsabilités** : les huit agents gardent des rôles distincts ; un producteur ne s'auto-audite pas.
-- **Fail closed** : une escalade non autorisée, un modèle absent ou une configuration invalide doit échouer explicitement.
-- **Preuves avant promesses** : le dépôt distingue ce qui est implémenté, testé, candidat ou simplement documenté.
-- **Configuration versionnée** : rôles, modèles, politiques d'escalade, qualification, sécurité et profils matériels sont des contrats Git.
-- **État local hors Git** : modèles téléchargés, secrets, journaux, benchmarks et caches restent sur la workstation.
+- **Cloud-on-demand** : activation + motif + rôle autorisé + secret local pour une exécution réelle.
+- **Huit rôles distincts** : séparation producteur/relecteur et permissions d'outils par agent.
+- **Fail closed** : modèle, runtime, config ou escalade non conforme échoue explicitement.
+- **Workspaces confinés** : filesystem limité au workspace ; exec soumis à approbation ; elevated désactivé.
+- **Preuves avant promesses** : aucun résultat B580 ni tool-calling n'est déclaré avant exécution réelle.
+- **État local hors Git** : modèles, secrets, sessions, logs, benchmarks et preuves restent sur la workstation.
 
 ## Démarrage rapide
 
-Prérequis : Windows 11 Pro x64, PowerShell 7, Python 3.12+ et OpenClaw. Ollama est le backend local de référence.
+Prérequis utilisateur : **Windows 11 Pro x64, PowerShell 7 et WinGet**. Python, Node.js, OpenClaw et Ollama peuvent être provisionnés par le dépôt.
 
 ```powershell
-# 1. Audit sans mutation
+# 1. Prévisualiser l'installation complète
+.\menu.ps1 -Action install-full -DryRun
+
+# 2. Installer runtime + Ollama + modèles + OpenClaw + 8 agents + Gateway
+.\menu.ps1 -Action install-full
+
+# 3. Vérifier le parcours local
 .\menu.ps1 -Action audit
-
-# 2. Préparer le backend local
-.\menu.ps1 -Action configure-local -DryRun
-.\menu.ps1 -Action configure-local
-
-# 3. Télécharger les modèles déclarés par défaut
-.\menu.ps1 -Action models
-
-# 4. Vérifier l'inférence locale
 .\menu.ps1 -Action verify
 
-# 5. Mesure simple
-.\menu.ps1 -Action benchmark
+# 4. Vérifier réellement OpenClaw/tool-calling/réparation/stabilité
+.\menu.ps1 -Action e2e
 
-# 6. Qualification matérielle complète, sans cloud
+# 5. Qualifier les modèles sur la machine cible
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
-Le raccourci `START_MENU.cmd` ouvre le même centre de contrôle en mode interactif.
+Pour ne préparer que les runtimes :
 
-## Qualification avant promotion
+```powershell
+.\menu.ps1 -Action install-core -DryRun
+.\menu.ps1 -Action install-core
+```
 
-Les modèles restent `candidate` tant qu'ils n'ont pas été mesurés sur la workstation réelle. La phase 2 fournit maintenant un protocole reproductible : inventaire, suite DevOps versionnée, TTFT, débit, contextes 8K/16K et gate automatique. Un gate réussi produit uniquement `READY_FOR_MANUAL_QUALIFICATION` : le tool-calling OpenClaw réel, la stabilité et la revue humaine restent obligatoires.
+Le raccourci `START_MENU.cmd` ouvre le centre de contrôle interactif.
 
-Voir [Qualification](docs/QUALIFICATION.md) et [Benchmark](docs/BENCHMARK.md).
+## Flotte OpenClaw
 
-## Huit rôles
+Les contrats Git sont rendus en configuration OpenClaw par `src/clawlocal/openclaw_config.py`. Chaque agent dispose d'un workspace géré sous `<OPENCLAW_LOCAL_ROOT>\workspaces\<agent-id>`.
 
 | Rôle | Mission principale | Route locale de référence | Escalade cloud |
 |---|---|---|---|
 | Chef des opérations | cadrage, orchestration, risques | Qwen 3.5 9B | arbitrage exceptionnel |
 | Expert recherche | recherche, sources, synthèse | Qwen 3.5 9B | recherche web fraîche |
 | Architecte solutions | architecture, ADR, compromis | Gemma 4 | décision complexe |
-| Ingénieur DevOps | CI/CD, IaC, conteneurs, scripts | Qwen 3.5 9B / SERA candidat | blocage technique persistant |
+| Ingénieur DevOps | CI/CD, IaC, conteneurs, scripts | Qwen 3.5 9B / SERA candidat | blocage persistant |
 | Ingénieur sécurité | hardening, supply chain, secrets | Qwen 3.5 9B | revue critique |
 | Ingénieur release/forges | Git, PR, releases, preuves distantes | Qwen 3.5 9B | exceptionnel |
 | Rédacteur technique | README, runbooks, vulgarisation | Gemma 4 | document stratégique |
-| Auditeur qualité | conformité, preuves, contrôle final | famille différente du producteur | contrôle indépendant si nécessaire |
+| Auditeur qualité | conformité, preuves, contrôle final | famille locale distincte si possible | contrôle indépendant |
 
-La source de vérité se trouve dans `config/v1/role_matrix.yaml`, `config/v1/model_routing.yaml`, `config/v1/escalation_policy.yaml` et `config/v1/qualification_policy.yaml`.
+Les rôles et permissions viennent de `role_matrix.yaml`, `model_routing.yaml`, `tool_policy.yaml` et `escalation_policy.yaml`.
+
+## Routage exécutable
+
+Plan local sans exécution :
+
+```powershell
+python .\scripts\27_route_openclaw.py `
+  --agent ingenieur-devops `
+  --message 'Analyse ce problème Kubernetes.'
+```
+
+Le même parcours avec `--execute` appelle explicitement `openclaw agent --agent ... --model ollama/...`.
+
+Une route cloud exige `--cloud --reason <motif>`, `OPENCLAW_LOCAL_CLOUD_ENABLED=true` et, lors de l'exécution, `OPENROUTER_API_KEY`. Le secret n'est jamais généré ni écrit dans le dépôt.
+
+## Qualification avant promotion
+
+Les modèles restent `candidate` jusqu'à preuve sur la workstation réelle.
+
+Deux gates complémentaires existent :
+
+1. **E2E OpenClaw réel** : huit agents, provider Ollama, vrai appel d'outil, correction après erreur, trois runs stables ;
+2. **qualification matérielle** : inventaire, suite DevOps, TTFT, débit, contextes 8K/16K et seuils versionnés.
+
+Un succès automatique signifie au mieux `READY_FOR_MANUAL_QUALIFICATION`. Aucune CI et aucun script ne promeuvent un modèle automatiquement.
+
+Voir [Qualification](docs/QUALIFICATION.md), [Intégration OpenClaw](docs/OPENCLAW_INTEGRATION.md) et [Benchmark](docs/BENCHMARK.md).
 
 ## État du projet
 
-La version actuelle est un **socle de production contrôlé avec outillage de qualification**, pas une prétention de performance universelle. Aucun résultat matériel n'est déclaré tant que la suite n'a pas été exécutée sur la workstation. Voir [STATUS.md](STATUS.md).
+Le dépôt contient maintenant le socle, le durcissement GitHub, l'installateur reproductible, la flotte OpenClaw et les gates d'exécution. **Les résultats matériels réels restent volontairement en attente de la workstation cible.** Voir [STATUS.md](STATUS.md).
 
 ## Documentation
 
 - [Portail documentaire](docs/README.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Installation Windows 11](docs/INSTALLATION_WINDOWS_11.md)
+- [Intégration OpenClaw](docs/OPENCLAW_INTEGRATION.md)
 - [Modèles locaux](docs/MODELES_LOCAUX.md)
 - [Routage hybride](docs/ROUTAGE_HYBRIDE.md)
 - [Qualification](docs/QUALIFICATION.md)
 - [Opérations](docs/OPERATIONS.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Sécurité](docs/SECURITY.md)
 - [Benchmark](docs/BENCHMARK.md)
 - [Gouvernance GitHub](docs/GITHUB_GOVERNANCE.md)
 
 ## Qualité et sécurité
 
-La CI vérifie Python **et** PowerShell 7. Le code Python passe les validateurs, Ruff, Pytest et CodeQL ; les scripts Windows passent le parseur PowerShell, PSScriptAnalyzer et Pester. Les changements de dépendances sont contrôlés par Dependency Review.
+La CI couvre :
+
+```text
+Python 3.12 + 3.13
+Ruff
+mypy
+Pytest + coverage >= 75 %
+validateurs dépôt/config/version
+PowerShell 7
+PSScriptAnalyzer
+Pester
+CodeQL
+Dependency Review / pip-audit fallback
+```
+
+Commandes locales principales :
 
 ```powershell
 python scripts/21_validate_repository.py
 python scripts/22_validate_configs.py
 python scripts/24_validate_release.py
 ruff check src tests scripts
-pytest -q
+mypy src
+pytest -q --cov=clawlocal --cov-report=term-missing --cov-fail-under=75
 
 Invoke-ScriptAnalyzer -Path .\scripts\windows -Recurse `
   -Settings .\.github\powershell\PSScriptAnalyzerSettings.psd1
@@ -133,7 +181,16 @@ Invoke-Pester -Path .\tests\powershell -CI
 
 ## Releases
 
-Le versionnage suit SemVer. `VERSION`, `pyproject.toml` et `CHANGELOG.md` doivent rester cohérents. Un tag `v<VERSION>` déclenche le workflow `Release`, qui revalide le dépôt avant de publier les artefacts Python et leurs sommes SHA-256.
+Le versionnage suit SemVer. `VERSION`, `pyproject.toml` et `CHANGELOG.md` doivent rester cohérents.
+
+Un tag `v<VERSION>` déclenche une release qui :
+
+- revalide Python et PowerShell ;
+- construit wheel + sdist ;
+- génère un **SBOM CycloneDX 1.6** ;
+- calcule les sommes SHA-256 ;
+- produit des **attestations GitHub de provenance et de SBOM** ;
+- publie les artefacts seulement si tous les gates passent.
 
 La version `1.0.0` reste réservée à un parcours local réellement qualifié sur la workstation cible.
 

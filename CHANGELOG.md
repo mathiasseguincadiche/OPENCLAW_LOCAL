@@ -12,12 +12,21 @@ Toutes les modifications notables sont documentées ici. Le format s'inspire de 
 - benchmark Ollama streaming avec TTFT et débit ;
 - gate automatique configurable et promotion manuelle uniquement ;
 - orchestrateur PowerShell de qualification ;
-- tests du moteur d'évaluation ;
-- analyse CodeQL du code Python ;
-- Dependency Review sur les Pull Requests ;
-- PSScriptAnalyzer et Pester pour les contrats PowerShell 7 ;
-- validation SemVer centralisée entre `VERSION`, `pyproject.toml`, changelog et tag ;
-- workflow de GitHub Release avec wheel, sdist et sommes SHA-256 ;
+- analyse CodeQL, Dependency Review, PSScriptAnalyzer et Pester ;
+- validation SemVer et workflow GitHub Release ;
+- bootstrap Windows reproductible avec lock Python/Node/OpenClaw/Ollama ;
+- validation SHA-256 du runtime Node.js et SHA-512/SRI du package OpenClaw ;
+- installation complète runtime + modèles + OpenClaw + Gateway ;
+- renderer déterministe de la flotte OpenClaw ;
+- matérialisation des huit workspaces agents ;
+- politique d'outils par rôle, filesystem workspace-only, exec avec approbation et elevated désactivé ;
+- pont de routage `clawlocal` vers les références modèles OpenClaw ;
+- commande de routage local/cloud explicite sans fallback silencieux ;
+- gate E2E OpenClaw réel : huit agents, tool-calling, réparation après erreur et stabilité sur trois runs ;
+- couverture Python avec seuil, mypy et matrice Python 3.12/3.13 ;
+- SBOM CycloneDX de release ;
+- attestations GitHub de provenance et SBOM ;
+- documentation d'intégration OpenClaw et troubleshooting approfondi ;
 - documentation de gouvernance GitHub et politique de protection de `main` ;
 - badges CI, CodeQL, version, licence, PowerShell et Python dans le README.
 

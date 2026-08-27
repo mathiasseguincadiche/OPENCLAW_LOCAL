@@ -6,56 +6,68 @@
 - huit rôles et séparation producteur/auditeur ;
 - catalogue local-first et politique d'escalade ;
 - profil matériel Intel Arc B580 12 Go ;
-- audit Windows sans mutation ;
-- préparation Ollama, téléchargement contrôlé et smoke test local ;
-- benchmark simple reproductible ;
+- audit Windows, configuration Ollama et smoke tests ;
+- benchmark reproductible et qualification versionnée ;
 - validateurs de dépôt/configuration ;
 - documentation d'installation, d'architecture, d'exploitation et de sécurité.
 
-## Phase 2 — outillage de qualification implémenté
+## Phase 2 — outillage de qualification
 
 - inventaire Windows matériel/runtime sans secret ;
 - suite de benchmark DevOps versionnée ;
 - mesures via API native Ollama en streaming ;
 - contextes requis 8K et 16K, 32K optionnel ;
 - gate automatique fonctionnel/performance/contexte ;
-- preuve locale JSON hors Git ;
+- preuves locales JSON hors Git ;
 - politique de promotion manuelle uniquement ;
 - orchestrateur PowerShell de qualification complète ;
 - tests unitaires du moteur d'évaluation.
 
-## Phase 2.5 — durcissement GitHub implémenté dans le dépôt
+## Phase 2.5 — durcissement GitHub
 
-- CI sur actions GitHub compatibles Node 24 ;
-- validation explicite de PowerShell 7 ;
-- PSScriptAnalyzer avec politique versionnée ;
-- tests Pester ciblés ;
-- CodeQL pour Python ;
-- Dependency Review sur les Pull Requests ;
-- validation SemVer entre `VERSION`, `pyproject.toml`, changelog et tag ;
-- workflow Release avec wheel, sdist et sommes SHA-256 ;
-- badges de qualité et de version ;
-- documentation de gouvernance GitHub, protection de `main` et métadonnées attendues.
+- PowerShell 7, PSScriptAnalyzer et Pester ;
+- CodeQL et Dependency Review avec fallback `pip-audit` ;
+- SemVer et workflow Release ;
+- wheel, sdist et SHA-256 ;
+- gouvernance versionnée ;
+- badges et métadonnées documentées.
 
-Les réglages administratifs GitHub eux-mêmes (ruleset/protection de `main`, description et topics) doivent être appliqués dans les paramètres du dépôt avec les valeurs documentées dans `docs/GITHUB_GOVERNANCE.md`.
+Les réglages administratifs GitHub hors Git restent vérifiés séparément via l'issue dédiée : ruleset/protection de `main`, Dependency Graph et métadonnées/topics.
 
-## Candidat / à exécuter sur matériel réel
+## Phase 3 — runtime et intégration OpenClaw implémentés dans le dépôt
 
-- Qwen 3.5 9B comme généraliste local ;
-- Gemma 4 comme seconde famille locale ;
-- SERA 14B comme spécialiste code/DevOps optionnel ;
-- qualification réelle 8K/16K sur Intel Arc B580 ;
-- tool-calling réel via OpenClaw ;
-- correction après retour d'outil ;
-- trois exécutions stables ;
-- décision finale sur les contextes et routes de production ;
-- stratégie d'escalade cloud après mesure de qualité/coût.
+- lock runtime Windows versionné (`runtime_versions.json`) ;
+- bootstrap Windows reproductible avec contrôles d'intégrité Node/OpenClaw ;
+- installation complète orchestrée ;
+- huit workspaces agents gérés et protégés contre l'écrasement accidentel ;
+- renderer de configuration OpenClaw à partir des contrats Git ;
+- Gateway local/loopback ;
+- API Ollama native avec contexte conservateur 16K avant qualification ;
+- outils bornés au workspace, exec soumis à approbation et elevated désactivé ;
+- fallbacks OpenClaw persistants exclusivement locaux ;
+- pont `clawlocal` -> références modèles/commandes OpenClaw ;
+- escalade OpenRouter explicite uniquement ;
+- gate E2E réel pour 8 agents, tool-calling, réparation après erreur et 3 runs ;
+- coverage Python, mypy et matrice Python 3.12/3.13 ;
+- SBOM CycloneDX et attestations de build pour les releases ;
+- runbook de troubleshooting approfondi.
+
+## À exécuter sur matériel réel
+
+- installation complète sur la workstation cible ;
+- E2E OpenClaw réel avec Qwen/Gemma/Ollama ;
+- qualification 8K/16K sur Intel Arc B580 ;
+- décision PROMOTE / KEEP_CANDIDATE / REJECT pour Qwen et Gemma ;
+- SERA 14B uniquement après import/backend explicite et qualification séparée ;
+- décision finale sur contextes et routes de production ;
+- éventuelle stratégie cloud après mesure réelle qualité/coût.
 
 ## Non prétendu
 
-- équivalence d'un modèle local 9B/12B avec un modèle frontier cloud ;
-- tool-calling fiable pour tout modèle/quantification ;
-- débit garanti sur toute carte Intel Arc B580 ;
-- résultat de benchmark tant que la suite n'a pas été exécutée sur la workstation ;
+- équivalence d'un modèle local compact avec un modèle frontier cloud ;
+- tool-calling fiable tant que le gate E2E n'a pas été exécuté sur la machine cible ;
+- débit garanti sur Intel Arc B580 avant benchmark réel ;
+- résultat matériel inventé par la CI ;
 - absence de risque d'injection de prompt en local ;
-- déploiement automatique d'une clé cloud.
+- déploiement automatique d'une clé cloud ;
+- promotion automatique d'un modèle ou d'une nouvelle version runtime.
