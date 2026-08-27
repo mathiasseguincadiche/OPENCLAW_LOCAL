@@ -1,7 +1,9 @@
 @{
     Severity = @('Error', 'Warning')
     ExcludeRules = @(
-        # Le dépôt utilise Write-Host volontairement pour ses interfaces opérateur.
-        'PSAvoidUsingWriteHost'
+        # Write-Host est volontaire pour les interfaces opérateur du dépôt.
+        'PSAvoidUsingWriteHost',
+        # PowerShell 7 utilise UTF-8 sans BOM par défaut ; le dépôt reste cross-platform.
+        'PSUseBOMForUnicodeEncodedFile'
     )
 }
