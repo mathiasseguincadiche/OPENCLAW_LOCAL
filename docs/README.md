@@ -5,7 +5,12 @@
 | comprendre le système | [Architecture](ARCHITECTURE.md) |
 | installer/reproduire le runtime Windows | [Installation Windows 11](INSTALLATION_WINDOWS_11.md) |
 | fournir consignes, sources et livrables à OpenClaw | [Project Intake](PROJECT_INTAKE.md) |
+| vérifier l'intégrité/immutabilité des entrées | [Intégrité Intake](INTAKE_INTEGRITY.md) |
 | transformer un projet flou en projet planifié, vérifié et packagé | [Project Orchestrator](PROJECT_ORCHESTRATOR.md) |
+| produire tout en comprenant le projet | [Pédagogie](PEDAGOGY.md) |
+| lire la documentation à plusieurs profondeurs | [Accessibilité](ACCESSIBILITY.md) |
+| publier un projet GitHub/GitLab avec gates | [Publication projet](PROJECT_PUBLICATION.md) |
+| mesurer les agents/backends en usage réel | [Télémétrie](TELEMETRY.md) |
 | comprendre la flotte OpenClaw et le routage runtime | [Intégration OpenClaw](OPENCLAW_INTEGRATION.md) |
 | utiliser Internet sans basculer automatiquement dans le cloud | [Recherche Web Local-First](WEB_LOCAL_FIRST.md) |
 | comprendre Ollama/Vulkan et les candidats llama.cpp | [Backends locaux](RUNTIME_BACKENDS.md) |
@@ -26,16 +31,19 @@
 ```text
 1. installer / auditer Windows
 2. qualifier le runtime local
-3. créer un Project Intake
+3. créer un Project Intake durci + archive canonique
 4. ANALYZE : transformer les sources en compréhension structurée
 5. CLARIFY : faire trancher les ambiguïtés bloquantes par l'humain
 6. PLAN + ASSIGN : créer les tâches et les confier aux rôles OpenClaw
 7. EXECUTE : travailler principalement avec les modèles locaux
-8. utiliser le Web pour les faits récents
-9. passer en LOCAL_DEEP si une tâche le justifie et si le modèle est qualifié
-10. VALIDATE + REVIEW : auditer indépendamment les résultats
-11. PACKAGE : produire le ZIP et les hashes
-12. COMPLETE : validation humaine finale
+8. apprendre aux jalons utiles selon efficient/balanced/intensive
+9. utiliser le Web pour les faits récents
+10. passer en LOCAL_DEEP si une tâche le justifie et si le modèle est qualifié
+11. VALIDATE + REVIEW : auditer indépendamment les résultats
+12. PACKAGE : produire le ZIP et les hashes
+13. COMPLETE : validation humaine finale
+14. PUBLICATION : GitHub/GitLab sous machine d'états et preuves distantes
+15. TELEMETRY : exploiter les métriques réelles pour optimiser modèles/backends
 ```
 
 OpenRouter reste hors du parcours automatique : une escalade cloud éventuelle doit continuer à respecter la politique d'escalade et FinOps.
