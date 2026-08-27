@@ -1,90 +1,63 @@
 schema_version: "1.1.0"
 platform_version: "0.2.0"
-models:
-  qwen-general:
-    provider: ollama
-    runtime_id: "qwen3.5:9b"
-    family: qwen
-    class: local_fast
-    role: generalist
-    required: true
-    status: candidate
-    input: [text, image]
-    context_policy: benchmark_before_raise
+policy:
+  local_first: true
+  local_model_count: 3
+  performance_only: true
+  only_supported_local_aliases: [qwen-max, gemma-deep, devstral-devops]
+  no_hidden_small_model_fallback: true
+  hardware_qualification_required_before_performance_claims: true
 
-  gemma-review:
+models:
+  qwen-max:
     provider: ollama
-    runtime_id: "gemma4:12b"
-    family: gemma
-    class: local_fast
-    role: writing_architecture_review
+    runtime_id: qwen3.8:27b
+    family: qwen
+    class: local_max
+    input: [text, image]
     required: true
     status: candidate
-    input: [text, image]
+    routing_active: true
+    purpose: [orchestration, research, security, release, deep_reasoning]
     context_policy: benchmark_before_raise
 
   gemma-deep:
     provider: ollama
-    runtime_id: "gemma4:26b"
+    runtime_id: gemma4:26b
     family: gemma
     class: local_deep
-    role: architecture_writing_review_deep
-    required: false
-    status: optional_candidate
     input: [text, image]
-    activation: benchmark_required
-    preferred_quantization: Q4_K_M
-    workstation_note: "26B MoE / 4B actifs; offload VRAM+RAM attendu sur B580 12 Go."
+    required: true
+    status: candidate
+    routing_active: true
+    purpose: [architecture, documentation, independent_review, multimodal_review]
+    context_policy: benchmark_before_raise
 
   devstral-devops:
     provider: ollama
-    runtime_id: "devstral-small-2:24b"
+    runtime_id: devstral-small-2:24b
     family: mistral
     class: local_specialist
-    role: agentic_software_engineering
-    required: false
-    status: optional_candidate
     input: [text, image]
-    activation: benchmark_required
-    preferred_quantization: Q4_K_M
-    workstation_note: "Spécialiste DevOps/code agentique; offload VRAM+RAM attendu sur B580 12 Go."
-
-  qwen-max:
-    provider: ollama
-    runtime_id: "qwen3.8:27b"
-    family: qwen
-    class: local_max
-    role: deep_reasoning_agentic_multimodal
-    required: false
-    status: optional_candidate
-    input: [text, image]
-    activation: benchmark_required
-    preferred_quantization: Q4_K_M
+    required: true
+    status: candidate
+    routing_active: true
+    purpose: [devops, software_engineering, repository_tools, multi_file_editing]
     context_policy: benchmark_before_raise
-    workstation_note: "Modèle local maximal généraliste; offload VRAM+RAM attendu sur B580 12 Go."
-
-  sera-devops:
-    provider: custom_gguf
-    runtime_id: "sera-14b"
-    family: qwen-derived
-    class: legacy_candidate
-    role: software_engineering_compact
-    required: false
-    status: legacy_optional_candidate
-    input: [text]
-    activation: import_backend_and_benchmark_required
-    routing_active: false
 
 cloud_catalog:
   research:
     provider: openrouter
-    runtime_id: "perplexity/sonar-pro-search"
+    runtime_id: perplexity/sonar-pro-search
     enabled: false
+    purpose: fresh_research_only
   frontier-reasoning:
     provider: openrouter
-    runtime_id: "openai/gpt-5.6-sol"
+    runtime_id: openai/gpt-5.6-sol
     enabled: false
+    purpose: exceptional_frontier_reasoning
   frontier-review:
     provider: openrouter
-    runtime_id: "anthropic/claude-sonnet-5"
+    runtime_id: anthropic/claude-sonnet-5
     enabled: false
+    purpose: exceptional_independent_review
