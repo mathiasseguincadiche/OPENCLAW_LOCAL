@@ -23,6 +23,36 @@ def accessibility_policy() -> dict[str, Any]:
     return load_contract("accessibility_policy.yaml")
 
 
+def _profile_payload(profile: str, mode: str) -> dict[str, Any]:
+    policy = learning_policy()
+    profiles = policy.get("profiles", {})
+    modes = set(policy.get("modes", []))
+    if profile not in profiles:
+        raise ValueError(f"profil pédagogique inconnu: {profile}")
+    if mode not in modes:
+        raise ValueError(f"mode pédagogique inconnu: {mode}")
+    return {
+        "schema_version": "1.0.0",
+        "profile": profile,
+        "mode": mode,
+        "delivery_priority": bool(policy.get("delivery_priority", True)),
+        **profiles[profile],
+    }
+
+
+def set_learning_profile(project: Path, *, profile: str, mode: str) -> Path:
+    root = project / "context" / "learning"
+    if not root.is_dir():
+        raise FileNotFoundError(root)
+    payload = _profile_payload(profile, mode)
+    path = root / "learning_profile.json"
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def initialize_learning(
     project: Path,
     *,
@@ -32,12 +62,7 @@ def initialize_learning(
     policy = learning_policy()
     selected_profile = profile or str(policy.get("default_profile", "balanced"))
     selected_mode = mode or str(policy.get("default_mode", "assisted"))
-    profiles = policy.get("profiles", {})
-    modes = set(policy.get("modes", []))
-    if selected_profile not in profiles:
-        raise ValueError(f"profil pédagogique inconnu: {selected_profile}")
-    if selected_mode not in modes:
-        raise ValueError(f"mode pédagogique inconnu: {selected_mode}")
+    _profile_payload(selected_profile, selected_mode)
 
     root = project / "context" / "learning"
     root.mkdir(parents=True, exist_ok=True)
@@ -70,16 +95,10 @@ def initialize_learning(
         yaml.safe_dump(retention, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
     )
-    profile_payload = {
-        "schema_version": "1.0.0",
-        "profile": selected_profile,
-        "mode": selected_mode,
-        "delivery_priority": bool(policy.get("delivery_priority", True)),
-        **profiles[selected_profile],
-    }
-    (root / "learning_profile.json").write_text(
-        json.dumps(profile_payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    set_learning_profile(
+        project,
+        profile=selected_profile,
+        mode=selected_mode,
     )
 
     access = accessibility_policy()
