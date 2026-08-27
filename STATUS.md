@@ -2,7 +2,7 @@
 
 ## Version courante
 
-**0.2.0 — Local-First Project Workflow + Project Orchestrator + V7 Superset + Document Flow + flotte IA août 2026**
+**0.2.0 — Local-First Project Workflow + Project Orchestrator + V7 Superset + Document Flow + flotte performance-only**
 
 `OPENCLAW_LOCAL` est le successeur local-first de `openclaw_openrouter` : huit rôles spécialisés, contrats, projets, preuves, séparation producteur/auditeur, pédagogie, publication gouvernée et garde-fous V7 sont préservés ou renforcés. Le parcours LLM nominal reste local ; le cloud est une escalade explicite, budgétée et contrôlée.
 
@@ -96,55 +96,45 @@ State gates et action gates protègent notamment création distante, visibilité
 - Rédacteur : documentation versionnée, sans réécriture des sources de vérité ;
 - Auditeur : contrôle indépendant, sans correction silencieuse.
 
-## Flotte IA locale — référence août 2026
+## Flotte IA locale — performance-only
 
-### Modèles fast requis
-
-| Alias | Runtime | Rôle |
-|---|---|---|
-| `qwen-general` | `qwen3.5:9b` | généraliste rapide, orchestration courante, DevOps courant |
-| `gemma-review` | `gemma4:12b` | architecture, rédaction et revue rapide |
-
-### Candidats performance optionnels
+**Trois modèles locaux, et uniquement trois :**
 
 | Alias | Runtime | Tier | Usage cible |
 |---|---|---|---|
+| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX | orchestration, recherche, sécurité, release, raisonnement complexe |
+| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP | architecture, rédaction, audit, contre-revue multimodale |
 | `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST | DevOps/software engineering agentique |
-| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP | architecture, rédaction et audit approfondis |
-| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX | raisonnement, orchestration, recherche et sécurité complexes |
 
-`sera-devops` / `sera-14b` est conservé comme candidat historique mais **hors routage actif** tant que son backend GGUF dédié n'est pas importé et qualifié.
+Il n'existe **aucun petit modèle local ou modèle legacy supporté comme fallback**. Les trois modèles ci-dessus sont `required: true` dans le catalogue et constituent exactement la flotte installable/routable par la plateforme.
 
-Les modèles optionnels restent `optional_candidate`. Ils ne deviennent automatiquement nominaux qu'après qualification réelle et exposition locale de leurs alias via `OPENCLAW_LOCAL_QUALIFIED_MODELS`. Sans qualification, le routeur revient au modèle fast requis et n'utilise jamais le cloud comme fallback silencieux.
-
-### Routage par rôle après qualification
+### Routage par rôle
 
 ```text
-Chef opérations       -> Qwen3.8 27B max ; fallback Qwen3.5 9B
-Expert recherche      -> Qwen3.8 27B max + Web ; fallback Qwen3.5 9B
-Architecte solutions  -> Gemma 4 26B deep ; fallback Gemma 4 12B
-Ingénieur DevOps      -> Devstral Small 2 24B ; fallback Qwen3.5 9B
-Ingénieur sécurité    -> Qwen3.8 27B max ; fallback Qwen3.5 9B
-Release/Forges        -> Qwen3.5 9B nominal
-Rédacteur technique   -> Gemma 4 26B deep ; fallback Gemma 4 12B
-Auditeur qualité      -> Gemma 4 26B deep ; changement vers Qwen si famille producteur=Gemma
+Chef opérations       -> Qwen 3.8 27B
+Expert recherche      -> Qwen 3.8 27B + Web
+Architecte solutions  -> Gemma 4 26B
+Ingénieur DevOps      -> Devstral Small 2 24B
+Ingénieur sécurité    -> Qwen 3.8 27B
+Release/Forges        -> Qwen 3.8 27B
+Rédacteur technique   -> Gemma 4 26B
+Auditeur qualité      -> Gemma 4 26B ; bascule Qwen 3.8 27B si producteur Gemma
 ```
 
-Cette table est une **politique de préférence**, pas une preuve de performance B580.
+Cette table définit le **support logiciel et le routage nominal**. Elle n'est pas une preuve de performance B580.
 
 ## Qualification de la flotte
 
-La suite active reste `devops-v2`. Les modèles requis sont évalués pour le gate global ; les candidats optionnels peuvent être inclus séparément :
+La suite active reste `devops-v2`. Les **trois modèles supportés sont tous requis** pour le gate global :
 
 ```powershell
-.\scripts\windows\07_run_qualification.ps1 -IncludeSpecialist
-.\scripts\windows\07_run_qualification.ps1 -IncludeDeep
-.\scripts\windows\07_run_qualification.ps1 -IncludeMax
+.\scripts\windows\03_pull_models.ps1
+.\scripts\windows\07_run_qualification.ps1
 ```
 
-Chaque candidat optionnel reçoit désormais son propre rapport automatique. Son échec n'altère pas artificiellement le verdict des modèles fast requis et ne déclenche aucune promotion automatique.
+L'échec de l'un des trois modèles fait échouer le gate de qualification de la flotte. Il n'existe aucun candidat local optionnel à promouvoir dans le routage.
 
-Toute promotion réelle exige encore les critères de `qualification_policy.yaml`, notamment E2E OpenClaw, tool-calling, réparation après erreur, stabilité sur trois runs, parcours Project Intake/Web, absence de dépendance cloud nominale et revue humaine.
+La qualification réelle exige encore les critères de `qualification_policy.yaml`, notamment E2E OpenClaw, tool-calling, réparation après erreur, stabilité sur trois runs, parcours Project Intake/Web, multimodalité PDF/image, absence de dépendance cloud nominale et revue humaine.
 
 ## Backends Intel Arc
 
@@ -161,7 +151,7 @@ La sélection finale exige des mesures B580 réelles : TTFT, tokens/s, VRAM, RAM
 - stockage local append-only ;
 - modèle, agent, backend, route et durée ;
 - TTFT, tokens/s, tokens, VRAM/RAM seulement lorsqu'ils sont observés ;
-- tool calls, retries, transition local deep/max et escalade cloud ;
+- tool calls, retries, transitions locales et escalade cloud ;
 - prompts, réponses, secrets et documents privés interdits ;
 - métriques inconnues jamais fabriquées.
 
@@ -188,7 +178,7 @@ CodeQL
 Dependency Review
 ```
 
-Le gate flotte août 2026 vérifie les IDs runtime, les tiers, les rôles, l'absence d'auto-promotion des modèles lourds, l'indépendance de l'Auditeur et le câblage de qualification.
+Le gate flotte vérifie que le catalogue contient **exactement** les trois runtimes supportés, que tous les rôles n'utilisent que ces alias, qu'aucun ancien petit modèle ne réapparaît dans les surfaces actives, que les trois modèles sont obligatoires dans la qualification et que l'indépendance de l'Auditeur reste respectée.
 
 ## À exécuter sur matériel réel
 
@@ -196,27 +186,28 @@ Les points suivants **ne peuvent pas être validés par GitHub Actions** :
 
 1. installation complète Windows 11 Pro sur la workstation cible ;
 2. ACL d'Intake dans l'environnement final ;
-3. E2E OpenClaw avec les modèles réellement chargés ;
+3. E2E OpenClaw avec les trois modèles réellement chargés ;
 4. vrai projet multi-documents PDF/images/Office/code ;
 5. qualité sémantique de lecture de PDF scannés et images ;
-6. benchmark Qwen3.5 9B et Gemma 4 12B ;
-7. benchmark séparé Devstral Small 2 24B, Gemma 4 26B et Qwen3.8 27B ;
-8. comparaison Ollama/Vulkan vs llama.cpp/SYCL vs llama.cpp/Vulkan ;
-9. mesure TTFT, tokens/s, VRAM, RAM, stabilité, tool-calling et consommation avec offload ;
-10. qualification 8K/16K puis éventuelle montée 32K/64K selon preuves ;
-11. test d'indépendance réelle producteur/auditeur sur des tâches représentatives ;
-12. télémétrie réelle sur un projet complet ;
-13. publication réelle jusqu'au clone propre/audit distant ;
-14. validation du coût réel des rares escalades OpenRouter.
+6. benchmark Qwen 3.8 27B ;
+7. benchmark Gemma 4 26B ;
+8. benchmark Devstral Small 2 24B ;
+9. comparaison Ollama/Vulkan vs llama.cpp/SYCL vs llama.cpp/Vulkan ;
+10. mesure TTFT, tokens/s, VRAM, RAM, stabilité, tool-calling et consommation avec offload ;
+11. qualification 8K/16K puis éventuelle montée 32K/64K selon preuves ;
+12. test d'indépendance réelle producteur/auditeur sur des tâches représentatives ;
+13. télémétrie réelle sur un projet complet ;
+14. publication réelle jusqu'au clone propre/audit distant ;
+15. validation du coût réel des rares escalades OpenRouter.
 
 ## Non prétendu
 
 - équivalence systématique d'un modèle local avec un modèle frontier cloud ;
 - débit garanti sur Intel Arc B580 avant benchmark ;
 - résidence VRAM complète des modèles 24–27B sur 12 Go ;
-- contexte 256K/384K utilisable avec un bon débit sur cette workstation ;
+- contexte maximal théorique utilisable avec un bon débit sur cette workstation ;
 - compréhension parfaite des PDF/images avant E2E ;
-- auto-qualification ou auto-promotion d'un modèle lourd ;
+- sélection automatique d'un backend sans preuve ;
 - escalade cloud automatique par le Project Orchestrator ;
 - publication distante sans preuve et approbation ;
 - résultat matériel inventé par la CI.
