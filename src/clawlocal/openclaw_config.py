@@ -70,7 +70,7 @@ def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
-    """Build the deterministic OpenClaw patch for the local-first fleet."""
+    """Build the deterministic OpenClaw patch for the performance-only fleet."""
     catalog = load_contract("model_catalog.yaml")
     routing = load_contract("model_routing.yaml")
     tool_policy = load_contract("tool_policy.yaml")
@@ -96,8 +96,8 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
             "tools": _agent_tools(agent_id, tool_policy),
         }
 
-    qwen = catalog["models"]["qwen-general"]["runtime_id"]
-    gemma = catalog["models"]["gemma-review"]["runtime_id"]
+    qwen = catalog["models"]["qwen-max"]["runtime_id"]
+    gemma = catalog["models"]["gemma-deep"]["runtime_id"]
     qwen_ref = f"ollama/{qwen}"
     gemma_ref = f"ollama/{gemma}"
     web = web_policy["nominal_path"]
