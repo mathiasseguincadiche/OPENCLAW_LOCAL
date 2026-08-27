@@ -17,8 +17,10 @@ def _write_docx(path: Path) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(
             "word/document.xml",
-            """<w:document xmlns:w="urn:w"><w:body><w:p><w:r><w:t>Bonjour DOCX</w:t>"
-            "</w:r></w:p></w:body></w:document>""",
+            (
+                '<w:document xmlns:w="urn:w"><w:body><w:p><w:r>'
+                '<w:t>Bonjour DOCX</w:t></w:r></w:p></w:body></w:document>'
+            ),
         )
 
 
@@ -26,8 +28,10 @@ def _write_pptx(path: Path) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(
             "ppt/slides/slide1.xml",
-            """<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><a:p><a:r>"
-            "<a:t>Slide locale</a:t></a:r></a:p></p:cSld></p:sld>""",
+            (
+                '<p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><a:p><a:r>'
+                '<a:t>Slide locale</a:t></a:r></a:p></p:cSld></p:sld>'
+            ),
         )
 
 
@@ -35,12 +39,16 @@ def _write_xlsx(path: Path) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(
             "xl/sharedStrings.xml",
-            """<sst xmlns="urn:x"><si><t>Valeur partagée</t></si></sst>""",
+            '<sst xmlns="urn:x"><si><t>Valeur partagée</t></si></sst>',
         )
         archive.writestr(
             "xl/worksheets/sheet1.xml",
-            """<worksheet xmlns="urn:x"><sheetData><row><c r="A1" t="s"><v>0</v>"
-            "</c><c r="B1"><f>1+1</f><v>2</v></c></row></sheetData></worksheet>""",
+            (
+                '<worksheet xmlns="urn:x"><sheetData><row>'
+                '<c r="A1" t="s"><v>0</v></c>'
+                '<c r="B1"><f>1+1</f><v>2</v></c>'
+                '</row></sheetData></worksheet>'
+            ),
         )
 
 
