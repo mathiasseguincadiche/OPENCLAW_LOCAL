@@ -14,7 +14,9 @@ from clawlocal.project_context import (
     sync_project_context,
     sync_project_to_all_agents,
 )
-from clawlocal.project_orchestrator import (
+from clawlocal.project_governance import required_criticality_gates
+from clawlocal.project_migrations import ensure_current_project_schema
+from clawlocal.project_orchestrator_superset import (
     all_tasks_finished,
     build_phase_prompt,
     create_assignments,
@@ -35,6 +37,7 @@ from clawlocal.project_orchestrator import (
 )
 from clawlocal.project_remediation import reopen_tasks_for_correction
 from clawlocal.runtime import build_openclaw_agent_command, route_evidence, route_request
+from clawlocal.telemetry import automatic_run_telemetry, extract_observed_metrics
 
 _JSON_REQUIRED = {
     "analyze": {
@@ -110,12 +113,7 @@ def _write_invocation_evidence(
     agent: str,
     payload: dict[str, Any],
 ) -> Path:
-    target = (
-        project
-        / "evidence"
-        / "orchestration"
-        / f"{_timestamp()}-{phase}-{agent}.json"
-    )
+    target = project / "evidence" / "orchestration" / f"{_timestamp()}-{phase}-{agent}.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
@@ -188,21 +186,32 @@ def _local_agent_call(
         print(json.dumps(evidence, ensure_ascii=False, indent=2))
         return evidence, None
 
-    completed = subprocess.run(
-        command,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    evidence["returncode"] = completed.returncode
-    if completed.stdout:
-        try:
-            evidence["openclaw"] = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            evidence["stdout"] = completed.stdout
-    if completed.stderr:
-        evidence["stderr"] = completed.stderr
+    manifest = load_project_manifest(project)
+    with automatic_run_telemetry(
+        project,
+        project_id=str(manifest["project_id"]),
+        agent=agent,
+        model=resolved_model,
+        backend=resolved_model.split("/", maxsplit=1)[0],
+        route_kind=decision.route_kind,
+        phase=phase,
+    ) as observed:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        evidence["returncode"] = completed.returncode
+        if completed.stdout:
+            try:
+                evidence["openclaw"] = json.loads(completed.stdout)
+                observed.update(extract_observed_metrics(evidence["openclaw"]))
+            except json.JSONDecodeError:
+                evidence["stdout"] = completed.stdout
+        if completed.stderr:
+            evidence["stderr"] = completed.stderr
     evidence_path = _write_invocation_evidence(project, phase, agent, evidence)
     return evidence, evidence_path
 
@@ -211,9 +220,7 @@ def _phase_payload(evidence: dict[str, Any], phase: str) -> dict[str, Any]:
     required = _JSON_REQUIRED[phase]
     found = _find_structured_payload(evidence, required)
     if found is None:
-        raise ValueError(
-            f"{phase}: la sortie OpenClaw ne contient pas le JSON contractuel attendu"
-        )
+        raise ValueError(f"{phase}: la sortie OpenClaw ne contient pas le JSON contractuel attendu")
     return found
 
 
@@ -223,6 +230,9 @@ def _show_status(project: Path) -> None:
         "project_id": manifest["project_id"],
         "title": manifest["title"],
         "status": manifest["status"],
+        "classification": manifest["classification"],
+        "criticality": manifest["criticality"],
+        "criticality_gates": sorted(required_criticality_gates(manifest)),
         "expected_deliverables": manifest.get("expected_deliverables", []),
         "open_blocking_clarifications": open_blocking_clarifications(project),
     }
@@ -282,8 +292,7 @@ def _plan(project: Path, root: Path, *, execute: bool, timeout: int) -> bool:
     )
     if not execute:
         return False
-    plan = _phase_payload(evidence, "plan")
-    store_plan(project, plan)
+    store_plan(project, _phase_payload(evidence, "plan"))
     transition_project(
         project,
         "PLANNED",
@@ -344,8 +353,7 @@ def _execute_tasks(
             if mutated:
                 return mutated
             raise ValueError(
-                "aucune tâche prête: dépendance en échec ou nombre maximal "
-                "de tentatives atteint"
+                "aucune tâche prête: dépendance en échec ou nombre maximal de tentatives atteint"
             )
 
         any_failure = False
@@ -355,7 +363,6 @@ def _execute_tasks(
             snapshot = root / "workspaces" / agent / "projects" / project.name
             if not snapshot.exists():
                 sync_project_context(root, project.name, agent)
-
             evidence, evidence_path = _local_agent_call(
                 project,
                 agent,
@@ -366,18 +373,10 @@ def _execute_tasks(
             )
             if not execute:
                 continue
-
             returncode = int(evidence.get("returncode", 1))
-            outputs = collect_agent_outputs(
-                root,
-                project.name,
-                agent,
-                current_task,
-            )
+            outputs = collect_agent_outputs(root, project.name, agent, current_task)
             relative_evidence = (
-                evidence_path.relative_to(project).as_posix()
-                if evidence_path is not None
-                else ""
+                evidence_path.relative_to(project).as_posix() if evidence_path is not None else ""
             )
             record_task_result(
                 project,
@@ -391,7 +390,6 @@ def _execute_tasks(
             mutated = True
             if returncode != 0:
                 any_failure = True
-
         if not execute:
             return False
         if task_id is not None or any_failure:
@@ -401,16 +399,10 @@ def _execute_tasks(
 def _validate(project: Path, root: Path, *, execute: bool, timeout: int) -> bool:
     if current_status(project) != "VALIDATING":
         raise ValueError("validate exige le statut VALIDATING")
-    sync_project_context(
-        root,
-        project.name,
-        "auditeur-qualite",
-        include_outputs=True,
-    )
+    sync_project_context(root, project.name, "auditeur-qualite", include_outputs=True)
     prompt = build_phase_prompt(project.name, "validate") + (
         " Si le verdict est FAIL, ajoute retry_task_ids[] avec les identifiants exacts des tâches "
-        "à corriger. Si le finding concerne une dépendance amont, indique la tâche amont; "
-        "l'orchestrateur rouvrira aussi ses dépendants."
+        "à corriger. Si le finding concerne une dépendance amont, indique la tâche amont."
     )
     evidence, _ = _local_agent_call(
         project,
@@ -432,11 +424,7 @@ def _validate(project: Path, root: Path, *, execute: bool, timeout: int) -> bool
             reason="validation_passed",
         )
     else:
-        reopened = reopen_tasks_for_correction(
-            project,
-            report,
-            source="validation",
-        )
+        reopened = reopen_tasks_for_correction(project, report, source="validation")
         print("REOPENED_TASKS=" + ",".join(reopened))
         transition_project(
             project,
@@ -450,12 +438,7 @@ def _validate(project: Path, root: Path, *, execute: bool, timeout: int) -> bool
 def _review(project: Path, root: Path, *, execute: bool, timeout: int) -> bool:
     if current_status(project) != "REVIEW":
         raise ValueError("review exige le statut REVIEW")
-    sync_project_context(
-        root,
-        project.name,
-        "auditeur-qualite",
-        include_outputs=True,
-    )
+    sync_project_context(root, project.name, "auditeur-qualite", include_outputs=True)
     prompt = build_phase_prompt(project.name, "review") + (
         " Si le verdict est FAIL, ajoute retry_task_ids[] avec les identifiants exacts des tâches "
         "à corriger. N'invente pas d'identifiant absent du plan."
@@ -480,11 +463,7 @@ def _review(project: Path, root: Path, *, execute: bool, timeout: int) -> bool:
             reason="independent_review_passed",
         )
     else:
-        reopened = reopen_tasks_for_correction(
-            project,
-            report,
-            source="review",
-        )
+        reopened = reopen_tasks_for_correction(project, report, source="review")
         print("REOPENED_TASKS=" + ",".join(reopened))
         transition_project(
             project,
@@ -575,7 +554,7 @@ def _run(project: Path, root: Path, *, execute: bool, timeout: int) -> None:
 def main() -> int:
     args = parse_args()
     project = project_path(args.root, args.project)
-
+    ensure_current_project_schema(project)
     if args.action == "status":
         _show_status(project)
     elif args.action == "analyze":
