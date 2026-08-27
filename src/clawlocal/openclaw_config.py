@@ -75,6 +75,7 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
     routing = load_contract("model_routing.yaml")
     tool_policy = load_contract("tool_policy.yaml")
     web_policy = load_contract("web_policy.yaml")
+    ingestion_policy = load_contract("document_ingestion_policy.yaml")
 
     workspaces_root = platform_root / "workspaces"
     entries: dict[str, Any] = {}
@@ -97,7 +98,10 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
 
     qwen = catalog["models"]["qwen-general"]["runtime_id"]
     gemma = catalog["models"]["gemma-review"]["runtime_id"]
+    qwen_ref = f"ollama/{qwen}"
+    gemma_ref = f"ollama/{gemma}"
     web = web_policy["nominal_path"]
+    pdf_policy = ingestion_policy.get("formats", {}).get("pdf", {})
     return {
         "gateway": {
             "mode": "local",
@@ -119,9 +123,19 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
             "defaults": {
                 "skipBootstrap": True,
                 "model": {
-                    "primary": f"ollama/{qwen}",
-                    "fallbacks": [f"ollama/{gemma}"],
+                    "primary": qwen_ref,
+                    "fallbacks": [gemma_ref],
                 },
+                "imageModel": {
+                    "primary": qwen_ref,
+                    "fallbacks": [gemma_ref],
+                },
+                "pdfModel": {
+                    "primary": qwen_ref,
+                    "fallbacks": [gemma_ref],
+                },
+                "pdfMaxBytesMb": int(pdf_policy.get("max_bytes_mb", 50)),
+                "pdfMaxPages": int(pdf_policy.get("max_pages_per_tool_call", 20)),
             },
             "entries": entries,
         },
