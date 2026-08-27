@@ -13,6 +13,12 @@ EXPECTED_AGENTS = {
     "auditeur-qualite",
 }
 
+EXPECTED_MODELS = {
+    "qwen3.8:27b",
+    "gemma4:26b",
+    "devstral-small-2:24b",
+}
+
 
 def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
     patch = build_openclaw_patch(Path("E:/AI/OpenClawLocal"))
@@ -58,20 +64,22 @@ def test_read_only_roles_cannot_mutate_or_exec() -> None:
         assert {"write", "edit", "apply_patch", "exec", "process"} <= denied
 
 
-def test_provider_uses_explicit_models_and_multimodal_metadata() -> None:
+def test_provider_exposes_exactly_three_performance_models() -> None:
     patch = build_openclaw_patch(Path("C:/OpenClawLocal"))
     provider = patch["models"]["providers"]["ollama"]
     assert provider["api"] == "ollama"
     ids = {model["id"] for model in provider["models"]}
-    assert {
-        "qwen3.5:9b",
-        "gemma4:12b",
-        "gemma4:26b",
-        "devstral-small-2:24b",
-        "qwen3.8:27b",
-    } <= ids
-    gemma = next(
-        model for model in provider["models"] if model["id"] == "gemma4:12b"
-    )
-    assert gemma["input"] == ["text", "image"]
-    assert gemma["contextTokens"] == 16384
+    assert ids == EXPECTED_MODELS
+    assert all(model["input"] == ["text", "image"] for model in provider["models"])
+    assert all(model["contextTokens"] == 16384 for model in provider["models"])
+
+
+def test_multimodal_defaults_use_qwen38_then_gemma26() -> None:
+    defaults = build_openclaw_patch(Path("C:/OpenClawLocal"))["agents"]["defaults"]
+    expected = {
+        "primary": "ollama/qwen3.8:27b",
+        "fallbacks": ["ollama/gemma4:26b"],
+    }
+    assert defaults["model"] == expected
+    assert defaults["imageModel"] == expected
+    assert defaults["pdfModel"] == expected
