@@ -82,7 +82,10 @@ def main() -> int:
 
     sera = models.get("sera-devops", {})
     if sera.get("routing_active") is not False:
-        failures.append("SERA doit rester hors routage actif tant que son backend n'est pas qualifié")
+        failures.append(
+            "SERA doit rester hors routage actif tant que son backend "
+            "n'est pas qualifié"
+        )
 
     if routing.get("routing_order") != [
         "local_primary",
@@ -110,7 +113,10 @@ def main() -> int:
         failures.append("Auditeur: Gemma 4 12B doit être le primaire indépendant")
     if auditor.get("independent_alternative") != "qwen-max":
         failures.append("Auditeur: Qwen3.8 27B doit être l'alternative indépendante max")
-    if auditor.get("independence_rule") != "reviewer_family_must_differ_from_producer_when_practical":
+    if (
+        auditor.get("independence_rule")
+        != "reviewer_family_must_differ_from_producer_when_practical"
+    ):
         failures.append("Auditeur: règle d'indépendance manquante")
 
     specialists = qualification.get("specialists", {})
@@ -157,9 +163,15 @@ def main() -> int:
         if model_ref(alias) != expected:
             failures.append(f"{alias}: résolution runtime incohérente")
 
-    runtime_source = (ROOT / "src" / "clawlocal" / "runtime.py").read_text(encoding="utf-8")
-    qualification_source = (ROOT / "src" / "clawlocal" / "qualification.py").read_text(encoding="utf-8")
-    benchmark_source = (ROOT / "scripts" / "benchmark_local.py").read_text(encoding="utf-8")
+    runtime_source = (ROOT / "src" / "clawlocal" / "runtime.py").read_text(
+        encoding="utf-8"
+    )
+    qualification_source = (
+        ROOT / "src" / "clawlocal" / "qualification.py"
+    ).read_text(encoding="utf-8")
+    benchmark_source = (ROOT / "scripts" / "benchmark_local.py").read_text(
+        encoding="utf-8"
+    )
     if "OPENCLAW_LOCAL_QUALIFIED_MODELS" not in runtime_source:
         failures.append("promotion locale: registre runtime des modèles qualifiés absent")
     if "optional_candidates" not in qualification_source:
