@@ -40,29 +40,32 @@ Projet utilisateur
            |
      8 rôles spécialisés
            |
-     +-----+------------------+----------------+----------------+
-     |                        |                |                |
-     v                        v                v                v
- LOCAL_FAST             LOCAL_SPECIALIST  LOCAL_DEEP       LOCAL_MAX
- Qwen 3.5 9B            Devstral 24B (*)  Gemma 4 26B (*) Qwen 3.8 27B (*)
- Gemma 4 12B                 |                |                |
-     |                       +----------------+----------------+
-     |                                        |
-     +---------------- LOCAL + WEB -----------+
-                      web_search/fetch
-                              |
-                        insuffisant ?
-                       non /        \ oui démontré
-                          v          v
-                     livrables   OpenRouter
-                                  sous politique
-                                  + budget FinOps
-                              |
-                              v
-                   télémétrie locale / preuves
+     +----------------------+----------------------+----------------------+
+     |                      |                      |                      |
+     v                      v                      v                      |
+ Qwen 3.8 27B        Gemma 4 26B       Devstral Small 2 24B            |
+ orchestration       architecture       DevOps / code agentique         |
+ recherche           rédaction                                         |
+ sécurité            audit                                             |
+ release             multimodal review                                 |
+     |                      |                      |                      |
+     +----------------------+----------------------+----------------------+
+                            |
+                      LOCAL + WEB
+                    web_search/fetch
+                            |
+                      insuffisant ?
+                   non /            \ oui démontré
+                      v              v
+                 livrables       OpenRouter
+                                 sous politique
+                                 + budget FinOps
+                            |
+                            v
+                 télémétrie locale / preuves
 ```
 
-`(*)` Les modèles LOCAL_SPECIALIST/LOCAL_DEEP/LOCAL_MAX sont des **candidats optionnels**. Ils deviennent automatiquement sélectionnables par leur rôle uniquement après qualification réelle de la combinaison modèle + backend + workstation. Sans qualification, le routeur revient au modèle LOCAL_FAST requis ; il ne bascule jamais automatiquement vers le cloud.
+La flotte locale est **performance-only** : exactement trois modèles sont déclarés, installables et routables. Il n'existe aucun fallback nominal vers un petit modèle local. La qualification matérielle détermine les performances réelles de ces trois modèles et des backends sur la workstation ; elle ne change pas la liste des modèles supportés.
 
 ## Principes de conception
 
@@ -73,6 +76,7 @@ Projet utilisateur
 - **Orchestration fail-closed** : une phase ne progresse que si son artefact/gate existe réellement.
 - **Clarification humaine** : une ambiguïté bloquante n'est jamais résolue arbitrairement par un agent.
 - **Local-first** : aucune dépendance LLM cloud n'est requise pour le parcours nominal.
+- **Performance-only local** : seuls Qwen 3.8 27B, Gemma 4 26B et Devstral Small 2 24B sont supportés localement.
 - **Web local-first** : une donnée récente déclenche d'abord recherche/fetch Web + raisonnement local.
 - **Cloud-on-demand** : activation, motif autorisé, préconditions, budget et éventuellement validation humaine.
 - **Fail closed** : aucun fallback cloud silencieux, aucune promotion automatique de modèle/backend.
@@ -116,26 +120,17 @@ COMPLETE
 
 Les retours `VALIDATING -> IN_PROGRESS` et `REVIEW -> IN_PROGRESS` sont utilisés lorsque des corrections sont nécessaires. Les tâches concernées et leurs dépendants transitifs sont rouverts sans effacer les tentatives précédentes.
 
-## Flotte modèles — août 2026
+## Flotte modèles — performance-only
 
-| Alias | Runtime | Classe | Usage |
+| Alias | Runtime | Classe | Usage nominal |
 |---|---|---|---|
-| `qwen-general` | `qwen3.5:9b` | LOCAL_FAST | généraliste rapide, orchestration et DevOps courant |
-| `gemma-review` | `gemma4:12b` | LOCAL_FAST | rédaction, architecture et revue rapide |
-| `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST | DevOps/code agentique après qualification |
-| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP | architecture, rédaction et audit complexes après qualification |
-| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX | raisonnement/orchestration/investigation maximale après qualification |
-| `sera-devops` | `sera-14b` | LEGACY_CANDIDATE | candidat historique hors routage actif |
+| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX | Chef, recherche, sécurité, release et raisonnement transversal |
+| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP | architecture, rédaction, audit et contre-revue multimodale |
+| `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST | DevOps, code agentique, outils dépôt et éditions multi-fichiers |
 
-Le catalogue `config/v1/model_catalog.yaml` est la source de vérité. Les scripts Windows lisent le catalogue au lieu de recopier les identifiants de modèles. Les gros candidats sont évalués séparément et n'affectent pas artificiellement le gate global des deux modèles fast requis.
+Le catalogue `config/v1/model_catalog.yaml` est la source de vérité et contient **exactement ces trois modèles locaux**. Aucun quatrième modèle local, modèle fast ou modèle legacy n'est un fallback supporté.
 
-Après qualification réelle, l'état runtime local expose uniquement les alias approuvés :
-
-```powershell
-$env:OPENCLAW_LOCAL_QUALIFIED_MODELS = 'qwen-max,gemma-deep,devstral-devops'
-```
-
-Cette variable reflète une qualification déjà produite ; elle n'est pas une preuve à elle seule.
+La qualification matérielle est obligatoire avant toute affirmation de débit, latence, VRAM/RAM, stabilité ou contexte soutenable sur Intel Arc B580. Elle benchmarke les trois modèles supportés ; elle ne sert pas à promouvoir un modèle non supporté dans le routage.
 
 ## Backends locaux
 
@@ -161,15 +156,14 @@ Prérequis utilisateur : **Windows 11 Pro x64, PowerShell 7 et WinGet**.
 .\menu.ps1 -Action qualification
 ```
 
-Pour mesurer la flotte performance optionnelle une fois les modèles téléchargés :
+Pour télécharger et qualifier la flotte supportée :
 
 ```powershell
-.\scripts\windows\03_pull_models.ps1 -IncludeOptionalOllama
-.\scripts\windows\07_run_qualification.ps1 `
-  -IncludeSpecialist `
-  -IncludeDeep `
-  -IncludeMax
+.\scripts\windows\03_pull_models.ps1
+.\scripts\windows\07_run_qualification.ps1
 ```
+
+Ces commandes couvrent les trois modèles requis ; aucune option n'est nécessaire pour activer un modèle local supplémentaire.
 
 ## Prendre en charge un projet
 
@@ -343,9 +337,9 @@ Les métriques réellement observées peuvent être enregistrées localement :
 python .\scripts\34_record_telemetry.py `
   --project p5-devops `
   --agent ingenieur-devops `
-  --model qwen-general `
+  --model devstral-devops `
   --backend ollama-vulkan `
-  --route-kind local_primary `
+  --route-kind local_specialist `
   --duration-ms 8120 `
   --tokens-per-second 18.7 `
   --generated-tokens 380 `
@@ -380,7 +374,7 @@ python .\scripts\27_route_openclaw.py `
   --message 'Analyse ce problème Kubernetes.'
 ```
 
-Si `devstral-devops` a été réellement qualifié et déclaré dans `OPENCLAW_LOCAL_QUALIFIED_MODELS`, cette route privilégie automatiquement le spécialiste DevOps ; sinon elle reste sur `qwen-general`.
+Cette route utilise **Devstral Small 2 24B** pour l'Ingénieur DevOps. Les autres rôles utilisent Qwen 3.8 27B ou Gemma 4 26B selon leur spécialité ; aucun petit modèle local n'est utilisé comme fallback.
 
 Escalade de recherche après tentative Web locale :
 
@@ -414,7 +408,7 @@ Voir [FinOps](docs/FINOPS.md).
 
 La suite active est **`devops-v2`**. Elle couvre notamment analyse de projet, GitLab CI, Kubernetes, Terraform multi-fichiers, Ansible, sécurité, documentation, diagrammes, Web, discipline agentique et contexte long.
 
-Un gate automatique réussi signifie au mieux `READY_FOR_MANUAL_QUALIFICATION`. Les modèles LOCAL_SPECIALIST/LOCAL_DEEP/LOCAL_MAX reçoivent leur propre verdict de benchmark et leur échec ne transforme pas artificiellement les modèles fast requis en échec. La promotion exige toujours E2E OpenClaw, stabilité, qualification matérielle B580 et revue humaine.
+Un gate automatique réussi signifie au mieux `READY_FOR_MANUAL_QUALIFICATION`. **Qwen 3.8 27B, Gemma 4 26B et Devstral Small 2 24B sont tous les trois requis** : l'échec de l'un des trois fait échouer le gate de qualification de la flotte. La promotion matérielle exige toujours E2E OpenClaw, stabilité, qualification B580 et revue humaine.
 
 ## Qualité et sécurité
 
@@ -439,7 +433,7 @@ CodeQL
 Dependency Review / pip-audit fallback
 ```
 
-Les validateurs vérifient notamment Project Intake / Project Orchestrator, machine d'états, gates humains, Web local-first, FinOps, backends, tags explicites des modèles Ollama, flotte août 2026, qualification obligatoire des gros candidats, absence de modèles recopiés en dur, Intake immuable, pédagogie, accessibilité, publication, télémétrie et séparation Architecte/Sécurité/Auditeur.
+Les validateurs vérifient notamment Project Intake / Project Orchestrator, machine d'états, gates humains, Web local-first, FinOps, backends, tags explicites des modèles Ollama, **flotte locale performance-only de trois modèles**, qualification obligatoire des trois modèles supportés, Intake immuable, pédagogie, accessibilité, publication, télémétrie et séparation Architecte/Sécurité/Auditeur.
 
 ## Documentation
 
