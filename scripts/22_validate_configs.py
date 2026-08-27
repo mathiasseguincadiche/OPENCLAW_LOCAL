@@ -94,7 +94,6 @@ def validate_orchestrator(
     if transitions.get("COMPLETE") != []:
         failures.append("COMPLETE doit être un état terminal")
 
-    artifacts = orchestration.get("artifacts", {})
     required_artifacts = {
         "analysis",
         "clarifications",
@@ -106,6 +105,7 @@ def validate_orchestrator(
         "package_manifest",
         "final_report",
     }
+    artifacts = orchestration.get("artifacts", {})
     if set(artifacts) != required_artifacts:
         failures.append("orchestration_policy.yaml: artefacts canoniques incomplets")
     allowed_roots = {"context", "evidence", "deliverables"}
@@ -113,21 +113,17 @@ def validate_orchestrator(
         path = Path(str(relative))
         if path.is_absolute() or ".." in path.parts:
             failures.append(f"orchestration: chemin artefact non sûr: {artifact_id}")
-            continue
-        if not path.parts or path.parts[0] not in allowed_roots:
+        elif not path.parts or path.parts[0] not in allowed_roots:
             failures.append(f"orchestration: racine artefact interdite: {artifact_id}")
 
-    phases = orchestration.get("phases", {})
     allowed_phase_owners = role_ids | {"human", "assigned_agent"}
-    for phase_id, phase in phases.items():
+    for phase_id, phase in orchestration.get("phases", {}).items():
         owner = str(phase.get("owner", ""))
         if owner not in allowed_phase_owners:
             failures.append(f"orchestration phase {phase_id}: owner inconnu: {owner}")
         reviewers = phase.get("reviewers", [])
-        if not isinstance(reviewers, list):
-            failures.append(f"orchestration phase {phase_id}: reviewers invalide")
-        elif not set(reviewers) <= role_ids:
-            failures.append(f"orchestration phase {phase_id}: reviewer inconnu")
+        if not isinstance(reviewers, list) or not set(reviewers) <= role_ids:
+            failures.append(f"orchestration phase {phase_id}: reviewers invalides")
         security_reviewer = phase.get("security_reviewer")
         if security_reviewer is not None and security_reviewer not in role_ids:
             failures.append(f"orchestration phase {phase_id}: security_reviewer inconnu")
@@ -136,7 +132,7 @@ def validate_orchestrator(
     if execution.get("local_first") is not True:
         failures.append("Project Orchestrator doit rester local-first")
     if int(execution.get("max_parallel_tasks", 0)) != 1:
-        failures.append("V0.2: exécution projet doit rester séquentielle par défaut")
+        failures.append("exécution projet doit rester séquentielle par défaut")
     if int(execution.get("max_task_attempts", 0)) < 1:
         failures.append("Project Orchestrator exige au moins une tentative par tâche")
     if execution.get("collect_task_outputs") is not True:
@@ -144,7 +140,6 @@ def validate_orchestrator(
     if execution.get("task_output_namespaced_by_task") is not True:
         failures.append("sorties de tâches doivent être namespacées")
 
-    human_gates = orchestration.get("human_gates", {})
     required_human_gates = {
         "blocking_clarifications",
         "destructive_actions",
@@ -152,8 +147,7 @@ def validate_orchestrator(
         "cloud_escalation",
         "final_completion",
     }
-    if not required_human_gates <= set(human_gates):
-        failures.append("Project Orchestrator: gates humains incomplets")
+    human_gates = orchestration.get("human_gates", {})
     for gate in required_human_gates:
         if human_gates.get(gate) is not True:
             failures.append(f"Project Orchestrator: gate humain désactivé: {gate}")
@@ -163,58 +157,61 @@ def main() -> int:
     failures: list[str] = []
     repository_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
-    catalog = load(CONFIG / "model_catalog.yaml")
-    routing = load(CONFIG / "model_routing.yaml")
-    roles = load(CONFIG / "role_matrix.yaml")
-    escalation = load(CONFIG / "escalation_policy.yaml")
-    qualification = load(CONFIG / "qualification_policy.yaml")
-    security = load(CONFIG / "security.yaml")
-    tools = load(CONFIG / "tool_policy.yaml")
-    platform = load(CONFIG / "platform.yaml")
-    project = load(CONFIG / "project_policy.yaml")
-    orchestration = load(CONFIG / "orchestration_policy.yaml")
-    web = load(CONFIG / "web_policy.yaml")
-    budget = load(CONFIG / "budget_policy.yaml")
-    backends = load(CONFIG / "runtime_backends.yaml")
-    diagrams = load(CONFIG / "diagram_policy.yaml")
+    names = (
+        "model_catalog.yaml",
+        "model_routing.yaml",
+        "role_matrix.yaml",
+        "escalation_policy.yaml",
+        "qualification_policy.yaml",
+        "security.yaml",
+        "tool_policy.yaml",
+        "platform.yaml",
+        "project_policy.yaml",
+        "orchestration_policy.yaml",
+        "web_policy.yaml",
+        "budget_policy.yaml",
+        "runtime_backends.yaml",
+        "diagram_policy.yaml",
+        "intake_policy.yaml",
+        "pedagogy_policy.yaml",
+        "accessibility_policy.yaml",
+        "publication_policy.yaml",
+        "telemetry_policy.yaml",
+    )
+    contracts = {name: load(CONFIG / name) for name in names}
+    catalog = contracts["model_catalog.yaml"]
+    routing = contracts["model_routing.yaml"]
+    roles = contracts["role_matrix.yaml"]
+    escalation = contracts["escalation_policy.yaml"]
+    qualification = contracts["qualification_policy.yaml"]
+    security = contracts["security.yaml"]
+    tools = contracts["tool_policy.yaml"]
+    platform = contracts["platform.yaml"]
+    project = contracts["project_policy.yaml"]
+    orchestration = contracts["orchestration_policy.yaml"]
+    web = contracts["web_policy.yaml"]
+    budget = contracts["budget_policy.yaml"]
+    backends = contracts["runtime_backends.yaml"]
+    diagrams = contracts["diagram_policy.yaml"]
     runtime = load_json(CONFIG / "runtime_versions.json")
 
-    suite_id = str(qualification.get("suite", "")).strip()
-    suite_path = ROOT / "benchmarks" / "suites" / f"{suite_id.replace('-', '_')}.yaml"
-    if not suite_id or not suite_path.is_file():
-        failures.append(
-            f"suite de qualification introuvable: {suite_id or '<vide>'}"
-        )
-        suite: dict[str, Any] = {}
-    else:
-        suite = load(suite_path)
-
-    contracts = {
-        "model_catalog.yaml": catalog,
-        "model_routing.yaml": routing,
-        "role_matrix.yaml": roles,
-        "escalation_policy.yaml": escalation,
-        "qualification_policy.yaml": qualification,
-        "security.yaml": security,
-        "tool_policy.yaml": tools,
-        "platform.yaml": platform,
-        "project_policy.yaml": project,
-        "orchestration_policy.yaml": orchestration,
-        "web_policy.yaml": web,
-        "budget_policy.yaml": budget,
-        "runtime_backends.yaml": backends,
-        "diagram_policy.yaml": diagrams,
-    }
     validate_platform_versions(contracts, repository_version, failures)
     if str(runtime.get("platform_version")) != repository_version:
         failures.append("runtime_versions.json: platform_version incohérente")
+
+    suite_id = str(qualification.get("suite", "")).strip()
+    suite_path = ROOT / "benchmarks" / "suites" / f"{suite_id.replace('-', '_')}.yaml"
+    suite: dict[str, Any] = {}
+    if not suite_id or not suite_path.is_file():
+        failures.append(f"suite de qualification introuvable: {suite_id or '<vide>'}")
+    else:
+        suite = load(suite_path)
 
     model_ids = set(catalog.get("models", {}))
     cloud_ids = set(catalog.get("cloud_catalog", {}))
     role_ids = set(roles.get("roles", {}))
     routed_agents = set(routing.get("agents", {}))
     tool_agents = set(tools.get("agents", {}))
-
     if role_ids != routed_agents:
         failures.append("les rôles et les agents routés ne correspondent pas exactement")
     if role_ids != tool_agents:
@@ -243,46 +240,30 @@ def main() -> int:
             failures.append(f"{alias}: route cloud doit être désactivée par défaut")
 
     for agent, route in routing.get("agents", {}).items():
-        for field in (
-            "local_primary",
-            "local_fallback",
-            "local_specialist",
-            "local_deep",
-        ):
+        for field in ("local_primary", "local_fallback", "local_specialist", "local_deep"):
             model = route.get(field)
             if model is not None and model not in model_ids:
                 failures.append(f"{agent}: {field} inconnu: {model}")
-        cloud = route.get("cloud_escalation")
-        if cloud not in cloud_ids:
-            failures.append(f"{agent}: cloud_escalation inconnue: {cloud}")
+        if route.get("cloud_escalation") not in cloud_ids:
+            failures.append(f"{agent}: cloud_escalation inconnue")
 
     required_models = {
         key
         for key, value in catalog.get("models", {}).items()
         if value.get("required") is True
     }
-    if not required_models:
-        failures.append("aucun modèle local requis n'est déclaré")
-    gate_models = set(
-        qualification.get("automated_gates", {}).get("required_models", [])
-    )
-    if gate_models != required_models:
-        failures.append(
-            "les modèles requis du catalogue et de la qualification doivent correspondre"
-        )
+    gate_models = set(qualification.get("automated_gates", {}).get("required_models", []))
+    if not required_models or gate_models != required_models:
+        failures.append("catalogue et qualification doivent partager les modèles requis")
 
     if qualification.get("promotion", {}).get("automatic_promotion") is not False:
         failures.append("la promotion automatique des modèles doit rester désactivée")
-    if (
-        qualification.get("safety", {}).get("cloud_calls_allowed_during_qualification")
-        is not False
-    ):
+    if qualification.get("safety", {}).get("cloud_calls_allowed_during_qualification") is not False:
         failures.append("la qualification matérielle ne doit effectuer aucun appel cloud")
 
     contexts = qualification.get("required_contexts", [])
     if not contexts or any(int(context) <= 0 for context in contexts):
         failures.append("au moins un contexte de qualification positif est requis")
-
     if suite and suite.get("id") != suite_id:
         failures.append("la suite de benchmark ne correspond pas à qualification_policy.yaml")
     scenarios = suite.get("scenarios", []) if suite else []
@@ -293,11 +274,8 @@ def main() -> int:
         failures.append("les identifiants de scénarios de benchmark doivent être uniques")
     for scenario in scenarios:
         for check in scenario.get("checks", []):
-            check_type = check.get("type")
-            if check_type not in SUPPORTED_CHECKS:
-                failures.append(
-                    f"{scenario.get('id')}: check non supporté par le runner: {check_type}"
-                )
+            if check.get("type") not in SUPPORTED_CHECKS:
+                failures.append(f"{scenario.get('id')}: check non supporté: {check.get('type')}")
 
     defaults = tools.get("security_defaults", {})
     if defaults.get("fs_workspace_only") is not True:
@@ -309,19 +287,20 @@ def main() -> int:
     if defaults.get("cloud_tools_without_explicit_escalation") is not False:
         failures.append("les outils cloud ne doivent pas contourner l'escalade explicite")
 
-    review_roles = {
-        "chef-operations",
-        "expert-recherche",
-        "architecte-solutions",
-        "auditeur-qualite",
-    }
-    required_denies = {"write", "edit", "apply_patch", "exec", "process"}
-    for agent in review_roles:
+    full_read_only = {"write", "edit", "apply_patch", "exec", "process"}
+    for agent in {"chef-operations", "expert-recherche", "auditeur-qualite"}:
         denied = set(tools.get("agents", {}).get(agent, {}).get("deny", []))
-        if not required_denies <= denied:
+        if not full_read_only <= denied:
             failures.append(f"{agent}: posture de revue insuffisamment restrictive")
+    architect_denied = set(tools.get("agents", {}).get("architecte-solutions", {}).get("deny", []))
+    if not {"exec", "process"} <= architect_denied:
+        failures.append("architecte-solutions: exec/process doivent rester interdits")
+    if {"write", "edit", "apply_patch"} & architect_denied:
+        failures.append("architecte-solutions: ADR/schémas doivent rester inscriptibles")
+    security_denied = set(tools.get("agents", {}).get("ingenieur-securite", {}).get("deny", []))
+    if not {"write", "edit", "apply_patch"} <= security_denied:
+        failures.append("ingenieur-securite: modification directe des sources interdite")
 
-    project_dirs = set(project.get("required_directories", []))
     expected_project_dirs = {
         "intake",
         "sources",
@@ -331,19 +310,25 @@ def main() -> int:
         "evidence",
         "diagrams",
     }
-    if project_dirs != expected_project_dirs:
+    if set(project.get("required_directories", [])) != expected_project_dirs:
         failures.append("project_policy.yaml: arborescence projet incomplète")
     project_rules = project.get("rules", {})
-    if project_rules.get("overwrite_existing_project") is not False:
-        failures.append("Project Intake ne doit pas écraser un projet existant")
-    if project_rules.get("source_repository_is_ground_truth") is not True:
-        failures.append("le dépôt source doit rester la vérité du projet")
-    if project_rules.get("rag_does_not_replace_file_reading") is not True:
-        failures.append("le RAG ne doit pas remplacer la lecture des fichiers réels")
-    if project_rules.get("state_changes_require_evidence") is not True:
-        failures.append("les changements d'état projet doivent exiger des preuves")
-    if project_rules.get("final_completion_requires_human_approval") is not True:
-        failures.append("COMPLETE doit exiger une validation humaine")
+    expected_project_rules = {
+        "overwrite_existing_project": False,
+        "source_repository_is_ground_truth": True,
+        "rag_does_not_replace_file_reading": True,
+        "state_changes_require_evidence": True,
+        "final_completion_requires_human_approval": True,
+        "intake_manifest_required": True,
+        "intake_checksums_required": True,
+        "intake_read_only_after_ingestion": True,
+        "intake_symlinks_forbidden": True,
+        "publication_requires_separate_state_machine": True,
+        "operational_telemetry_stays_outside_git": True,
+    }
+    for key, expected in expected_project_rules.items():
+        if project_rules.get(key) is not expected:
+            failures.append(f"project_policy.yaml: règle invalide {key}")
 
     validate_orchestrator(orchestration, project, role_ids, failures)
 
@@ -369,7 +354,7 @@ def main() -> int:
     for key in ("daily_eur", "monthly_eur", "per_project_eur"):
         try:
             if float(limits.get(key, 0)) <= 0:
-                failures.append(f"budget_policy.yaml: {key} doit être strictement positif")
+                failures.append(f"budget_policy.yaml: {key} doit être positif")
         except (TypeError, ValueError):
             failures.append(f"budget_policy.yaml: {key} invalide")
     if budget.get("cloud_enabled_by_default") is not False:
@@ -382,22 +367,20 @@ def main() -> int:
     backend_catalog = backends.get("backends", {})
     nominal_backend = platform.get("local_provider", {}).get("nominal_id")
     if nominal_backend not in backend_catalog:
-        failures.append("platform.yaml: backend nominal absent de runtime_backends.yaml")
+        failures.append("platform.yaml: backend nominal absent")
     for backend_id, backend in backend_catalog.items():
         if backend.get("windows_native") is not True:
             failures.append(f"{backend_id}: backend non Windows natif")
         endpoint = str(backend.get("endpoint", ""))
         if endpoint and "127.0.0.1" not in endpoint and "localhost" not in endpoint:
-            failures.append(f"{backend_id}: endpoint non loopback: {endpoint}")
-    runtime_candidates = set(
-        qualification.get("runtime_comparison", {}).get("candidates", [])
-    )
+            failures.append(f"{backend_id}: endpoint non loopback")
+    runtime_candidates = set(qualification.get("runtime_comparison", {}).get("candidates", []))
     if not runtime_candidates <= set(backend_catalog):
         failures.append("qualification_policy.yaml référence un backend inconnu")
 
     diagram_policy = diagrams.get("policy", {})
     if diagram_policy.get("diagram_as_code_first") is not True:
-        failures.append("les schémas doivent rester diagram-as-code en priorité")
+        failures.append("les schémas doivent rester diagram-as-code")
     if diagram_policy.get("renderer_must_be_local") is not True:
         failures.append("les renderers de diagrammes doivent rester locaux")
     if diagrams.get("security", {}).get("remote_renderers_forbidden_by_default") is not True:
@@ -405,14 +388,11 @@ def main() -> int:
 
     if runtime.get("schema_version") != "1.0.0":
         failures.append("runtime_versions.json doit utiliser schema_version 1.0.0")
-    python_supported = set(runtime.get("python", {}).get("supported", []))
-    if not {"3.12", "3.13"} <= python_supported:
-        failures.append("Python 3.12 et 3.13 doivent être déclarés supportés")
-    node_hash = str(runtime.get("node", {}).get("sha256_win_x64_zip", ""))
-    if len(node_hash) != 64:
+    if not {"3.12", "3.13"} <= set(runtime.get("python", {}).get("supported", [])):
+        failures.append("Python 3.12 et 3.13 doivent être supportés")
+    if len(str(runtime.get("node", {}).get("sha256_win_x64_zip", ""))) != 64:
         failures.append("le SHA256 Node.js verrouillé doit contenir 64 caractères")
-    openclaw_integrity = str(runtime.get("openclaw", {}).get("integrity", ""))
-    if not openclaw_integrity.startswith("sha512-"):
+    if not str(runtime.get("openclaw", {}).get("integrity", "")).startswith("sha512-"):
         failures.append("l'intégrité OpenClaw doit être une SRI SHA-512")
     if runtime.get("qualification", {}).get("real_run_required") is not True:
         failures.append("le runtime doit exiger une qualification matérielle réelle")
@@ -432,7 +412,7 @@ def main() -> int:
     print(f"OK  scénarios qualification: {len(scenarios)} ({suite_id})")
     print(f"OK  backends locaux déclarés: {len(backend_catalog)}")
     print(f"OK  Project Orchestrator: {len(EXPECTED_PROJECT_STATES)} états fail-closed")
-    print("OK  Project Intake / Web local-first / FinOps / diagrammes")
+    print("OK  Project/Web/FinOps/Intake/Publication/Telemetry")
     print("Verdict: CONFORME")
     return 0
 
