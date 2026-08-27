@@ -5,7 +5,7 @@ required_contexts: [8192, 16384]
 optional_contexts: [32768]
 
 automated_gates:
-  required_models: [qwen-general, gemma-review]
+  required_models: [qwen-max, gemma-deep, devstral-devops]
   thresholds:
     max_error_rate: 0.0
     min_check_pass_rate: 0.875
@@ -18,38 +18,22 @@ automated_gates:
 promotion:
   automatic_promotion: false
   ready_verdict: READY_FOR_MANUAL_QUALIFICATION
-  runtime_activation_env: OPENCLAW_LOCAL_QUALIFIED_MODELS
   requires:
     - automated_gate_pass
     - openclaw_tool_call_smoke_pass
     - openclaw_tool_feedback_repair_pass
     - project_intake_e2e_pass
     - local_web_research_e2e_pass
+    - multimodal_pdf_image_e2e_pass
     - stability_three_runs
     - human_review
     - no_cloud_dependency_in_nominal_path
 
-specialists:
-  devstral-devops:
-    required: false
-    evaluate_after_required_models: true
-    promotion_requires_separate_review: true
-    target_roles: [ingenieur-devops]
-  gemma-deep:
-    required: false
-    evaluate_after_required_models: true
-    promotion_requires_separate_review: true
-    target_roles: [architecte-solutions, redacteur-technique, auditeur-qualite]
-  qwen-max:
-    required: false
-    evaluate_after_required_models: true
-    promotion_requires_separate_review: true
-    target_roles: [chef-operations, expert-recherche, ingenieur-securite]
-  sera-devops:
-    required: false
-    evaluate_after_required_models: false
-    promotion_requires_separate_review: true
-    routing_active: false
+supported_fleet:
+  exact_aliases: [qwen-max, gemma-deep, devstral-devops]
+  all_models_required: true
+  allow_optional_local_models: false
+  allow_unsupported_local_fallback: false
 
 runtime_comparison:
   required_for_intel_arc_promotion: true
