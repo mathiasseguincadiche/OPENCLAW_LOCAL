@@ -23,6 +23,21 @@ def main() -> int:
     parser.add_argument("--intake", action="append", default=[], type=Path)
     parser.add_argument("--source", action="append", default=[], type=Path)
     parser.add_argument("--deliverable", action="append", default=[])
+    parser.add_argument(
+        "--learning-profile",
+        choices=["efficient", "balanced", "intensive"],
+        default="balanced",
+    )
+    parser.add_argument(
+        "--classification",
+        choices=["public", "internal", "confidential", "restricted"],
+        default="internal",
+    )
+    parser.add_argument(
+        "--criticality",
+        choices=["low", "standard", "high", "critical"],
+        default="standard",
+    )
     parser.add_argument("--root", type=Path, default=default_root())
     args = parser.parse_args()
     project = create_project(
@@ -32,6 +47,9 @@ def main() -> int:
         intake_items=args.intake,
         source_items=args.source,
         expected_deliverables=args.deliverable,
+        learning_profile=args.learning_profile,
+        classification=args.classification,
+        criticality=args.criticality,
     )
     print(f"PROJECT={project}")
     return 0
