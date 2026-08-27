@@ -47,14 +47,14 @@ def build_phase_prompt(project_id: str, phase: str, *, task_id: str | None = Non
     prompt = base.build_phase_prompt(project_id, phase, task_id=task_id)
     if phase == "analyze":
         return prompt + (
-            " Lis aussi context/ingestion/index.json avant de conclure. Pour chaque document indexé, "
-            "utilise derived_path quand status=READY_TEXT/PARTIAL_TEXT; utilise l'outil pdf sur "
-            "source_path pour un PDF et view_image pour une image. Un PDF long doit être parcouru "
-            "par tranches jusqu'à couvrir le document utile; le fallback PDF local peut rendre les "
-            "pages scannées en images. Ajoute source_coverage[] avec exactement une entrée par "
-            "document: {document_id,status,method,notes}; status vaut READ, PARTIAL ou UNREADABLE, "
-            "et method vaut local_text_extract, local_zip_xml_extract, pdf, view_image ou raw_file. "
-            "Tout UNREADABLE doit aussi être expliqué dans missing_information[]."
+            " Lis aussi context/ingestion/index.json avant de conclure. Pour chaque document "
+            "indexé, utilise derived_path quand status=READY_TEXT/PARTIAL_TEXT; utilise l'outil "
+            "pdf sur source_path pour un PDF et view_image pour une image. Un PDF long doit être "
+            "parcouru par tranches jusqu'à couvrir le document utile; le fallback PDF local peut "
+            "rendre les pages scannées en images. Ajoute source_coverage[] avec exactement une "
+            "entrée par document: {document_id,status,method,notes}; status vaut READ, PARTIAL ou "
+            "UNREADABLE, et method vaut local_text_extract, local_zip_xml_extract, pdf, view_image "
+            "ou raw_file. Tout UNREADABLE doit aussi être expliqué dans missing_information[]."
         )
     if phase == "plan":
         return prompt + (
@@ -65,14 +65,16 @@ def build_phase_prompt(project_id: str, phase: str, *, task_id: str | None = Non
         return prompt + (
             f" Consulte aussi context/exchange/{task_id}/ si ce dossier existe: dependencies/ "
             "contient les sorties validées des tâches amont et self/ contient les tentatives "
-            "précédentes de cette tâche. Ces artefacts sont des entrées versionnées en lecture seule; "
-            "ne les modifie pas en place. Produis une nouvelle sortie dans les répertoires de la tâche."
+            "précédentes de cette tâche. Ces artefacts sont des entrées versionnées en lecture "
+            "seule; ne les modifie pas en place. Produis une nouvelle sortie dans les répertoires "
+            "de la tâche."
         )
     if phase in {"validate", "review"}:
         return prompt + (
-            " Vérifie aussi context/ingestion/index.json, source_coverage dans project_analysis.json, "
-            "et les manifests sous context/exchange/. Un document déclaré non couvert ou un échange "
-            "d'artefact incohérent est un finding bloquant, pas une hypothèse à combler."
+            " Vérifie aussi context/ingestion/index.json et source_coverage dans "
+            "project_analysis.json, ainsi que les manifests sous context/exchange/. Un document "
+            "déclaré non couvert ou un échange d'artefact incohérent est un finding bloquant, pas "
+            "une hypothèse à combler."
         )
     return prompt
 
@@ -248,7 +250,8 @@ def transition_project(
 def package_project(project: Path) -> tuple[Path, Path]:
     failures = validate_exchange_completeness(project)
     if failures:
-        raise PermissionError("packaging bloqué; artifact exchange incomplet: " + "; ".join(failures))
+        details = "; ".join(failures)
+        raise PermissionError(f"packaging bloqué; artifact exchange incomplet: {details}")
     snapshot_integrity(project, "PRE_PACKAGE")
     archive, manifest = base.package_project(project)
     snapshot_integrity(
