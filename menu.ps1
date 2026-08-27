@@ -41,7 +41,8 @@ function Show-Title {
 function Invoke-Action {
     param(
         [Parameter(Mandatory)][string]$Name,
-        [switch]$DryRunMode
+        [switch]$DryRunMode,
+        [switch]$AllowRuntimeDriftMode
     )
 
     if ($Name -eq 'docs') {
@@ -62,7 +63,7 @@ function Invoke-Action {
     }
 
     if ($Name -in @('install-core', 'install-full')) {
-        & $Script -DryRun:$DryRunMode -AllowRuntimeDrift:$AllowRuntimeDrift
+        & $Script -DryRun:$DryRunMode -AllowRuntimeDrift:$AllowRuntimeDriftMode
     }
     else {
         & $Script -DryRun:$DryRunMode
@@ -74,7 +75,7 @@ function Invoke-Action {
 
 if ($Action -ne 'menu') {
     Show-Title
-    Invoke-Action -Name $Action -DryRunMode:$DryRun
+    Invoke-Action -Name $Action -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift
     exit 0
 }
 
@@ -99,8 +100,8 @@ while ($true) {
 '@ | Write-Host
 
     switch (Read-Host 'Choix') {
-        '1' { Invoke-Action -Name 'install-full' -DryRunMode:$DryRun }
-        '2' { Invoke-Action -Name 'install-core' -DryRunMode:$DryRun }
+        '1' { Invoke-Action -Name 'install-full' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift }
+        '2' { Invoke-Action -Name 'install-core' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift }
         '3' { Invoke-Action -Name 'audit' -DryRunMode:$DryRun }
         '4' { Invoke-Action -Name 'configure-local' -DryRunMode:$DryRun }
         '5' { Invoke-Action -Name 'models' -DryRunMode:$DryRun }
