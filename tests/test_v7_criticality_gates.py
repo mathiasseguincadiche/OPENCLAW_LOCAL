@@ -10,6 +10,7 @@ from clawlocal.project_governance import (
     criticality_gate_status,
     record_criticality_gate,
 )
+from clawlocal.project_ingestion import ingest_project_documents
 from clawlocal.project_intake import create_project
 
 
@@ -23,6 +24,7 @@ def _analysis() -> dict[str, object]:
         "missing_information": [],
         "risks": [],
         "decisions_required": [],
+        "source_coverage": [],
     }
 
 
@@ -47,6 +49,7 @@ def _plan() -> dict[str, object]:
 
 
 def _advance_to_review(project: Path) -> None:
+    ingest_project_documents(project)
     superset.store_analysis(project, _analysis())
     superset.store_clarifications_from_analysis(project)
     superset.transition_project(
