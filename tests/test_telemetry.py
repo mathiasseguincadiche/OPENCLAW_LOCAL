@@ -13,9 +13,9 @@ def test_telemetry_records_observed_metrics_only(tmp_path: Path) -> None:
         {
             "project_id": "telemetry-demo",
             "agent": "ingenieur-devops",
-            "model": "qwen-general",
+            "model": "devstral-devops",
             "backend": "ollama-vulkan",
-            "route_kind": "local_primary",
+            "route_kind": "local_specialist",
             "duration_ms": 1200,
             "ttft_ms": 200,
             "generated_tokens": 120,
@@ -37,9 +37,9 @@ def test_telemetry_rejects_private_content_and_negative_metrics(tmp_path: Path) 
     base = {
         "project_id": "telemetry-safe",
         "agent": "chef-operations",
-        "model": "qwen-general",
+        "model": "qwen-max",
         "backend": "ollama-vulkan",
-        "route_kind": "local_primary",
+        "route_kind": "local_max",
         "duration_ms": 10,
     }
     with pytest.raises(ValueError):
