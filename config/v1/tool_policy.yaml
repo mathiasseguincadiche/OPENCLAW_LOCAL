@@ -20,7 +20,7 @@ agents:
 
   architecte-solutions:
     profile: coding
-    deny: [write, edit, apply_patch, exec, process]
+    deny: [exec, process]
 
   ingenieur-devops:
     profile: coding
@@ -28,7 +28,7 @@ agents:
 
   ingenieur-securite:
     profile: coding
-    deny: []
+    deny: [write, edit, apply_patch]
 
   ingenieur-release-forges:
     profile: coding
@@ -48,4 +48,6 @@ notes:
   - "Les outils de fichiers restent bornés au workspace de chaque agent."
   - "Toute commande exec hors allowlist requiert une approbation humaine avec exec_mode=ask."
   - "Le mode elevated reste désactivé."
+  - "L'architecte peut produire ADR et schémas dans son workspace mais ne peut pas exécuter de commandes."
+  - "L'ingénieur sécurité peut lancer des analyses autorisées mais ne modifie jamais directement les sources."
   - "Les rôles de revue ne peuvent pas modifier silencieusement le livrable qu'ils auditent."
