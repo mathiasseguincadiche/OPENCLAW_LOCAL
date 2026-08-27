@@ -1,0 +1,33 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+default_enabled: true
+default_mode: universal_progressive
+principles:
+  technical_accuracy_first: true
+  progressive_disclosure: true
+  no_false_simplification: true
+  no_unstated_critical_prerequisite: true
+  define_jargon_on_first_use: true
+  examples_when_useful: true
+  preserve_expert_depth: true
+  professional_non_infantilizing_tone: true
+  skimmable_structure: true
+  accessibility_does_not_weaken_security: true
+reading_depths:
+  - id: understand
+    label: Comprendre
+    content: [purpose, context, problem_solved, vocabulary, main_risks, expected_outcome]
+  - id: operate
+    label: Utiliser
+    content: [prerequisites, required_rights, procedure, expected_results, validation, evidence, rollback]
+  - id: deepen
+    label: Approfondir
+    content: [architecture, decisions_and_tradeoffs, security, limitations, references]
+  - id: diagnose
+    label: Diagnostiquer
+    content: [symptoms, checks, common_errors, stop_conditions, recovery, evidence]
+application:
+  explanatory_documentation_uses_depths_when_relevant: true
+  imposed_deliverable_format_has_priority: true
+  concise_operational_output_may_skip_unused_depths: true
+  auditeur_qualite_checks_actionability: true
