@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 models:
   qwen-general:
@@ -23,27 +23,57 @@ models:
     input: [text, image]
     context_policy: benchmark_before_raise
 
-  qwen-deep:
+  gemma-deep:
     provider: ollama
-    runtime_id: "qwen3.5:27b"
-    family: qwen
+    runtime_id: "gemma4:26b"
+    family: gemma
     class: local_deep
-    role: deep_reasoning
+    role: architecture_writing_review_deep
     required: false
     status: optional_candidate
     input: [text, image]
     activation: benchmark_required
+    preferred_quantization: Q4_K_M
+    workstation_note: "26B MoE / 4B actifs; offload VRAM+RAM attendu sur B580 12 Go."
+
+  devstral-devops:
+    provider: ollama
+    runtime_id: "devstral-small-2:24b"
+    family: mistral
+    class: local_specialist
+    role: agentic_software_engineering
+    required: false
+    status: optional_candidate
+    input: [text, image]
+    activation: benchmark_required
+    preferred_quantization: Q4_K_M
+    workstation_note: "Spécialiste DevOps/code agentique; offload VRAM+RAM attendu sur B580 12 Go."
+
+  qwen-max:
+    provider: ollama
+    runtime_id: "qwen3.8:27b"
+    family: qwen
+    class: local_max
+    role: deep_reasoning_agentic_multimodal
+    required: false
+    status: optional_candidate
+    input: [text, image]
+    activation: benchmark_required
+    preferred_quantization: Q4_K_M
+    context_policy: benchmark_before_raise
+    workstation_note: "Modèle local maximal généraliste; offload VRAM+RAM attendu sur B580 12 Go."
 
   sera-devops:
     provider: custom_gguf
     runtime_id: "sera-14b"
     family: qwen-derived
-    class: local_deep
-    role: software_engineering
+    class: legacy_candidate
+    role: software_engineering_compact
     required: false
-    status: optional_candidate
+    status: legacy_optional_candidate
     input: [text]
     activation: import_backend_and_benchmark_required
+    routing_active: false
 
 cloud_catalog:
   research:
