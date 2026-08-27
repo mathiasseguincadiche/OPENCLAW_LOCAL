@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
+from clawlocal.project_ingestion import ingest_project_documents
 from clawlocal.project_intake import create_project
 
 
@@ -47,7 +48,9 @@ def main() -> int:
         classification=args.classification,
         criticality=args.criticality,
     )
+    ingestion_index = ingest_project_documents(project)
     print(f"PROJECT={project}")
+    print(f"INGESTION_INDEX={ingestion_index}")
     return 0
 
 
