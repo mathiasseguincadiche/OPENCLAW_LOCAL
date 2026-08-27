@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,6 +25,19 @@ _NUMERIC_FIELDS = {
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def platform_root_for_telemetry() -> Path | None:
+    configured = os.environ.get("OPENCLAW_LOCAL_ROOT")
+    if configured:
+        return Path(configured)
+    if os.name == "nt":
+        if Path("E:/").exists():
+            return Path("E:/AI/OpenClawLocal")
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            return Path(local_app_data) / "OpenClawLocal"
+    return None
 
 
 def default_telemetry_path(platform_root: Path) -> Path:
@@ -60,6 +74,33 @@ def append_telemetry_event(platform_root: Path, event: dict[str, Any]) -> Path:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
     return path
+
+
+def try_record_route_event(
+    *,
+    agent: str,
+    model: str,
+    route_kind: str,
+    backend: str,
+) -> None:
+    root = platform_root_for_telemetry()
+    if root is None:
+        return
+    try:
+        append_telemetry_event(
+            root,
+            {
+                "event_type": "route_decision",
+                "agent": agent,
+                "model": model,
+                "backend": backend,
+                "route_kind": route_kind,
+                "local_to_deep_transition": route_kind == "local_deep",
+                "cloud_escalation": route_kind == "cloud_escalation",
+            },
+        )
+    except (OSError, TypeError, ValueError):
+        return
 
 
 def read_telemetry_events(path: Path) -> list[dict[str, Any]]:
