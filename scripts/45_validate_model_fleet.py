@@ -168,6 +168,18 @@ def main() -> int:
         if flag not in benchmark_source:
             failures.append(f"benchmark: option absente: {flag}")
 
+    for relative in ("README.md", "STATUS.md"):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        if "qwen3.5:27b" in text or "`qwen-deep`" in text:
+            failures.append(f"{relative}: référence active obsolète à Qwen3.5 27B")
+        for runtime_id in (
+            "devstral-small-2:24b",
+            "gemma4:26b",
+            "qwen3.8:27b",
+        ):
+            if runtime_id not in text:
+                failures.append(f"{relative}: modèle août 2026 absent: {runtime_id}")
+
     if failures:
         print("Model Fleet August 2026: NON CONFORME")
         for failure in failures:
