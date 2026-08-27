@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 default_enabled: true
 default_visibility: private
@@ -41,6 +41,18 @@ human_approval_required:
   - PR_MR_OPEN
   - RELEASE_CREATED
   - PUBLISHED_AND_VERIFIED
+
+human_approval_actions:
+  - create_remote_repository
+  - change_visibility
+  - make_public
+  - merge_pull_or_merge_request
+  - create_or_publish_release
+  - change_branch_protection
+  - force_push_or_history_rewrite
+  - delete_remote_repository_or_tag
+
+action_gates_are_independent_from_state_gates: true
 
 prepublication_checks:
   - local_tests_green

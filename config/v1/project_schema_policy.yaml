@@ -1,0 +1,74 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+project_manifest_schema: "2.0.0"
+strict_unknown_fields: true
+owner_default: dirigeant-operateur
+
+classifications: [public, internal, confidential, restricted]
+default_classification: internal
+criticalities: [low, standard, high, critical]
+default_criticality: standard
+
+cloud_policy:
+  public:
+    allowed: true
+    redaction_required: false
+    human_approval_required: false
+  internal:
+    allowed: true
+    redaction_required: false
+    human_approval_required: false
+  confidential:
+    allowed: true
+    redaction_required: true
+    human_approval_required: true
+  restricted:
+    allowed: false
+    redaction_required: true
+    human_approval_required: true
+
+criticality_gates:
+  low: [evidence_required]
+  standard: [evidence_required, independent_audit_required]
+  high:
+    - evidence_required
+    - security_review_required
+    - independent_audit_required
+    - rollback_required_when_relevant
+    - human_final_approval_required
+  critical:
+    - evidence_required
+    - security_review_required
+    - independent_audit_required
+    - second_independent_review_required
+    - rollback_required_when_relevant
+    - human_final_approval_required
+    - cloud_requires_human_approval
+
+acceptance_defaults:
+  evidence_required: true
+  rollback_when_relevant: true
+  independent_audit_required: true
+  documentation_required: true
+  remote_ci_required_for_publication: true
+  clean_clone_required_for_publication: true
+
+human_approval_actions:
+  - privileged_command
+  - destructive_action
+  - network_exposure
+  - firewall_change
+  - storage_change
+  - production_change
+  - disable_pedagogy
+  - disable_accessibility
+  - residual_risk_acceptance
+  - create_remote_repository
+  - change_repository_visibility
+  - make_public
+  - merge_pull_or_merge_request
+  - create_or_publish_release
+  - change_branch_protection
+  - force_push_or_history_rewrite
+  - delete_remote_repository_or_tag
+  - public_release

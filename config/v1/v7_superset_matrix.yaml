@@ -1,0 +1,77 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+baseline_repository: mathiasseguincadiche/openclaw_openrouter
+baseline_commit: b2d5ae5c9df4dc06fe2f2c3fbae5653b37b67f1b
+rule: every_relevant_v7_capability_must_be_preserved_improved_or_explicitly_replaced
+allowed_statuses: [PRESERVED, IMPROVED, REPLACED]
+
+capabilities:
+  windows_native_runtime:
+    status: PRESERVED
+    evidence: config/v1/platform.yaml
+  eight_separated_roles:
+    status: PRESERVED
+    evidence: config/v1/role_matrix.yaml
+  model_routing:
+    status: IMPROVED
+    evidence: config/v1/model_routing.yaml
+  immutable_intake:
+    status: IMPROVED
+    evidence: config/v1/intake_policy.yaml
+  project_manifest_contract:
+    status: IMPROVED
+    evidence: config/v1/project_schema_policy.yaml
+  task_contract:
+    status: IMPROVED
+    evidence: src/clawlocal/project_contracts.py
+  project_integrity:
+    status: IMPROVED
+    evidence: src/clawlocal/project_integrity.py
+  source_secret_scan:
+    status: IMPROVED
+    evidence: src/clawlocal/project_intake.py
+  pedagogy:
+    status: IMPROVED
+    evidence: config/v1/pedagogy_policy.yaml
+  learning_verdict:
+    status: PRESERVED
+    evidence: src/clawlocal/project_learning.py
+  progressive_accessibility:
+    status: PRESERVED
+    evidence: config/v1/accessibility_policy.yaml
+  publication_state_machine:
+    status: IMPROVED
+    evidence: config/v1/publication_policy.yaml
+  publication_action_gates:
+    status: PRESERVED
+    evidence: config/v1/publication_policy.yaml
+  least_privilege_review_roles:
+    status: IMPROVED
+    evidence: config/v1/tool_policy.yaml
+  local_telemetry:
+    status: IMPROVED
+    evidence: config/v1/telemetry_policy.yaml
+  migration_engine:
+    status: PRESERVED
+    evidence: src/clawlocal/project_migrations.py
+  decision_and_risk_logs:
+    status: PRESERVED
+    evidence: src/clawlocal/project_governance.py
+  runtime_redaction:
+    status: PRESERVED
+    evidence: src/clawlocal/project_security.py
+  support_bundle_second_pass:
+    status: PRESERVED
+    evidence: src/clawlocal/project_security.py
+  supply_chain_guards:
+    status: IMPROVED
+    evidence: config/v1/security.yaml
+  cloud_cost_control:
+    status: IMPROVED
+    evidence: config/v1/budget_policy.yaml
+  project_orchestration:
+    status: IMPROVED
+    evidence: config/v1/orchestration_policy.yaml
+  human_approval_boundaries:
+    status: IMPROVED
+    evidence: config/v1/project_schema_policy.yaml

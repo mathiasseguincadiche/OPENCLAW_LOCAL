@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 default_enabled: true
 default_mode: universal_progressive
@@ -29,5 +29,28 @@ reading_depths:
     label: Diagnostiquer
     content: [symptoms, checks, common_errors, stop_conditions, recovery, evidence]
 
+role_responsibilities:
+  chef-operations: [objectives, prerequisites, comprehension_criteria]
+  expert-recherche: [definitions, mechanisms, limitations, sources]
+  architecte-solutions: [choices, tradeoffs, useful_complexity]
+  ingenieur-devops: [commands, expected_results, evidence, rollback]
+  ingenieur-securite: [risks, controls, limitations]
+  redacteur-technique: [canonical_progressive_documentation]
+  auditeur-qualite: [comprehension, actionability, technical_fidelity]
+  ingenieur-release-forges: [publication_state, remote_evidence]
+
+audit_checklist:
+  - objective_understood_quickly
+  - prerequisites_explicit
+  - critical_vocabulary_defined
+  - essential_steps_not_guessed
+  - expected_result_visible
+  - validation_explained
+  - risks_and_stop_conditions_when_relevant
+  - rollback_or_recovery_when_relevant
+  - expert_depth_preserved
+  - links_and_sources_of_truth_coherent
+
+proportionality_factors: [risk, complexity, reversibility, audience, frequency]
 project_artifact: context/documentation_profile.json
 required_depth_ids: [understand, operate, deepen, diagnose]

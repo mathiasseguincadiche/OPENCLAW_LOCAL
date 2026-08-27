@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 project_root: projects
 required_directories:
@@ -10,12 +10,16 @@ required_directories:
   - evidence
   - diagrams
 manifest: project.json
+manifest_schema: config/v1/project_schema_policy.yaml
 orchestrator_contract: config/v1/orchestration_policy.yaml
 intake_contract: config/v1/intake_policy.yaml
 pedagogy_contract: config/v1/pedagogy_policy.yaml
 accessibility_contract: config/v1/accessibility_policy.yaml
 publication_contract: config/v1/publication_policy.yaml
 telemetry_contract: config/v1/telemetry_policy.yaml
+superset_contract: config/v1/v7_superset_matrix.yaml
+migration_engine: src/clawlocal/project_migrations.py
+integrity_engine: src/clawlocal/project_integrity.py
 status_flow:
   - INTAKE_READY
   - ANALYZED
@@ -31,13 +35,16 @@ rules:
   overwrite_existing_project: false
   copy_inputs_into_managed_project: true
   secrets_in_intake_forbidden: true
+  secrets_in_sources_forbidden: true
   intake_integrity_required: true
   intake_immutable_after_creation: true
+  project_phase_integrity_snapshots: true
+  strict_project_manifest: true
   source_repository_is_ground_truth: true
   rag_does_not_replace_file_reading: true
   agent_context_mode: workspace_snapshot
   state_changes_require_evidence: true
   final_completion_requires_human_approval: true
   learning_support_enabled_by_default: true
-  publication_governed_by_state_machine: true
+  publication_governed_by_state_and_action_gates: true
   operational_telemetry_local_only: true

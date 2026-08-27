@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -81,6 +84,93 @@ def append_telemetry(project: Path, measurement: dict[str, Any]) -> Path:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
     return path
+
+
+def _find_numeric(value: Any, names: set[str]) -> float | int | None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if (
+                key in names
+                and isinstance(child, (int, float))
+                and not isinstance(child, bool)
+            ):
+                return child
+        for child in value.values():
+            found = _find_numeric(child, names)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _find_numeric(child, names)
+            if found is not None:
+                return found
+    return None
+
+
+def extract_observed_metrics(value: Any) -> dict[str, Any]:
+    aliases = {
+        "ttft_ms": {"ttft_ms", "time_to_first_token_ms"},
+        "tokens_per_second": {"tokens_per_second", "tps"},
+        "prompt_tokens": {"prompt_tokens", "input_tokens"},
+        "generated_tokens": {
+            "generated_tokens",
+            "output_tokens",
+            "completion_tokens",
+        },
+        "vram_mb": {"vram_mb"},
+        "ram_mb": {"ram_mb"},
+        "retries": {"retries", "retry_count"},
+    }
+    observed: dict[str, Any] = {}
+    for target, names in aliases.items():
+        found = _find_numeric(value, names)
+        if found is not None:
+            observed[target] = found
+    if isinstance(value, dict):
+        calls = value.get("tool_calls")
+        if isinstance(calls, list):
+            observed["tool_calls"] = len(calls)
+    return observed
+
+
+@contextmanager
+def automatic_run_telemetry(
+    project: Path,
+    *,
+    project_id: str,
+    agent: str,
+    model: str,
+    backend: str,
+    route_kind: str,
+    phase: str,
+) -> Iterator[dict[str, Any]]:
+    observed: dict[str, Any] = {}
+    started = time.perf_counter()
+    success = False
+    error_class: str | None = None
+    try:
+        yield observed
+        success = True
+    except Exception as exc:
+        error_class = type(exc).__name__
+        raise
+    finally:
+        payload: dict[str, Any] = {
+            "project_id": project_id,
+            "agent": agent,
+            "model": model,
+            "backend": backend,
+            "route_kind": route_kind,
+            "phase": phase,
+            "duration_ms": (time.perf_counter() - started) * 1000.0,
+            "success": success,
+            "local_to_deep_transition": route_kind == "local_deep",
+            "cloud_escalation": route_kind == "cloud_escalation",
+            **observed,
+        }
+        if error_class:
+            payload["error_class"] = error_class
+        append_telemetry(project, payload)
 
 
 def read_telemetry(project: Path) -> list[dict[str, Any]]:

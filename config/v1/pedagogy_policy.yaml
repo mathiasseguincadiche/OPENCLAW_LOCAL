@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 default_enabled: true
 default_profile: balanced
@@ -22,13 +22,33 @@ profiles:
     max_learning_objectives: 6
 
 modes: [guided, assisted, autonomous, evaluation]
+learning_verdicts: [ACQUIS, ACQUIS_AVEC_RESERVES, A_RENFORCER, NON_EVALUE]
+
+help_ladder:
+  - short_question
+  - hint
+  - targeted_correction
+  - full_solution_with_justification
+rules:
+  ladder_steps_may_be_skipped: true
+  direct_solution_allowed_on_request: true
+
+competence_evidence:
+  - explain_purpose
+  - execute_or_review_meaningful_action
+  - interpret_result
+  - identify_risk
+  - diagnose_representative_failure
+  - reproduce_with_less_help
 
 artifacts:
   root: context/learning
+  learning_contract: context/learning/LEARNING_CONTRACT.json
   skills_matrix: context/learning/SKILLS_MATRIX.csv
   learning_journal: context/learning/LEARNING_JOURNAL.md
   teach_back: context/learning/TEACH_BACK.md
   retention_plan: context/learning/RETENTION_PLAN.yaml
+  evaluations: context/learning/evaluations
 
 principles:
   no_systematic_quiz: true
@@ -38,6 +58,7 @@ principles:
   direct_solution_allowed_on_request: true
   incident_fix_first_debrief_after: true
   never_mark_acquired_from_exposure_only: true
+  technical_verdict_is_distinct_from_learning_verdict: true
 
 specialization:
   core:

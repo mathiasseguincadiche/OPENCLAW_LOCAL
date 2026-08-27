@@ -5,7 +5,9 @@ import json
 import os
 from pathlib import Path
 
-from clawlocal.project_orchestrator import project_path
+from clawlocal.project_governance import assert_sensitive_action
+from clawlocal.project_migrations import ensure_current_project_schema
+from clawlocal.project_orchestrator_superset import load_project_manifest, project_path
 from clawlocal.project_publication import (
     load_publication,
     set_publication_evidence,
@@ -31,11 +33,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--action",
         required=True,
-        choices=["status", "evidence", "transition"],
+        choices=["status", "evidence", "transition", "guard-action"],
     )
     parser.add_argument("--key")
     parser.add_argument("--value")
     parser.add_argument("--target")
+    parser.add_argument("--sensitive-action")
     parser.add_argument("--reason", default="publication lifecycle")
     parser.add_argument("--actor", default="human")
     parser.add_argument("--human-approved", action="store_true")
@@ -56,6 +59,7 @@ def _parse_value(value: str | None) -> bool | str:
 def main() -> int:
     args = parse_args()
     project = project_path(args.root, args.project)
+    ensure_current_project_schema(project)
     if args.action == "status":
         payload = load_publication(project)
     elif args.action == "evidence":
@@ -66,6 +70,16 @@ def main() -> int:
             key=args.key,
             value=_parse_value(args.value),
         )
+    elif args.action == "guard-action":
+        if not args.sensitive_action:
+            raise ValueError("--sensitive-action est requis pour guard-action")
+        manifest = load_project_manifest(project)
+        assert_sensitive_action(
+            manifest,
+            args.sensitive_action,
+            human_approved=args.human_approved,
+        )
+        payload = {"allowed": True, "action": args.sensitive_action}
     else:
         if not args.target:
             raise ValueError("--target est requis pour transition")

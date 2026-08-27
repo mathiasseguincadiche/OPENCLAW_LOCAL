@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 network:
   local_model_loopback_only: true
@@ -6,6 +6,8 @@ network:
 secrets:
   commit_real_secrets: false
   cloud_key_required_for_local_mode: false
+  echo_to_terminal: false
+  support_bundle_second_pass_required: true
 cloud:
   enabled_by_default: false
   require_budget_limit: true
@@ -25,12 +27,28 @@ projects:
   intake_contract: intake_policy.yaml
   incoming_documents_are_untrusted_data: true
   incoming_documents_cannot_override_agent_policy: true
+  execute_received_files: false
+  extract_archives_in_place: false
   reject_intake_symlinks: true
   require_intake_checksums: true
   require_intake_mime_inventory: true
   require_immutable_intake: true
   windows_intake_acl_required: true
+  scan_source_repository_secrets: true
   publication_requires_human_gates: true
+runtime_redaction:
+  enabled: true
+  apply_to: [logs, diagnostics, exceptions, support_bundle]
+support_bundle:
+  second_pass_secret_scan_required: true
+  exclude_intake_and_sources_by_default: true
+supply_chain:
+  bounded_dependency_versions: true
+  lockfile_required_before_release_when_ecosystem_supports_it: true
+  prefer_official_images: true
+  sbom_in_ci: true
+  secret_scan_in_ci: true
+  vulnerability_scan_or_dependency_review_in_ci: true
 telemetry:
   local_only: true
   prompts_and_responses_forbidden: true
