@@ -1,0 +1,97 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+
+engine:
+  fail_closed: true
+  automatic_cloud_escalation: false
+  source_repository_is_ground_truth: true
+  human_decision_for_blocking_clarifications: true
+  final_human_approval_required: true
+
+status_flow:
+  - INTAKE_READY
+  - ANALYZED
+  - CLARIFICATION_REQUIRED
+  - PLANNED
+  - ASSIGNED
+  - IN_PROGRESS
+  - VALIDATING
+  - REVIEW
+  - PACKAGING
+  - COMPLETE
+
+transitions:
+  INTAKE_READY:
+    - ANALYZED
+  ANALYZED:
+    - CLARIFICATION_REQUIRED
+    - PLANNED
+  CLARIFICATION_REQUIRED:
+    - ANALYZED
+  PLANNED:
+    - ASSIGNED
+  ASSIGNED:
+    - IN_PROGRESS
+  IN_PROGRESS:
+    - VALIDATING
+  VALIDATING:
+    - IN_PROGRESS
+    - REVIEW
+  REVIEW:
+    - IN_PROGRESS
+    - PACKAGING
+  PACKAGING:
+    - COMPLETE
+  COMPLETE: []
+
+artifacts:
+  analysis: context/project_analysis.json
+  clarifications: context/clarifications.json
+  plan: context/project_plan.json
+  assignments: context/task_assignments.json
+  task_results: evidence/task_results.json
+  validation: evidence/validation_report.json
+  review: evidence/review_report.json
+  package_manifest: deliverables/package_manifest.json
+  final_report: evidence/final_report.json
+
+phases:
+  analyze:
+    owner: chef-operations
+    reviewers:
+      - expert-recherche
+  clarify:
+    owner: human
+  plan:
+    owner: chef-operations
+    reviewers:
+      - architecte-solutions
+  assign:
+    owner: chef-operations
+  execute:
+    owner: assigned_agent
+  validate:
+    owner: auditeur-qualite
+    security_reviewer: ingenieur-securite
+  review:
+    owner: auditeur-qualite
+  package:
+    owner: ingenieur-release-forges
+  complete:
+    owner: human
+
+execution:
+  local_first: true
+  max_parallel_tasks: 1
+  max_task_attempts: 2
+  sync_context_before_agent_phase: true
+  collect_task_outputs: true
+  rerun_failed_tasks: true
+  task_output_namespaced_by_task: true
+
+human_gates:
+  blocking_clarifications: true
+  destructive_actions: true
+  remote_publication: true
+  cloud_escalation: true
+  final_completion: true

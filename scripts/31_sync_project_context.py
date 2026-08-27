@@ -26,13 +26,29 @@ def main() -> int:
     )
     parser.add_argument("--project", required=True)
     parser.add_argument("--agent", choices=[*AGENT_IDS, "all"], default="all")
+    parser.add_argument(
+        "--include-outputs",
+        action="store_true",
+        help="Inclut travail/livrables/preuves pour un snapshot de revue.",
+    )
     parser.add_argument("--root", type=Path, default=default_root())
     args = parser.parse_args()
 
     targets = (
-        sync_project_to_all_agents(args.root, args.project)
+        sync_project_to_all_agents(
+            args.root,
+            args.project,
+            include_outputs=args.include_outputs,
+        )
         if args.agent == "all"
-        else [sync_project_context(args.root, args.project, args.agent)]
+        else [
+            sync_project_context(
+                args.root,
+                args.project,
+                args.agent,
+                include_outputs=args.include_outputs,
+            )
+        ]
     )
     for target in targets:
         print(f"SYNCED={target}")
