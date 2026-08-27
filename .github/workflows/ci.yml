@@ -36,6 +36,33 @@ jobs:
         run: python scripts/24_validate_release.py
       - name: Ruff
         run: ruff check src tests scripts
+      - name: Mypy
+        run: mypy src
+      - name: Tests with coverage
+        run: pytest -q --cov=clawlocal --cov-report=term-missing --cov-fail-under=75
+
+  python-compatibility:
+    name: python-${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Runtime contracts
+        run: |
+          python scripts/21_validate_repository.py
+          python scripts/22_validate_configs.py
       - name: Tests
         run: pytest -q
 
@@ -91,6 +118,12 @@ jobs:
       - name: Pester
         shell: pwsh
         run: Invoke-Pester -Path '.\tests\powershell' -CI -Output Detailed
+      - name: Phase 3 dry-run contracts
+        shell: pwsh
+        run: |
+          .\scripts\windows\08_configure_openclaw.ps1 -DryRun
+          .\scripts\windows\09_deploy_agents.ps1 -DryRun
+          .\scripts\windows\10_test_openclaw_e2e.ps1 -DryRun
       - name: Menu smoke test
         shell: pwsh
         run: .\menu.ps1 -Action docs
