@@ -57,14 +57,24 @@ def _project(tmp_path: Path) -> Path:
 def _write_assignments(project: Path, *, task_b_status: str = "PENDING") -> None:
     payload = {
         "tasks": [
-            {"task_id": "task-a", "role": "architecte-solutions", "status": "PASS", "attempts": 1},
+            {
+                "task_id": "task-a",
+                "role": "architecte-solutions",
+                "status": "PASS",
+                "attempts": 1,
+            },
             {
                 "task_id": "task-b",
                 "role": "ingenieur-devops",
                 "status": task_b_status,
                 "attempts": 1 if task_b_status != "PENDING" else 0,
             },
-            {"task_id": "task-c", "role": "redacteur-technique", "status": "PENDING", "attempts": 0},
+            {
+                "task_id": "task-c",
+                "role": "redacteur-technique",
+                "status": "PENDING",
+                "attempts": 0,
+            },
         ]
     }
     (project / "context" / "task_assignments.json").write_text(
