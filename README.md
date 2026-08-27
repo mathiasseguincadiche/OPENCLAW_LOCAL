@@ -9,7 +9,11 @@
 
 Plateforme IA **local-first, multi-agents et multi-modèles** pour Windows 11 Pro x64.
 
-La V0.2 fournit maintenant un vrai parcours projet : l'utilisateur dépose consignes, cahier des charges, sources et livrables ; le **Project Orchestrator** transforme ce matériau en analyse, clarifications, plan, tâches attribuées, exécution, preuves, validation, revue indépendante et package final. Les huit agents travaillent principalement avec des modèles locaux ; les informations récentes sont récupérées sur le Web puis raisonnées localement ; OpenRouter reste une escalade explicite, budgétée et traçable.
+`OPENCLAW_LOCAL` reprend l'idée fondatrice de `openclaw_openrouter` — OpenClaw + huit rôles spécialisés + contrats/projets/preuves — mais déplace le parcours nominal vers les modèles locaux afin de réduire fortement la dépendance payante au cloud. OpenRouter reste disponible uniquement comme escalade explicite, budgétée et traçable.
+
+La V0.2 fournit un vrai parcours projet : l'utilisateur dépose consignes, cahier des charges, sources et livrables ; le **Project Orchestrator** transforme ce matériau en analyse, clarifications, plan, tâches attribuées, exécution, preuves, validation, revue indépendante et package final. Les informations récentes sont récupérées sur le Web puis raisonnées localement.
+
+Voir [Filiation V7 / Parity Plus](docs/V7_PARITY_PLUS.md).
 
 ## Architecture V0.2
 
@@ -18,7 +22,8 @@ Projet utilisateur
 (consignes / sources / livrables)
            |
            v
-     Project Intake
+ Project Intake durci
+ secrets/symlinks/SHA-256/MIME/ACL
            |
            v
    Project Orchestrator
@@ -27,6 +32,13 @@ Projet utilisateur
      | ANALYZE -> CLARIFY -> PLAN -> ASSIGN -> EXECUTE          |
      |                    -> VALIDATE -> REVIEW -> PACKAGE       |
      +----------------------------------------------------------+
+           |
+     +-----+----------------------+-------------------+
+     |                            |                   |
+     v                            v                   v
+ apprentissage             documentation        publication
+ efficient/balanced/       progressive          gouvernée
+ intensive                  4 profondeurs        GitHub/GitLab
            |
            v
  OpenClaw / Gateway loopback
@@ -48,6 +60,9 @@ Gemma 4 12B                browser recherche  SERA 14B (*)
                          livrables   OpenRouter
                                       sous politique
                                       + budget FinOps
+                                  |
+                                  v
+                       télémétrie locale / preuves
 ```
 
 `(*)` Les modèles `LOCAL_DEEP` sont des **candidats**. Ils ne deviennent actifs qu'après import/backend et qualification réelle.
@@ -56,6 +71,8 @@ Gemma 4 12B                browser recherche  SERA 14B (*)
 
 - **Windows natif** : OpenClaw, Gateway, runtime IA et modèles tournent sous Windows 11 Pro ; WSL2 Ubuntu reste un environnement DevOps/Linux externe.
 - **Project-first** : le système prend en charge un projet structuré, pas seulement une conversation.
+- **Intake immuable** : archive canonique, SHA-256, MIME, refus symlink, secrets bloquants et ACL Windows.
+- **Entrées non fiables** : un document reçu ne peut jamais redéfinir la politique des agents.
 - **Orchestration fail-closed** : une phase ne progresse que si son artefact/gate existe réellement.
 - **Clarification humaine** : une ambiguïté bloquante n'est jamais résolue arbitrairement par un agent.
 - **Local-first** : aucune dépendance LLM cloud n'est requise pour le parcours nominal.
@@ -64,6 +81,12 @@ Gemma 4 12B                browser recherche  SERA 14B (*)
 - **Fail closed** : aucun fallback cloud silencieux, aucune promotion automatique de modèle/backend.
 - **Huit rôles distincts** : orchestration, recherche, architecture, DevOps, sécurité, release, documentation, audit.
 - **Séparation producteur/auditeur** lorsque cela est praticable.
+- **Architecture bornée** : l'Architecte produit ADR/schémas via un writer spécialisé, sans droits d'écriture génériques.
+- **Sécurité read-only** : l'Ingénieur sécurité audite et propose ; il ne corrige pas directement les sources.
+- **Pédagogie utile** : efficient/balanced/intensive sans bloquer la livraison.
+- **Documentation progressive** : Comprendre, Utiliser, Approfondir, Diagnostiquer.
+- **Publication gouvernée** : GitHub/GitLab avec checks, preuves distantes, clone propre et gates humains.
+- **Télémétrie locale** : métriques observées sans prompts, réponses, secrets ni documents privés.
 - **Workspaces confinés** : filesystem limité au workspace ; exec soumis à approbation ; elevated désactivé.
 - **FinOps** : limites quotidiennes, mensuelles et par projet ; ledger hors Git.
 - **Diagram-as-code** : D2, PlantUML et Graphviz pour les schémas techniques locaux.
@@ -94,7 +117,7 @@ PACKAGING
 COMPLETE
 ```
 
-Les retours `VALIDATING -> IN_PROGRESS` et `REVIEW -> IN_PROGRESS` sont prévus lorsque des corrections sont nécessaires.
+Les retours `VALIDATING -> IN_PROGRESS` et `REVIEW -> IN_PROGRESS` sont utilisés lorsque des corrections sont nécessaires. Les tâches concernées et leurs dépendants transitifs sont rouverts sans effacer les tentatives précédentes.
 
 ## Modèles candidats V0.2
 
@@ -146,6 +169,8 @@ python .\scripts\28_create_project.py `
   --deliverable ansible `
   --deliverable documentation
 ```
+
+Avant `INTAKE_READY`, le système vérifie les secrets évidents et symlinks, crée une archive canonique sous `state/intake/`, calcule SHA-256/MIME, écrit les preuves d'ingestion puis rend l'intake en lecture seule.
 
 Le projet géré contient `intake/`, `sources/`, `context/`, `work/`, `deliverables/`, `evidence/` et `diagrams/`.
 
@@ -203,9 +228,9 @@ python .\scripts\32_orchestrate_project.py `
   --human-approved
 ```
 
-Voir [Project Intake](docs/PROJECT_INTAKE.md) et [Project Orchestrator](docs/PROJECT_ORCHESTRATOR.md).
+Voir [Project Intake](docs/PROJECT_INTAKE.md), [Intégrité Intake](docs/INTAKE_INTEGRITY.md) et [Project Orchestrator](docs/PROJECT_ORCHESTRATOR.md).
 
-## Artefacts d'orchestration
+## Artefacts projet enrichis
 
 ```text
 context/
@@ -213,10 +238,28 @@ context/
 ├── clarifications.json
 ├── project_plan.json
 ├── task_assignments.json
+├── documentation_profile.json
+├── architecture/
+├── learning/
+│   ├── SKILLS_MATRIX.csv
+│   ├── LEARNING_JOURNAL.md
+│   ├── TEACH_BACK.md
+│   ├── RETENTION_PLAN.yaml
+│   └── learning_profile.json
+├── publication/
+│   └── publication.json
 └── tasks/
 
 evidence/
+├── intake/
+│   ├── manifest.json
+│   ├── checksums.sha256
+│   ├── mime-types.tsv
+│   ├── symlinks.txt
+│   └── INGESTION_REPORT.md
 ├── orchestration/
+├── telemetry/
+│   └── runs.jsonl
 ├── task_results.json
 ├── validation_report.json
 ├── review_report.json
@@ -229,6 +272,72 @@ deliverables/
 ```
 
 Les sorties de tâches sont historisées par tâche, agent et tentative (`run-001`, `run-002`, etc.) afin de ne pas écraser les preuves précédentes.
+
+## Comprendre et apprendre
+
+Le profil par défaut est `balanced` (70 % exécution / 30 % apprentissage). Il peut être changé sans effacer le journal ou la matrice de compétences :
+
+```powershell
+python .\scripts\36_project_learning.py `
+  --project p5-devops `
+  --action profile `
+  --profile intensive `
+  --mode evaluation
+```
+
+Les profils disponibles sont `efficient`, `balanced` et `intensive`. Une compétence n'est jamais déclarée acquise uniquement parce qu'elle a été mentionnée par un agent.
+
+Voir [Pédagogie](docs/PEDAGOGY.md) et [Accessibilité](docs/ACCESSIBILITY.md).
+
+## Publication d'un projet utilisateur
+
+Après validation locale, l'Ingénieur Release/Forge pilote une machine d'états distincte :
+
+```text
+LOCAL_IN_PROGRESS
+→ LOCAL_VALIDATED
+→ READY_TO_PUBLISH
+→ REMOTE_CREATED
+→ BRANCH_PUSHED
+→ PR_MR_OPEN
+→ CI_GREEN
+→ REMOTE_CLONE_VALIDATED
+→ RELEASE_CREATED (optionnel)
+→ PUBLISHED_AND_VERIFIED
+```
+
+Exemple :
+
+```powershell
+python .\scripts\33_project_publication.py `
+  --project p5-devops `
+  --action status
+```
+
+Les transitions distantes importantes restent soumises à approbation humaine et à des preuves observées.
+
+Voir [Publication projet](docs/PROJECT_PUBLICATION.md).
+
+## Télémétrie opérationnelle
+
+Les métriques réellement observées peuvent être enregistrées localement :
+
+```powershell
+python .\scripts\34_record_telemetry.py `
+  --project p5-devops `
+  --agent ingenieur-devops `
+  --model qwen-general `
+  --backend ollama-vulkan `
+  --route-kind local_primary `
+  --duration-ms 8120 `
+  --tokens-per-second 18.7 `
+  --generated-tokens 380 `
+  --success
+```
+
+La télémétrie interdit prompts, réponses, secrets et documents privés. Une métrique non mesurée reste absente ; elle n'est jamais fabriquée.
+
+Voir [Télémétrie](docs/TELEMETRY.md).
 
 ## Recherche Internet récente
 
@@ -296,6 +405,7 @@ La CI couvre :
 Python 3.12 + 3.13
 validate_repository
 validate_configs
+validate_v7_parity
 validate_release
 Ruff
 mypy
@@ -307,14 +417,20 @@ CodeQL
 Dependency Review / pip-audit fallback
 ```
 
-Les validateurs vérifient également la cohérence Project Intake / Project Orchestrator, la machine d'états, les gates humains, Web local-first, FinOps, les backends, le tag explicite des modèles Ollama et l'absence de `runtime_id` recopiés dans les scripts Windows.
+Les validateurs vérifient notamment Project Intake / Project Orchestrator, machine d'états, gates humains, Web local-first, FinOps, backends, tags explicites des modèles Ollama, absence de modèles recopiés en dur, Intake immuable, pédagogie, accessibilité, publication, télémétrie et séparation Architecte/Sécurité.
 
 ## Documentation
 
 - [Portail documentaire](docs/README.md)
+- [Filiation V7 / Parity Plus](docs/V7_PARITY_PLUS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Project Intake](docs/PROJECT_INTAKE.md)
+- [Intégrité Intake](docs/INTAKE_INTEGRITY.md)
 - [Project Orchestrator](docs/PROJECT_ORCHESTRATOR.md)
+- [Pédagogie](docs/PEDAGOGY.md)
+- [Accessibilité](docs/ACCESSIBILITY.md)
+- [Publication projet](docs/PROJECT_PUBLICATION.md)
+- [Télémétrie](docs/TELEMETRY.md)
 - [Recherche Web Local-First](docs/WEB_LOCAL_FIRST.md)
 - [Backends locaux](docs/RUNTIME_BACKENDS.md)
 - [Modèles locaux](docs/MODELES_LOCAUX.md)
@@ -331,7 +447,7 @@ Les validateurs vérifient également la cohérence Project Intake / Project Orc
 
 ## Version et état
 
-La version courante reste `0.2.0`. Le Project Orchestrator complète la promesse V0.2 de **workflow projet complet** sans créer artificiellement une nouvelle génération de fichiers ou de contrats.
+La version courante reste `0.2.0`. Ces ajouts renforcent la V0.2 sans prétendre qu'un benchmark matériel ou un vrai projet a été exécuté automatiquement par la CI.
 
 La **qualification matérielle Intel Arc B580 n'est pas déclarée tant qu'elle n'a pas été exécutée sur la workstation cible**. Voir [STATUS.md](STATUS.md).
 
