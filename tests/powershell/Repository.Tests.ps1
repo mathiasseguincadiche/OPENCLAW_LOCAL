@@ -3,7 +3,10 @@ $ErrorActionPreference = 'Stop'
 
 BeforeAll {
     $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-    $WindowsScripts = Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'scripts\windows') -Filter '*.ps1'
+
+    function Get-WindowsScripts {
+        Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'scripts\windows') -Filter '*.ps1'
+    }
 }
 
 Describe 'Contrats PowerShell 7' {
@@ -14,7 +17,7 @@ Describe 'Contrats PowerShell 7' {
     It 'parse tous les scripts PowerShell sans erreur' {
         $AllScripts = @(
             Get-Item -LiteralPath (Join-Path $RepoRoot 'menu.ps1')
-            $WindowsScripts
+            Get-WindowsScripts
         )
 
         foreach ($Script in $AllScripts) {
@@ -30,7 +33,7 @@ Describe 'Contrats PowerShell 7' {
     }
 
     It 'expose DryRun sur chaque script opérationnel Windows' {
-        foreach ($Script in $WindowsScripts) {
+        foreach ($Script in (Get-WindowsScripts)) {
             $Tokens = $null
             $ParseErrors = $null
             $Ast = [System.Management.Automation.Language.Parser]::ParseFile(
