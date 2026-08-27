@@ -68,8 +68,9 @@ Exemples :
 - pas de `project_analysis.json` → impossible de passer à `ANALYZED` ;
 - clarification bloquante ouverte → impossible de passer à `PLANNED` ;
 - tâche en échec → impossible de passer à `VALIDATING` ;
-- validation `FAIL` → retour à `IN_PROGRESS` ;
-- review `FAIL` → retour à `IN_PROGRESS` ;
+- validation `FAIL` → réouverture de tâches puis retour à `IN_PROGRESS` ;
+- review `FAIL` → réouverture de tâches puis retour à `IN_PROGRESS` ;
+- limite de tentatives atteinte → arrêt et intervention humaine ;
 - pas de livrables → packaging refusé ;
 - pas d'approbation humaine → `COMPLETE` refusé.
 
@@ -89,6 +90,7 @@ context/
 evidence/
 ├── orchestration/
 ├── task_results.json
+├── remediation_history.json
 ├── validation_report.json
 ├── review_report.json
 └── final_report.json
@@ -225,9 +227,20 @@ L'Auditeur qualité reçoit un snapshot incluant :
 - preuves ;
 - diagrammes.
 
-Il ne corrige pas silencieusement le travail. Il produit un verdict `PASS` ou `FAIL` et des findings.
+Il ne corrige pas silencieusement le travail. Il produit un verdict `PASS` ou `FAIL` et des findings. Lors d'un `FAIL`, il est invité à fournir `retry_task_ids[]` avec les tâches qui doivent être reprises.
 
-Un `FAIL` remet le projet en `IN_PROGRESS`.
+L'orchestrateur applique alors une vraie remediation :
+
+1. vérifie que les IDs existent dans le plan ;
+2. rouvre les tâches demandées ;
+3. rouvre aussi leurs dépendants transitifs pour éviter un livrable incohérent après correction amont ;
+4. conserve le compteur de tentatives et toutes les preuves `run-001`, `run-002`, etc. ;
+5. écrit `evidence/remediation_history.json` ;
+6. revient à `IN_PROGRESS`.
+
+Si le rapport `FAIL` ne permet pas d'identifier précisément les tâches, le mode fail-closed rouvre toutes les tâches plutôt que de prétendre savoir lesquelles sont sûres.
+
+Si une tâche a déjà atteint `max_task_attempts`, la remediation est refusée et une intervention humaine est requise.
 
 ## Phase REVIEW
 
@@ -243,7 +256,7 @@ Elle vérifie notamment :
 - ambiguïtés résiduelles ;
 - conformité aux critères fournis.
 
-Un `FAIL` remet le projet en `IN_PROGRESS`.
+Un `FAIL` utilise la même boucle de remediation que la validation : tâches ciblées, dépendants transitifs, historique conservé, puis retour à `IN_PROGRESS`.
 
 ## Phase PACKAGE
 
@@ -312,9 +325,11 @@ Le mode `run` s'arrête volontairement sur :
 
 - clarification humaine requise ;
 - échec d'une tâche ;
-- échec de validation ;
-- échec de review ;
+- validation/review ayant rouvert des tâches ;
+- limite de tentatives atteinte ;
 - attente d'approbation finale.
+
+Après correction, relancer `--action run --execute` reprend le projet depuis son état persistant et crée une nouvelle tentative sans effacer les preuves précédentes.
 
 ## Sécurité
 
@@ -324,6 +339,7 @@ Le mode `run` s'arrête volontairement sur :
 - les prompts demandent aux agents de lire le snapshot au lieu de recopier les documents en arguments de commande ;
 - les reviewers reçoivent les sorties par snapshot contrôlé ;
 - les sorties d'agents ne peuvent pas écraser les preuves des exécutions précédentes ;
+- une remediation ne remet jamais le compteur de tentatives à zéro ;
 - `COMPLETE` reste un gate humain.
 
 ## Ce que la CI peut vérifier
@@ -336,6 +352,9 @@ La CI peut valider :
 - dépendances de tâches ;
 - gates ;
 - collecte des sorties ;
+- boucle de remediation et dépendants transitifs ;
+- conservation des compteurs de tentatives ;
+- arrêt à la limite de tentatives ;
 - packaging et SHA-256 ;
 - obligation de validation humaine ;
 - dry-run Python.
