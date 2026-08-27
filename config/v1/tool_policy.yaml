@@ -20,8 +20,9 @@ agents:
 
   architecte-solutions:
     profile: coding
-    deny: [exec, process]
-    write_scope: [context, diagrams]
+    deny: [write, edit, apply_patch, exec, process]
+    artifact_writer: architecture_scoped
+    write_scope: [context/architecture, diagrams]
 
   ingenieur-devops:
     profile: coding
@@ -50,5 +51,5 @@ notes:
   - "Toute commande exec hors allowlist requiert une approbation humaine avec exec_mode=ask."
   - "Le mode elevated reste désactivé."
   - "Ingénieur sécurité audite et scanne mais ne modifie pas directement les sources."
-  - "Architecte solutions peut produire ADR et schémas sans disposer d'exec/process."
+  - "Architecte produit ADR/schémas via un writer borné à context/architecture et diagrams."
   - "Les rôles de revue ne peuvent pas modifier silencieusement le livrable qu'ils auditent."
