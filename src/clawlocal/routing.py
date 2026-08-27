@@ -181,7 +181,11 @@ def select_route(
             raise ValueError(f"tier local inconnu: {preferred_tier}")
 
         explicit_tier = bool(selected_explicit)
-        tier = selected_explicit[0] if selected_explicit else (preferred_tier or "primary")
+        tier = selected_explicit[0] if selected_explicit else str(
+            preferred_tier or route.get("default_preferred_tier", "primary")
+        )
+        if tier not in _TIER_FIELDS:
+            raise ValueError(f"tier local inconnu: {tier}")
         return _select_local(
             agent,
             route,
