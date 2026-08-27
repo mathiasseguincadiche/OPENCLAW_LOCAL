@@ -8,10 +8,12 @@ import re
 import shutil
 import subprocess
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from clawlocal.project_contracts import build_project_manifest
+from clawlocal.project_governance import initialize_governance
+from clawlocal.project_integrity import snapshot_integrity
 from clawlocal.project_learning import initialize_learning
 from clawlocal.project_publication import initialize_publication
 
@@ -44,35 +46,6 @@ _BLOCKED_SECRET_NAMES = {
     "id_ed25519",
 }
 _BLOCKED_SECRET_SUFFIXES = {".key", ".pem", ".p12", ".pfx", ".jks"}
-_TEXT_SUFFIXES = {
-    ".txt",
-    ".md",
-    ".yaml",
-    ".yml",
-    ".json",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".conf",
-    ".ps1",
-    ".sh",
-    ".tf",
-    ".tfvars",
-    ".py",
-}
-_MAX_SECRET_SCAN_BYTES = 2 * 1024 * 1024
-
-
-@dataclass(frozen=True)
-class ProjectManifest:
-    schema_version: str
-    project_id: str
-    title: str
-    created_at: str
-    status: str
-    expected_deliverables: list[str]
-    source_items: list[str]
-    intake_archive: str
 
 
 def validate_project_id(project_id: str) -> str:
@@ -102,11 +75,15 @@ def _sha256(path: Path) -> str:
 
 
 def _iter_files(item: Path) -> Iterable[Path]:
-    if item.is_file():
+    if item.is_file() and not item.is_symlink():
         yield item
         return
     if item.is_dir():
-        yield from (path for path in item.rglob("*") if path.is_file())
+        yield from (
+            path
+            for path in item.rglob("*")
+            if path.is_file() and not path.is_symlink()
+        )
 
 
 def _iter_symlinks(item: Path) -> Iterable[Path]:
@@ -124,23 +101,31 @@ def _assert_no_symlinks(item: Path) -> None:
         raise ValueError(f"lien symbolique interdit dans l'intake: {names}")
 
 
-def _assert_intake_has_no_obvious_secret(item: Path) -> None:
+def _looks_text(path: Path) -> bool:
+    try:
+        return b"\x00" not in path.read_bytes()[:4096]
+    except OSError:
+        return False
+
+
+def _assert_no_obvious_secret(item: Path, *, label: str) -> None:
     for path in _iter_files(item):
         if (
             path.name.casefold() in _BLOCKED_SECRET_NAMES
             or path.suffix.casefold() in _BLOCKED_SECRET_SUFFIXES
         ):
-            raise ValueError(f"secret potentiel interdit dans l'intake: {path.name}")
-        if path.suffix.casefold() not in _TEXT_SUFFIXES:
+            raise ValueError(f"secret potentiel interdit dans {label}: {path.name}")
+        if not _looks_text(path):
             continue
         try:
-            if path.stat().st_size > _MAX_SECRET_SCAN_BYTES:
-                continue
-            text = path.read_text(encoding="utf-8", errors="replace")
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    if any(pattern.search(line) for pattern in _SECRET_PATTERNS):
+                        raise ValueError(
+                            f"secret potentiel interdit dans {label}: {path.name}"
+                        )
         except OSError:
             continue
-        if any(pattern.search(text) for pattern in _SECRET_PATTERNS):
-            raise ValueError(f"secret potentiel interdit dans l'intake: {path.name}")
 
 
 def _validated_source(item: Path, *, intake: bool) -> Path:
@@ -150,7 +135,9 @@ def _validated_source(item: Path, *, intake: bool) -> Path:
     source = raw.resolve(strict=True)
     if intake:
         _assert_no_symlinks(source)
-        _assert_intake_has_no_obvious_secret(source)
+        _assert_no_obvious_secret(source, label="l'intake")
+    else:
+        _assert_no_obvious_secret(source, label="les sources")
     return source
 
 
@@ -178,6 +165,8 @@ def _inventory(root: Path) -> tuple[list[str], list[str], list[str]]:
     checksums: list[str] = []
     mime_types: list[str] = []
     symlinks: list[str] = []
+    if not root.exists():
+        return checksums, mime_types, symlinks
     for path in sorted(root.rglob("*")):
         relative = path.relative_to(root).as_posix()
         if path.is_symlink():
@@ -191,67 +180,69 @@ def _inventory(root: Path) -> tuple[list[str], list[str], list[str]]:
     return checksums, mime_types, symlinks
 
 
-def _write_ingestion_evidence(
+def _write_inventory(
     root: Path,
     *,
     project_id: str,
-    archive: Path,
+    source_kind: str,
+    canonical_archive: str | None,
     checksums: list[str],
     mime_types: list[str],
     symlinks: list[str],
 ) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "checksums.sha256").write_text(
-        "\n".join(checksums) + ("\n" if checksums else ""),
-        encoding="utf-8",
+        "\n".join(checksums) + ("\n" if checksums else ""), encoding="utf-8"
     )
     (root / "mime-types.tsv").write_text(
-        "\n".join(mime_types) + ("\n" if mime_types else ""),
-        encoding="utf-8",
+        "\n".join(mime_types) + ("\n" if mime_types else ""), encoding="utf-8"
     )
     (root / "symlinks.txt").write_text(
-        "\n".join(symlinks) + ("\n" if symlinks else ""),
-        encoding="utf-8",
+        "\n".join(symlinks) + ("\n" if symlinks else ""), encoding="utf-8"
     )
+    aggregate = hashlib.sha256("\n".join(checksums).encode()).hexdigest()
     manifest = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "project_id": project_id,
         "generated_at": datetime.now(UTC).isoformat(),
-        "canonical_archive": str(archive),
+        "source_kind": source_kind,
+        "canonical_archive": canonical_archive,
         "file_count": len(checksums),
         "symlink_count": len(symlinks),
         "sha256_required": True,
-        "documents_are_untrusted_data": True,
+        "aggregate_sha256": aggregate,
+        "secret_scan_passed": True,
+        "documents_are_untrusted_data": source_kind == "intake",
     }
     (root / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     (root / "INGESTION_REPORT.md").write_text(
-        "# Rapport d'ingestion\n\n"
+        f"# Rapport {source_kind}\n\n"
         f"- Projet : `{project_id}`\n"
         f"- Fichiers : **{len(checksums)}**\n"
         f"- Liens symboliques : **{len(symlinks)}**\n"
-        "- Secrets potentiels : **0** (sinon l'ingestion aurait été refusée)\n"
-        "- Intégrité : **SHA-256 enregistrés**\n"
-        "- MIME : **inventaire enregistré**\n"
-        "- Confiance : **contenus entrants traités comme données non fiables**\n",
+        "- Secrets potentiels : **0** (sinon la création aurait été refusée)\n"
+        "- Intégrité : **SHA-256 + digest agrégé enregistrés**\n"
+        "- MIME : **inventaire enregistré**\n",
         encoding="utf-8",
     )
 
 
 def _set_posix_read_only(root: Path) -> None:
-    for path in root.rglob("*"):
-        if path.is_file() and not path.is_symlink():
+    for path in sorted(root.rglob("*"), reverse=True):
+        if path.is_symlink():
+            continue
+        if path.is_file():
             path.chmod(0o444)
+        elif path.is_dir():
+            path.chmod(0o555)
+    root.chmod(0o555)
 
 
 def _set_windows_read_only(root: Path) -> None:
     identity_result = subprocess.run(
-        ["whoami.exe"],
-        capture_output=True,
-        text=True,
-        check=False,
+        ["whoami.exe"], capture_output=True, text=True, check=False
     )
     identity = identity_result.stdout.strip()
     if identity_result.returncode != 0 or not identity:
@@ -286,19 +277,21 @@ def _set_read_only(root: Path) -> None:
 def _restore_posix_writable(root: Path) -> None:
     if not root.exists():
         return
+    root.chmod(0o755)
     for path in root.rglob("*"):
-        if path.is_file() and not path.is_symlink():
+        if path.is_symlink():
+            continue
+        if path.is_file():
             path.chmod(0o644)
+        elif path.is_dir():
+            path.chmod(0o755)
 
 
 def _restore_windows_writable(root: Path) -> None:
     if not root.exists():
         return
     identity_result = subprocess.run(
-        ["whoami.exe"],
-        capture_output=True,
-        text=True,
-        check=False,
+        ["whoami.exe"], capture_output=True, text=True, check=False
     )
     identity = identity_result.stdout.strip()
     if identity_result.returncode != 0 or not identity:
@@ -343,10 +336,11 @@ def _archive_intake(
     checksums, mime_types, symlinks = _inventory(original)
     if symlinks:
         raise ValueError("intake canonique contient un lien symbolique inattendu")
-    _write_ingestion_evidence(
+    _write_inventory(
         archive,
         project_id=project_id,
-        archive=archive,
+        source_kind="intake",
+        canonical_archive=str(archive),
         checksums=checksums,
         mime_types=mime_types,
         symlinks=symlinks,
@@ -362,6 +356,9 @@ def create_project(
     intake_items: Iterable[Path] = (),
     source_items: Iterable[Path] = (),
     expected_deliverables: Iterable[str] = (),
+    owner: str = "dirigeant-operateur",
+    classification: str = "internal",
+    criticality: str = "standard",
 ) -> Path:
     normalized_id = validate_project_id(project_id)
     destination = _safe_destination(platform_root, normalized_id)
@@ -370,11 +367,7 @@ def create_project(
 
     intake_list = list(intake_items)
     source_list = list(source_items)
-    archive, copied_intake = _archive_intake(
-        platform_root,
-        normalized_id,
-        intake_list,
-    )
+    archive, copied_intake = _archive_intake(platform_root, normalized_id, intake_list)
 
     try:
         for name in PROJECT_DIRS:
@@ -382,49 +375,59 @@ def create_project(
                 parents=True,
                 exist_ok=False if name == PROJECT_DIRS[0] else True,
             )
-
         archived_original = archive / "original"
         for name in copied_intake:
             _copy_one(archived_original / name, destination / "intake" / name)
         copied_sources = _copy_sources(source_list, destination / "sources")
-        deliverables = [
-            value.strip()
-            for value in expected_deliverables
-            if value.strip()
-        ]
+        deliverables = [value.strip() for value in expected_deliverables if value.strip()]
 
         checksums, mime_types, symlinks = _inventory(destination / "intake")
-        evidence_root = destination / "evidence" / "intake"
-        _write_ingestion_evidence(
-            evidence_root,
+        _write_inventory(
+            destination / "evidence" / "intake",
             project_id=normalized_id,
-            archive=archive,
+            source_kind="intake",
+            canonical_archive=str(archive),
             checksums=checksums,
             mime_types=mime_types,
             symlinks=symlinks,
         )
+        source_checksums, source_mime, source_symlinks = _inventory(destination / "sources")
+        _write_inventory(
+            destination / "evidence" / "sources",
+            project_id=normalized_id,
+            source_kind="sources",
+            canonical_archive=None,
+            checksums=source_checksums,
+            mime_types=source_mime,
+            symlinks=source_symlinks,
+        )
 
-        manifest = ProjectManifest(
-            schema_version="1.1.0",
+        created_at = datetime.now(UTC).isoformat()
+        manifest = build_project_manifest(
             project_id=normalized_id,
             title=title.strip() or normalized_id,
-            created_at=datetime.now(UTC).isoformat(),
-            status="INTAKE_READY",
+            created_at=created_at,
             expected_deliverables=deliverables,
             source_items=copied_sources,
+            intake_items=copied_intake,
             intake_archive=str(archive),
+            owner=owner,
+            classification=classification,
+            criticality=criticality,
         )
-        payload = asdict(manifest)
-        payload["intake_items"] = copied_intake
         (destination / "project.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
-
         initialize_learning(destination)
         initialize_publication(destination)
+        initialize_governance(destination)
         _set_read_only(destination / "intake")
         _set_read_only(archive)
+        snapshot_integrity(
+            destination,
+            "INTAKE_READY",
+            roots=["project.json", "intake", "sources", "context"],
+        )
         return destination
     except Exception:
         _restore_writable(destination / "intake")
