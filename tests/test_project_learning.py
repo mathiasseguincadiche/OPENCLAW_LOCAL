@@ -1,7 +1,12 @@
+import json
 from pathlib import Path
 
 from clawlocal.project_intake import create_project
-from clawlocal.project_learning import append_learning_entry, update_skill
+from clawlocal.project_learning import (
+    append_learning_entry,
+    set_learning_profile,
+    update_skill,
+)
 
 
 def test_project_initializes_learning_artifacts(tmp_path: Path) -> None:
@@ -25,9 +30,14 @@ def test_project_initializes_learning_artifacts(tmp_path: Path) -> None:
         status="IN_PROGRESS",
         evidence="plan validé",
     )
-    assert "Terraform plan" in (root / "LEARNING_JOURNAL.md").read_text(
-        encoding="utf-8"
-    )
+    journal_before = (root / "LEARNING_JOURNAL.md").read_text(encoding="utf-8")
+    set_learning_profile(project, profile="intensive", mode="evaluation")
+    profile = json.loads((root / "learning_profile.json").read_text(encoding="utf-8"))
+
+    assert profile["profile"] == "intensive"
+    assert profile["mode"] == "evaluation"
+    assert profile["execution_share_percent"] == 60
+    assert journal_before == (root / "LEARNING_JOURNAL.md").read_text(encoding="utf-8")
     assert "terraform,IN_PROGRESS" in (root / "SKILLS_MATRIX.csv").read_text(
         encoding="utf-8"
     )
