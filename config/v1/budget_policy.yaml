@@ -9,6 +9,7 @@ limits:
 behavior:
   on_limit: deny
   require_reason: true
+  default_reservation_eur: 0.25
   require_cost_logging_when_available: true
   allow_manual_override: false
 ledger:

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "platform_version": "0.1.0",
+  "platform_version": "0.2.0",
   "windows": {
     "edition": "Windows 11 Pro",
     "architecture": "x64"
@@ -10,16 +10,34 @@
     "ci_tested": "7"
   },
   "python": {
-    "supported": ["3.12", "3.13"],
+    "supported": [
+      "3.12",
+      "3.13"
+    ],
     "preferred": "3.13.13",
-    "ci_tested": ["3.12", "3.13"]
+    "ci_tested": [
+      "3.12",
+      "3.13"
+    ]
   },
   "node": {
     "supported": [
-      {"major": 22, "minimum": "22.22.3"},
-      {"major": 24, "minimum": "24.15.0"},
-      {"major": 25, "minimum": "25.9.0"},
-      {"major": 26, "minimum": "26.0.0"}
+      {
+        "major": 22,
+        "minimum": "22.22.3"
+      },
+      {
+        "major": 24,
+        "minimum": "24.15.0"
+      },
+      {
+        "major": 25,
+        "minimum": "25.9.0"
+      },
+      {
+        "major": 26,
+        "minimum": "26.0.0"
+      }
     ],
     "preferred": "26.0.0",
     "sha256_win_x64_zip": "d0418640a36096e00bddb57761aa0b1b98f91904ec4ed2b9dd75cbad723becd7"

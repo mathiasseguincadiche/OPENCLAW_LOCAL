@@ -22,10 +22,10 @@ def test_local_route_is_default_and_command_targets_agent() -> None:
     assert command[-1] == "--json"
 
 
-def test_cloud_route_requires_enable_budget_and_reason() -> None:
+def test_cloud_route_requires_enable_budget_reason_and_precondition() -> None:
     with pytest.raises(PermissionError):
-        route_request("expert-recherche", request_cloud=True, reason="deep_web_research", cloud_enabled=False, budget_ok=True)
-    decision, resolved = route_request("expert-recherche", request_cloud=True, reason="deep_web_research", cloud_enabled=True, budget_ok=True)
+        route_request("expert-recherche", request_cloud=True, reason="deep_web_research", cloud_enabled=False, budget_ok=True, local_web_attempted=True)
+    decision, resolved = route_request("expert-recherche", request_cloud=True, reason="deep_web_research", cloud_enabled=True, budget_ok=True, local_web_attempted=True)
     assert decision.route_kind == "cloud_escalation"
     assert resolved == "openrouter/perplexity/sonar-pro-search"
 

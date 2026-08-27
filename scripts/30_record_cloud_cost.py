@@ -15,17 +15,10 @@ def main() -> int:
     parser.add_argument("--project-id")
     parser.add_argument("--ledger", type=Path, default=default_ledger_path())
     args = parser.parse_args()
-    allowed, reason = cloud_budget_allowed(args.ledger, proposed_cost_eur=args.cost_eur)
+    allowed, reason = cloud_budget_allowed(args.ledger, proposed_cost_eur=args.cost_eur, project_id=args.project_id)
     if not allowed:
         raise RuntimeError(reason)
-    path = append_cloud_cost(
-        args.ledger,
-        role=args.role,
-        model=args.model,
-        reason=args.reason,
-        cost_eur=args.cost_eur,
-        project_id=args.project_id,
-    )
+    path = append_cloud_cost(args.ledger, role=args.role, model=args.model, reason=args.reason, cost_eur=args.cost_eur, project_id=args.project_id)
     print(f"LEDGER={path}")
     return 0
 

@@ -17,6 +17,7 @@ AGENT_IDS = (
 )
 
 _CONTEXT_DIRS = ("intake", "sources", "context")
+_SNAPSHOT_MARKER = ".openclaw-local-project-snapshot"
 
 
 def sync_project_context(platform_root: Path, project_id: str, agent_id: str) -> Path:
@@ -30,8 +31,12 @@ def sync_project_context(platform_root: Path, project_id: str, agent_id: str) ->
 
     target = platform_root / "workspaces" / agent_id / "projects" / normalized
     if target.exists():
+        if not (target / _SNAPSHOT_MARKER).exists():
+            raise FileExistsError(f"snapshot non géré, refus d'écraser: {target}")
         shutil.rmtree(target)
+
     target.mkdir(parents=True, exist_ok=False)
+    (target / _SNAPSHOT_MARKER).write_text("managed-by=OPENCLAW_LOCAL\n", encoding="utf-8")
     shutil.copy2(project / "project.json", target / "project.json")
     for name in _CONTEXT_DIRS:
         source = project / name
