@@ -1,50 +1,83 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 fallback_policy: local_family_first
 cloud_enabled_by_default: false
+routing_order: [local_primary, local_specialist, local_deep, local_max, cloud_escalation]
 agents:
   chef-operations:
     local_primary: qwen-general
-    local_deep: qwen-deep
+    local_max: qwen-max
     local_fallback: gemma-review
+    default_preferred_tier: max
     cloud_escalation: frontier-reasoning
+    phase_preferences:
+      analyze: primary
+      plan: max
 
   expert-recherche:
     local_primary: qwen-general
+    local_max: qwen-max
     local_fallback: gemma-review
+    default_preferred_tier: max
     cloud_escalation: research
+    phase_preferences:
+      execute: max
 
   architecte-solutions:
     local_primary: gemma-review
-    local_deep: qwen-deep
+    local_deep: gemma-deep
+    local_max: qwen-max
     local_fallback: qwen-general
+    default_preferred_tier: deep
     cloud_escalation: frontier-review
+    phase_preferences:
+      execute: deep
 
   ingenieur-devops:
     local_primary: qwen-general
-    local_specialist: sera-devops
-    local_deep: qwen-deep
+    local_specialist: devstral-devops
+    local_max: qwen-max
     local_fallback: gemma-review
+    default_preferred_tier: specialist
     cloud_escalation: frontier-reasoning
+    phase_preferences:
+      execute: specialist
 
   ingenieur-securite:
     local_primary: qwen-general
-    local_deep: qwen-deep
+    local_max: qwen-max
     local_fallback: gemma-review
+    default_preferred_tier: max
     cloud_escalation: frontier-review
+    phase_preferences:
+      execute: max
 
   ingenieur-release-forges:
     local_primary: qwen-general
+    local_max: qwen-max
     local_fallback: gemma-review
+    default_preferred_tier: primary
     cloud_escalation: frontier-reasoning
+    phase_preferences:
+      execute: primary
 
   redacteur-technique:
     local_primary: gemma-review
+    local_deep: gemma-deep
     local_fallback: qwen-general
+    default_preferred_tier: deep
     cloud_escalation: frontier-review
+    phase_preferences:
+      execute: deep
 
   auditeur-qualite:
-    local_primary: qwen-general
-    local_fallback: gemma-review
+    local_primary: gemma-review
+    local_deep: gemma-deep
+    local_fallback: qwen-general
+    independent_alternative: qwen-max
+    default_preferred_tier: deep
     cloud_escalation: frontier-review
     independence_rule: reviewer_family_must_differ_from_producer_when_practical
+    phase_preferences:
+      validate: deep
+      review: deep

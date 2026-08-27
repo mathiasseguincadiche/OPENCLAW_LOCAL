@@ -3,7 +3,8 @@ param(
     [switch]$DryRun,
     [switch]$Quick,
     [switch]$IncludeDeep,
-    [switch]$IncludeSpecialist
+    [switch]$IncludeSpecialist,
+    [switch]$IncludeMax
 )
 
 Set-StrictMode -Version Latest
@@ -30,10 +31,11 @@ if ($DryRun) {
     Write-Host '  4. suite définie dans qualification_policy.yaml'
     Write-Host '  5. évaluation des seuils; aucune promotion automatique'
     if ($Quick) { Write-Host '  mode QUICK: contexte 8192 uniquement' }
-    if ($IncludeDeep) { Write-Host '  inclure LOCAL_DEEP Ollama si installé' }
     if ($IncludeSpecialist) {
-        Write-Host '  inclure le spécialiste seulement si son provider est qualifié'
+        Write-Host '  inclure LOCAL_SPECIALIST Ollama déclaré et installé'
     }
+    if ($IncludeDeep) { Write-Host '  inclure LOCAL_DEEP Ollama déclaré et installé' }
+    if ($IncludeMax) { Write-Host '  inclure LOCAL_MAX Ollama déclaré et installé' }
     exit 0
 }
 
@@ -61,6 +63,7 @@ $BenchmarkParameters = @{
     Quick = $Quick
     IncludeDeep = $IncludeDeep
     IncludeSpecialist = $IncludeSpecialist
+    IncludeMax = $IncludeMax
 }
 & $Benchmark @BenchmarkParameters
 Assert-ExitCode 'Benchmark local'

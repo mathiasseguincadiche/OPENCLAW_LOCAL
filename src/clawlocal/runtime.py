@@ -36,6 +36,11 @@ def cloud_enabled_from_environment() -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
+def qualified_models_from_environment() -> set[str]:
+    raw = os.environ.get("OPENCLAW_LOCAL_QUALIFIED_MODELS", "")
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
 def route_request(
     agent: str,
     *,
@@ -43,6 +48,10 @@ def route_request(
     reason: str | None = None,
     specialist_available: bool = False,
     deep_local_available: bool = False,
+    max_local_available: bool = False,
+    preferred_tier: str | None = None,
+    qualified_models: set[str] | None = None,
+    producer_model_alias: str | None = None,
     cloud_enabled: bool | None = None,
     budget_ok: bool = False,
     local_web_attempted: bool = False,
@@ -56,6 +65,11 @@ def route_request(
         if cloud_enabled is None
         else cloud_enabled
     )
+    qualified = (
+        qualified_models_from_environment()
+        if qualified_models is None
+        else set(qualified_models)
+    )
     decision = select_route(
         agent,
         request_cloud=request_cloud,
@@ -64,6 +78,10 @@ def route_request(
         reason=reason,
         specialist_available=specialist_available,
         deep_local_available=deep_local_available,
+        max_local_available=max_local_available,
+        preferred_tier=preferred_tier,
+        qualified_models=qualified,
+        producer_model_alias=producer_model_alias,
         local_web_attempted=local_web_attempted,
         source_conflict_observed=source_conflict_observed,
         failure_evidence=failure_evidence,

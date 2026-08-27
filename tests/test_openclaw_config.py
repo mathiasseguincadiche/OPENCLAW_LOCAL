@@ -63,8 +63,13 @@ def test_provider_uses_explicit_models_and_multimodal_metadata() -> None:
     provider = patch["models"]["providers"]["ollama"]
     assert provider["api"] == "ollama"
     ids = {model["id"] for model in provider["models"]}
-    assert "qwen3.5:9b" in ids
-    assert "gemma4:12b" in ids
+    assert {
+        "qwen3.5:9b",
+        "gemma4:12b",
+        "gemma4:26b",
+        "devstral-small-2:24b",
+        "qwen3.8:27b",
+    } <= ids
     gemma = next(
         model for model in provider["models"] if model["id"] == "gemma4:12b"
     )

@@ -3,7 +3,8 @@ param(
     [switch]$DryRun,
     [switch]$Quick,
     [switch]$IncludeDeep,
-    [switch]$IncludeSpecialist
+    [switch]$IncludeSpecialist,
+    [switch]$IncludeMax
 )
 
 Set-StrictMode -Version Latest
@@ -21,10 +22,13 @@ if ($IncludeDeep) {
 if ($IncludeSpecialist) {
     $BenchmarkArgs += '--include-specialist'
 }
+if ($IncludeMax) {
+    $BenchmarkArgs += '--include-max'
+}
 
 if ($DryRun) {
     Write-Host "[DRY-RUN] python $($BenchmarkArgs -join ' ')"
-    Write-Host '[DRY-RUN] La suite est lue depuis qualification_policy.yaml.'
+    Write-Host '[DRY-RUN] La suite et les classes de modèles sont lues depuis les contrats YAML.'
     exit 0
 }
 
