@@ -10,12 +10,17 @@ required_directories:
   - evidence
   - diagrams
 manifest: project.json
+orchestrator_contract: config/v1/orchestration_policy.yaml
 status_flow:
   - INTAKE_READY
   - ANALYZED
+  - CLARIFICATION_REQUIRED
   - PLANNED
+  - ASSIGNED
   - IN_PROGRESS
+  - VALIDATING
   - REVIEW
+  - PACKAGING
   - COMPLETE
 rules:
   overwrite_existing_project: false
@@ -24,3 +29,5 @@ rules:
   source_repository_is_ground_truth: true
   rag_does_not_replace_file_reading: true
   agent_context_mode: workspace_snapshot
+  state_changes_require_evidence: true
+  final_completion_requires_human_approval: true

@@ -5,6 +5,26 @@ Keep a Changelog et le versionnage suit SemVer.
 
 ## [Unreleased]
 
+### Added
+
+- Project Orchestrator fail-closed avec machine d'états explicite ;
+- analyse structurée, clarifications humaines, plan et assignation de tâches ;
+- exécution locale des tâches OpenClaw avec dépendances et tentatives bornées ;
+- collecte namespacée des sorties par tâche/agent/tentative ;
+- validation et review indépendantes avec retour en correction ;
+- boucle de remediation exécutable avec réouverture ciblée des tâches et dépendants transitifs ;
+- historique `remediation_history.json` sans remise à zéro des tentatives ;
+- arrêt fail-closed lorsque la limite de tentatives impose une intervention humaine ;
+- packaging final ZIP avec SHA-256 et approbation humaine obligatoire ;
+- documentation `PROJECT_ORCHESTRATOR.md` et tests de la machine d'états.
+
+### Changed
+
+- `project_policy.yaml` couvre désormais tout le cycle jusqu'à `COMPLETE` ;
+- les snapshots de revue peuvent inclure les sorties centrales ;
+- le portail projet documente le parcours flou -> livrable ;
+- un `FAIL` de validation/review remet réellement les tâches concernées en état exécutable.
+
 ## [0.2.0] - 2026-08-27
 
 ### Added
