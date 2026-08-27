@@ -33,6 +33,7 @@ from clawlocal.project_orchestrator import (
     store_validation_report,
     transition_project,
 )
+from clawlocal.project_remediation import reopen_tasks_for_correction
 from clawlocal.runtime import build_openclaw_agent_command, route_evidence, route_request
 
 _JSON_REQUIRED = {
@@ -396,6 +397,7 @@ def _execute_tasks(
         if task_id is not None or any_failure:
             return mutated
 
+
 def _validate(project: Path, root: Path, *, execute: bool, timeout: int) -> bool:
     if current_status(project) != "VALIDATING":
         raise ValueError("validate exige le statut VALIDATING")
@@ -405,11 +407,16 @@ def _validate(project: Path, root: Path, *, execute: bool, timeout: int) -> bool
         "auditeur-qualite",
         include_outputs=True,
     )
+    prompt = build_phase_prompt(project.name, "validate") + (
+        " Si le verdict est FAIL, ajoute retry_task_ids[] avec les identifiants exacts des tâches "
+        "à corriger. Si le finding concerne une dépendance amont, indique la tâche amont; "
+        "l'orchestrateur rouvrira aussi ses dépendants."
+    )
     evidence, _ = _local_agent_call(
         project,
         "auditeur-qualite",
         "validate",
-        build_phase_prompt(project.name, "validate"),
+        prompt,
         execute=execute,
         timeout=timeout,
     )
@@ -425,11 +432,17 @@ def _validate(project: Path, root: Path, *, execute: bool, timeout: int) -> bool
             reason="validation_passed",
         )
     else:
+        reopened = reopen_tasks_for_correction(
+            project,
+            report,
+            source="validation",
+        )
+        print("REOPENED_TASKS=" + ",".join(reopened))
         transition_project(
             project,
             "IN_PROGRESS",
             actor="auditeur-qualite",
-            reason="validation_failed_corrections_required",
+            reason="validation_failed_tasks_reopened",
         )
     return True
 
@@ -443,11 +456,15 @@ def _review(project: Path, root: Path, *, execute: bool, timeout: int) -> bool:
         "auditeur-qualite",
         include_outputs=True,
     )
+    prompt = build_phase_prompt(project.name, "review") + (
+        " Si le verdict est FAIL, ajoute retry_task_ids[] avec les identifiants exacts des tâches "
+        "à corriger. N'invente pas d'identifiant absent du plan."
+    )
     evidence, _ = _local_agent_call(
         project,
         "auditeur-qualite",
         "review",
-        build_phase_prompt(project.name, "review"),
+        prompt,
         execute=execute,
         timeout=timeout,
     )
@@ -463,11 +480,17 @@ def _review(project: Path, root: Path, *, execute: bool, timeout: int) -> bool:
             reason="independent_review_passed",
         )
     else:
+        reopened = reopen_tasks_for_correction(
+            project,
+            report,
+            source="review",
+        )
+        print("REOPENED_TASKS=" + ",".join(reopened))
         transition_project(
             project,
             "IN_PROGRESS",
             actor="auditeur-qualite",
-            reason="review_failed_corrections_required",
+            reason="review_failed_tasks_reopened",
         )
     return True
 
@@ -528,14 +551,14 @@ def _run(project: Path, root: Path, *, execute: bool, timeout: int) -> None:
                 return
             if current_status(project) == "IN_PROGRESS":
                 _show_status(project)
-                print("STOP=VALIDATION_FAILED")
+                print("STOP=VALIDATION_FAILED_TASKS_REOPENED")
                 return
         elif status == "REVIEW":
             if not _review(project, root, execute=execute, timeout=timeout):
                 return
             if current_status(project) == "IN_PROGRESS":
                 _show_status(project)
-                print("STOP=REVIEW_FAILED")
+                print("STOP=REVIEW_FAILED_TASKS_REOPENED")
                 return
         elif status == "PACKAGING":
             _package(project)
