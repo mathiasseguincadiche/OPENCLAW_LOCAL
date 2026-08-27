@@ -15,17 +15,16 @@ def model_ref(model_alias: str) -> str:
         provider = model["provider"]
         if provider == "ollama":
             return f"ollama/{model['runtime_id']}"
+        if provider == "llama_cpp":
+            return f"llamacpp/{model['runtime_id']}"
         raise ValueError(
-            f"Le modèle local {model_alias} utilise {provider}; "
-            "import/qualification explicite requis"
+            f"Le modèle local {model_alias} utilise {provider}; import/qualification explicite requis"
         )
-
     if model_alias in catalog["cloud_catalog"]:
         model = catalog["cloud_catalog"][model_alias]
         if model["provider"] != "openrouter":
             raise ValueError(f"Provider cloud non supporté: {model['provider']}")
         return f"openrouter/{model['runtime_id']}"
-
     raise KeyError(f"Alias modèle inconnu: {model_alias}")
 
 
@@ -40,35 +39,25 @@ def route_request(
     request_cloud: bool = False,
     reason: str | None = None,
     specialist_available: bool = False,
+    deep_local_available: bool = False,
     cloud_enabled: bool | None = None,
+    budget_ok: bool = False,
 ) -> tuple[RouteDecision, str]:
     enabled = cloud_enabled_from_environment() if cloud_enabled is None else cloud_enabled
     decision = select_route(
         agent,
         request_cloud=request_cloud,
         cloud_enabled=enabled,
+        budget_ok=budget_ok,
         reason=reason,
         specialist_available=specialist_available,
+        deep_local_available=deep_local_available,
     )
     return decision, model_ref(decision.model_alias)
 
 
-def build_openclaw_agent_command(
-    decision: RouteDecision,
-    resolved_model: str,
-    message: str,
-) -> list[str]:
-    return [
-        "openclaw",
-        "agent",
-        "--agent",
-        decision.agent,
-        "--model",
-        resolved_model,
-        "--message",
-        message,
-        "--json",
-    ]
+def build_openclaw_agent_command(decision: RouteDecision, resolved_model: str, message: str) -> list[str]:
+    return ["openclaw", "agent", "--agent", decision.agent, "--model", resolved_model, "--message", message, "--json"]
 
 
 def route_evidence(decision: RouteDecision, resolved_model: str) -> dict[str, Any]:

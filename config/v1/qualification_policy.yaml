@@ -1,6 +1,6 @@
 schema_version: "1.0.0"
-platform_version: "0.1.0"
-suite: devops-v1
+platform_version: "0.2.0"
+suite: devops-v2
 required_contexts: [8192, 16384]
 optional_contexts: [32768]
 
@@ -22,15 +22,26 @@ promotion:
     - automated_gate_pass
     - openclaw_tool_call_smoke_pass
     - openclaw_tool_feedback_repair_pass
+    - project_intake_e2e_pass
+    - local_web_research_e2e_pass
     - stability_three_runs
     - human_review
     - no_cloud_dependency_in_nominal_path
 
 specialists:
+  qwen-deep:
+    required: false
+    evaluate_after_required_models: true
+    promotion_requires_separate_review: true
   sera-devops:
     required: false
     evaluate_after_required_models: true
     promotion_requires_separate_review: true
+
+runtime_comparison:
+  required_for_intel_arc_promotion: true
+  candidates: [ollama-vulkan, llama-cpp-sycl, llama-cpp-vulkan]
+  automatic_winner_promotion: false
 
 safety:
   cloud_calls_allowed_during_qualification: false

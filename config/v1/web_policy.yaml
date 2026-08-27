@@ -1,0 +1,23 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+local_first: true
+nominal_path:
+  reasoning: local_model
+  search_provider: parallel-free
+  web_search_enabled: true
+  web_fetch_enabled: true
+  browser_enabled_for_roles: [expert-recherche]
+  max_results: 8
+  search_timeout_seconds: 30
+  cache_ttl_minutes: 15
+freshness_policy:
+  current_fact_requires_web: true
+  source_count_target: 2
+  prefer_primary_sources: true
+cloud_escalation:
+  allowed_only_after_local_web_attempt: true
+  reasons: [deep_web_research, source_conflict]
+security:
+  private_network_fetch: false
+  browser_login_requires_human: true
+  secrets_in_queries_forbidden: true

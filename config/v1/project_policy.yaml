@@ -1,0 +1,26 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+project_root: projects
+required_directories:
+  - intake
+  - sources
+  - context
+  - work
+  - deliverables
+  - evidence
+  - diagrams
+manifest: project.json
+status_flow:
+  - INTAKE_READY
+  - ANALYZED
+  - PLANNED
+  - IN_PROGRESS
+  - REVIEW
+  - COMPLETE
+rules:
+  overwrite_existing_project: false
+  copy_inputs_into_managed_project: true
+  secrets_in_intake_forbidden: true
+  source_repository_is_ground_truth: true
+  rag_does_not_replace_file_reading: true
+  agent_context_mode: workspace_snapshot

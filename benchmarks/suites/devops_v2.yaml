@@ -1,0 +1,130 @@
+schema_version: "1.0.0"
+id: devops-v2
+description: Qualification locale orientée projets DevOps réels, raisonnement, documentation, sécurité et discipline agentique.
+default_temperature: 0.1
+scenarios:
+  - id: project-intake-analysis
+    category: project
+    prompt: >-
+      Un projet impose Docker, Kubernetes, Helm, trois environnements dev/staging/prod et des
+      livrables README, runbook et preuves. Retourne uniquement un JSON avec les clés
+      objectives, constraints, deliverables, risks et first_actions. N'invente aucun livrable.
+    checks:
+      - type: json_keys
+        keys: [objectives, constraints, deliverables, risks, first_actions]
+
+  - id: gitlab-ci-valid
+    category: devops
+    prompt: >-
+      Retourne uniquement un YAML GitLab CI valide. Définis stages test et build, un job tests
+      avec python:3.12 exécutant pytest -q, puis un job build dépendant des tests. Aucun markdown.
+    checks:
+      - type: yaml_keys
+        keys: [stages, tests, build]
+
+  - id: kubernetes-root-cause
+    category: troubleshooting
+    prompt: >-
+      Un Deployment reste à 0/2 Ready et aucun diagnostic n'a encore été fait. Donne une procédure
+      ordonnée qui commence par observer l'état, inspecte events, describe et logs, puis distingue
+      image pull, probes, ressources et configuration. Ne prétends pas connaître la cause.
+    checks:
+      - type: contains_all
+        values: [kubectl, describe, logs]
+      - type: not_contains_any
+        values: ["la cause est forcément", "certainement causé par"]
+
+  - id: terraform-multifile-change
+    category: iac
+    prompt: >-
+      Un module Terraform possède main.tf, variables.tf et outputs.tf. Il faut rendre le nombre
+      d'instances configurable et exposer leurs identifiants. Décris précisément les changements
+      attendus fichier par fichier, sans inventer de provider ni de ressource absente.
+    checks:
+      - type: contains_all
+        values: [main.tf, variables.tf, outputs.tf]
+
+  - id: ansible-idempotence
+    category: automation
+    prompt: >-
+      Donne cinq contrôles concrets pour vérifier qu'un rôle Ansible d'installation de service est
+      idempotent. Inclue check mode, handlers et second passage sans changement.
+    checks:
+      - type: contains_all
+        values: [check, handler]
+      - type: contains_any
+        values: [idempotent, idempotence, changed=0]
+
+  - id: security-pipeline-review
+    category: security
+    prompt: >-
+      Revois une pipeline CI qui reçoit des secrets, construit une image, télécharge des dépendances
+      et publie un artefact. Donne cinq contrôles prioritaires et le risque couvert pour chacun.
+    checks:
+      - type: contains_all
+        values: [secret, dépendance, artefact]
+      - type: contains_any
+        values: [SBOM, signature, provenance]
+
+  - id: rollback-runbook
+    category: documentation
+    prompt: >-
+      Rédige un mini-runbook opérationnel contenant exactement les sections Préconditions,
+      Déploiement, Vérification et Rollback. Ajoute des critères observables, sans inventer de
+      métriques de production.
+    checks:
+      - type: contains_all
+        values: [Préconditions, Déploiement, Vérification, Rollback]
+
+  - id: architecture-diagram-d2
+    category: diagram
+    prompt: >-
+      Retourne uniquement une source D2 minimale représentant Utilisateur -> OpenClaw -> Routeur,
+      puis Routeur -> Local et Routeur -> Cloud. Aucun bloc Markdown ni explication.
+    checks:
+      - type: contains_all
+        values: [Utilisateur, OpenClaw, Routeur, Local, Cloud]
+
+  - id: web-freshness-discipline
+    category: research
+    prompt: >-
+      On te demande la dernière version stable d'un logiciel mais aucun accès web ni source récente
+      n'est fourni. Explique en deux phrases maximum ce que tu dois vérifier avant de répondre et
+      refuse d'inventer une version.
+    checks:
+      - type: contains_any
+        values: [web, source, officiel, récente, récent]
+      - type: not_contains_any
+        values: ["je confirme que la dernière version est"]
+
+  - id: tool-intent-json
+    category: agentic-structure
+    prompt: >-
+      Tu dois inspecter README.md avant de répondre. Retourne uniquement un JSON avec les clés
+      tool, arguments et reason. tool doit valoir read_file et arguments doit cibler README.md.
+      N'exécute rien réellement.
+    checks:
+      - type: json_keys
+        keys: [tool, arguments, reason]
+
+  - id: tool-feedback-repair-json
+    category: agentic-repair
+    prompt: >-
+      Un outil répond ERROR file_not_found pour config/prod.yaml. Retourne uniquement un JSON
+      avec diagnosis et next_action. Ne prétends pas que le fichier existe et ne fabrique aucun
+      contenu du fichier.
+    checks:
+      - type: json_keys
+        keys: [diagnosis, next_action]
+      - type: not_contains_any
+        values: ["contenu de config/prod.yaml"]
+
+  - id: long-context-discipline
+    category: long-context
+    synthetic_context_chars: 24000
+    prompt: >-
+      À partir de l'inventaire synthétique fourni avant cette consigne, retourne uniquement trois
+      risques généraux de dérive de configuration. N'invente aucun hôte absent et ne transforme pas
+      les exemples en faits de production.
+    checks:
+      - type: nonempty

@@ -1,5 +1,5 @@
 schema_version: "1.0.0"
-platform_version: "0.1.0"
+platform_version: "0.2.0"
 models:
   qwen-general:
     provider: ollama
@@ -9,17 +9,30 @@ models:
     role: generalist
     required: true
     status: candidate
+    input: [text, image]
     context_policy: benchmark_before_raise
 
   gemma-review:
     provider: ollama
-    runtime_id: "gemma4"
+    runtime_id: "gemma4:12b"
     family: gemma
     class: local_fast
     role: writing_architecture_review
     required: true
     status: candidate
+    input: [text, image]
     context_policy: benchmark_before_raise
+
+  qwen-deep:
+    provider: ollama
+    runtime_id: "qwen3.5:27b"
+    family: qwen
+    class: local_deep
+    role: deep_reasoning
+    required: false
+    status: optional_candidate
+    input: [text, image]
+    activation: benchmark_required
 
   sera-devops:
     provider: custom_gguf
@@ -29,7 +42,8 @@ models:
     role: software_engineering
     required: false
     status: optional_candidate
-    activation: import_and_benchmark_required
+    input: [text]
+    activation: import_backend_and_benchmark_required
 
 cloud_catalog:
   research:

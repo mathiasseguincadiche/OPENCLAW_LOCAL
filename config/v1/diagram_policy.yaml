@@ -1,0 +1,13 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+preferred_formats: [d2, plantuml, graphviz]
+outputs: [svg, png]
+policy:
+  diagram_as_code_first: true
+  generated_source_must_be_versionable: true
+  renderer_must_be_local: true
+  ai_image_generation_required: false
+  no_mermaid_requirement: false
+security:
+  shell_execution_requires_approval: true
+  remote_renderers_forbidden_by_default: true
