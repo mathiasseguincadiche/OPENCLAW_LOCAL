@@ -6,6 +6,7 @@ from typing import Any
 
 from clawlocal.config import load_contract
 from clawlocal.routing import RouteDecision, select_route
+from clawlocal.telemetry import try_record_route_event
 
 
 def model_ref(model_alias: str) -> str:
@@ -34,6 +35,17 @@ def model_ref(model_alias: str) -> str:
 def cloud_enabled_from_environment() -> bool:
     value = os.environ.get("OPENCLAW_LOCAL_CLOUD_ENABLED", "false").strip().lower()
     return value in {"1", "true", "yes", "on"}
+
+
+def _backend_for_model(resolved_model: str) -> str:
+    if resolved_model.startswith("ollama/"):
+        platform = load_contract("platform.yaml")
+        return str(platform.get("local_provider", {}).get("nominal_id", "ollama"))
+    if resolved_model.startswith("llamacpp/"):
+        return "llama-cpp"
+    if resolved_model.startswith("openrouter/"):
+        return "openrouter"
+    return "unknown"
 
 
 def route_request(
@@ -70,7 +82,14 @@ def route_request(
         local_attempts=local_attempts,
         human_approved=human_approved,
     )
-    return decision, model_ref(decision.model_alias)
+    resolved_model = model_ref(decision.model_alias)
+    try_record_route_event(
+        agent=decision.agent,
+        model=resolved_model,
+        route_kind=decision.route_kind,
+        backend=_backend_for_model(resolved_model),
+    )
+    return decision, resolved_model
 
 
 def build_openclaw_agent_command(
