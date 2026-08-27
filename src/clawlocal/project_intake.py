@@ -326,26 +326,37 @@ def _archive_intake(
 ) -> tuple[Path, list[str]]:
     sources = [_validated_source(item, intake=True) for item in items]
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
-    archive = platform_root / "state" / "intake" / project_id / stamp
+    project_archive_root = platform_root / "state" / "intake" / project_id
+    archive = project_archive_root / stamp
     original = archive / "original"
-    original.mkdir(parents=True, exist_ok=False)
-    copied: list[str] = []
-    for source in sources:
-        _copy_one(source, original / source.name)
-        copied.append(source.name)
-    checksums, mime_types, symlinks = _inventory(original)
-    if symlinks:
-        raise ValueError("intake canonique contient un lien symbolique inattendu")
-    _write_inventory(
-        archive,
-        project_id=project_id,
-        source_kind="intake",
-        canonical_archive=str(archive),
-        checksums=checksums,
-        mime_types=mime_types,
-        symlinks=symlinks,
-    )
-    return archive, copied
+    try:
+        original.mkdir(parents=True, exist_ok=False)
+        copied: list[str] = []
+        for source in sources:
+            _copy_one(source, original / source.name)
+            copied.append(source.name)
+        checksums, mime_types, symlinks = _inventory(original)
+        if symlinks:
+            raise ValueError("intake canonique contient un lien symbolique inattendu")
+        _write_inventory(
+            archive,
+            project_id=project_id,
+            source_kind="intake",
+            canonical_archive=str(archive),
+            checksums=checksums,
+            mime_types=mime_types,
+            symlinks=symlinks,
+        )
+        return archive, copied
+    except Exception:
+        _restore_writable(archive)
+        if archive.exists():
+            shutil.rmtree(archive, ignore_errors=True)
+        try:
+            project_archive_root.rmdir()
+        except OSError:
+            pass
+        raise
 
 
 def create_project(
