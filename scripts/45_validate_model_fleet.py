@@ -11,30 +11,41 @@ from clawlocal.runtime import model_ref
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "config" / "v1"
 
-EXPECTED_RUNTIME_IDS = {
-    "qwen-general": "qwen3.5:9b",
-    "gemma-review": "gemma4:12b",
+EXPECTED_MODELS = {
+    "qwen-max": "qwen3.8:27b",
     "gemma-deep": "gemma4:26b",
     "devstral-devops": "devstral-small-2:24b",
-    "qwen-max": "qwen3.8:27b",
 }
 
-EXPECTED_DEFAULT_TIERS = {
-    "chef-operations": "max",
-    "expert-recherche": "max",
-    "architecte-solutions": "deep",
-    "ingenieur-devops": "specialist",
-    "ingenieur-securite": "max",
-    "ingenieur-release-forges": "primary",
-    "redacteur-technique": "deep",
-    "auditeur-qualite": "deep",
+EXPECTED_PRIMARY = {
+    "chef-operations": "qwen-max",
+    "expert-recherche": "qwen-max",
+    "architecte-solutions": "gemma-deep",
+    "ingenieur-devops": "devstral-devops",
+    "ingenieur-securite": "qwen-max",
+    "ingenieur-release-forges": "qwen-max",
+    "redacteur-technique": "gemma-deep",
+    "auditeur-qualite": "gemma-deep",
 }
 
-EXPECTED_QUALIFICATION_CLASSES = {
-    "devstral-devops": "local_specialist",
-    "gemma-deep": "local_deep",
-    "qwen-max": "local_max",
-}
+FORBIDDEN_ACTIVE_RUNTIME_IDS = (
+    "qwen3.5:9b",
+    "gemma4:12b",
+    "sera-14b",
+)
+
+ACTIVE_TEXT_FILES = (
+    "README.md",
+    "STATUS.md",
+    "docs/MODELES_LOCAUX.md",
+    "docs/ROUTAGE_HYBRIDE.md",
+    "docs/TELEMETRY.md",
+    "config/openclaw.local.example.json5",
+    "config/v1/model_catalog.yaml",
+    "config/v1/model_routing.yaml",
+    "config/v1/qualification_policy.yaml",
+    "src/clawlocal/openclaw_config.py",
+)
 
 
 def load_yaml(name: str) -> dict[str, Any]:
@@ -53,10 +64,24 @@ def main() -> int:
     models = catalog.get("models", {})
     agents = routing.get("agents", {})
 
-    for alias, runtime_id in EXPECTED_RUNTIME_IDS.items():
+    if set(models) != set(EXPECTED_MODELS):
+        failures.append(
+            "le catalogue local doit contenir exactement qwen-max, gemma-deep "
+            "et devstral-devops"
+        )
+
+    policy = catalog.get("policy", {})
+    if policy.get("performance_only") is not True:
+        failures.append("model_catalog: performance_only doit être activé")
+    if policy.get("local_model_count") != 3:
+        failures.append("model_catalog: exactement trois modèles locaux supportés")
+    if policy.get("no_hidden_small_model_fallback") is not True:
+        failures.append("model_catalog: les petits fallbacks cachés doivent être interdits")
+
+    for alias, runtime_id in EXPECTED_MODELS.items():
         model = models.get(alias)
         if not isinstance(model, dict):
-            failures.append(f"modèle requis par la flotte absent: {alias}")
+            failures.append(f"modèle performance absent: {alias}")
             continue
         if model.get("runtime_id") != runtime_id:
             failures.append(
@@ -64,147 +89,112 @@ def main() -> int:
             )
         if model.get("provider") != "ollama":
             failures.append(f"{alias}: provider Ollama attendu")
+        if model.get("required") is not True:
+            failures.append(f"{alias}: doit être requis dans la flotte supportée")
+        if model.get("routing_active") is not True:
+            failures.append(f"{alias}: doit être routable")
 
-    for alias in ("qwen-general", "gemma-review"):
-        if models.get(alias, {}).get("required") is not True:
-            failures.append(f"{alias}: le modèle fast doit rester requis")
-
-    for alias, expected_class in EXPECTED_QUALIFICATION_CLASSES.items():
-        model = models.get(alias, {})
-        if model.get("required") is not False:
-            failures.append(f"{alias}: doit rester optionnel avant qualification B580")
-        if model.get("status") != "optional_candidate":
-            failures.append(f"{alias}: status optional_candidate attendu")
-        if model.get("activation") != "benchmark_required":
-            failures.append(f"{alias}: activation benchmark_required obligatoire")
-        if model.get("class") != expected_class:
-            failures.append(f"{alias}: classe {expected_class} attendue")
-
-    sera = models.get("sera-devops", {})
-    if sera.get("routing_active") is not False:
-        failures.append(
-            "SERA doit rester hors routage actif tant que son backend "
-            "n'est pas qualifié"
-        )
-
-    if routing.get("routing_order") != [
-        "local_primary",
-        "local_specialist",
-        "local_deep",
-        "local_max",
-        "cloud_escalation",
-    ]:
-        failures.append("ordre de routage local-first inattendu")
-
-    for agent, tier in EXPECTED_DEFAULT_TIERS.items():
+    allowed = set(EXPECTED_MODELS)
+    for agent, expected in EXPECTED_PRIMARY.items():
         route = agents.get(agent, {})
-        if route.get("default_preferred_tier") != tier:
-            failures.append(f"{agent}: default_preferred_tier={tier} attendu")
-
-    if agents.get("ingenieur-devops", {}).get("local_specialist") != "devstral-devops":
-        failures.append("DevOps doit utiliser Devstral Small 2 comme spécialiste qualifiable")
-    if agents.get("architecte-solutions", {}).get("local_deep") != "gemma-deep":
-        failures.append("Architecte doit utiliser Gemma 4 26B comme deep qualifiable")
-    if agents.get("redacteur-technique", {}).get("local_deep") != "gemma-deep":
-        failures.append("Rédacteur doit utiliser Gemma 4 26B comme deep qualifiable")
+        if route.get("local_primary") != expected:
+            failures.append(f"{agent}: local_primary doit être {expected}")
+        for field in (
+            "local_primary",
+            "local_fallback",
+            "local_specialist",
+            "local_deep",
+            "local_max",
+            "independent_alternative",
+        ):
+            alias = route.get(field)
+            if alias is not None and alias not in allowed:
+                failures.append(f"{agent}: {field} référence un modèle non supporté: {alias}")
 
     auditor = agents.get("auditeur-qualite", {})
-    if auditor.get("local_primary") != "gemma-review":
-        failures.append("Auditeur: Gemma 4 12B doit être le primaire indépendant")
     if auditor.get("independent_alternative") != "qwen-max":
-        failures.append("Auditeur: Qwen3.8 27B doit être l'alternative indépendante max")
+        failures.append("Auditeur: Qwen3.8 27B doit être l'alternative indépendante")
     if (
         auditor.get("independence_rule")
         != "reviewer_family_must_differ_from_producer_when_practical"
     ):
         failures.append("Auditeur: règle d'indépendance manquante")
 
-    specialists = qualification.get("specialists", {})
-    for alias in EXPECTED_QUALIFICATION_CLASSES:
-        entry = specialists.get(alias, {})
-        if entry.get("evaluate_after_required_models") is not True:
-            failures.append(f"{alias}: qualification optionnelle active attendue")
-        if entry.get("promotion_requires_separate_review") is not True:
-            failures.append(f"{alias}: promotion séparée obligatoire")
-    if specialists.get("sera-devops", {}).get("routing_active") is not False:
-        failures.append("qualification SERA: routage doit rester inactif")
-    promotion = qualification.get("promotion", {})
-    if promotion.get("automatic_promotion") is not False:
-        failures.append("la qualification ne doit jamais auto-promouvoir un modèle")
-    if promotion.get("runtime_activation_env") != "OPENCLAW_LOCAL_QUALIFIED_MODELS":
-        failures.append("variable runtime de qualification incohérente")
+    required = qualification.get("automated_gates", {}).get("required_models", [])
+    if set(required) != allowed or len(required) != 3:
+        failures.append("qualification: les trois modèles performance doivent être requis")
+    fleet = qualification.get("supported_fleet", {})
+    if set(fleet.get("exact_aliases", [])) != allowed:
+        failures.append("qualification: supported_fleet doit contenir exactement trois alias")
+    if fleet.get("all_models_required") is not True:
+        failures.append("qualification: tous les modèles supportés doivent être requis")
+    if fleet.get("allow_optional_local_models") is not False:
+        failures.append("qualification: aucun quatrième modèle local optionnel n'est autorisé")
+    if qualification.get("promotion", {}).get("automatic_promotion") is not False:
+        failures.append("la qualification ne doit jamais auto-promouvoir un runtime/backend")
 
-    fast = select_route("chef-operations", qualified_models=set())
-    if fast.model_alias != "qwen-general" or fast.route_kind != "local_primary":
-        failures.append("un candidat non qualifié ne doit jamais remplacer le fast requis")
-
-    maximum = select_route("chef-operations", qualified_models={"qwen-max"})
-    if maximum.model_alias != "qwen-max" or maximum.route_kind != "local_max":
-        failures.append("Qwen3.8 qualifié doit devenir la route max du Chef")
-
-    devops = select_route("ingenieur-devops", qualified_models={"devstral-devops"})
-    if devops.model_alias != "devstral-devops" or devops.route_kind != "local_specialist":
-        failures.append("Devstral qualifié doit devenir le spécialiste DevOps")
-
-    architect = select_route("architecte-solutions", qualified_models={"gemma-deep"})
-    if architect.model_alias != "gemma-deep" or architect.route_kind != "local_deep":
-        failures.append("Gemma 4 26B qualifié doit devenir le deep Architecte")
+    decisions = {
+        "chef-operations": "qwen-max",
+        "expert-recherche": "qwen-max",
+        "architecte-solutions": "gemma-deep",
+        "ingenieur-devops": "devstral-devops",
+        "ingenieur-securite": "qwen-max",
+        "ingenieur-release-forges": "qwen-max",
+        "redacteur-technique": "gemma-deep",
+        "auditeur-qualite": "gemma-deep",
+    }
+    for agent, alias in decisions.items():
+        decision = select_route(agent, qualified_models=set())
+        if decision.model_alias != alias:
+            failures.append(f"{agent}: route nominale {alias} attendue")
 
     independent = select_route(
         "auditeur-qualite",
-        producer_model_alias="gemma-review",
+        producer_model_alias="gemma-deep",
         qualified_models=set(),
     )
-    if independent.model_alias != "qwen-general" or independent.route_kind != "local_independent":
-        failures.append("l'Auditeur doit changer de famille face à un producteur Gemma")
+    if independent.model_alias != "qwen-max" or independent.route_kind != "local_independent":
+        failures.append("Auditeur: production Gemma doit être revue par la famille Qwen")
 
-    for alias, runtime_id in EXPECTED_RUNTIME_IDS.items():
-        expected = f"ollama/{runtime_id}"
-        if model_ref(alias) != expected:
+    for alias, runtime_id in EXPECTED_MODELS.items():
+        if model_ref(alias) != f"ollama/{runtime_id}":
             failures.append(f"{alias}: résolution runtime incohérente")
 
-    runtime_source = (ROOT / "src" / "clawlocal" / "runtime.py").read_text(
+    openclaw_source = (ROOT / "src/clawlocal/openclaw_config.py").read_text(
         encoding="utf-8"
     )
-    qualification_source = (
-        ROOT / "src" / "clawlocal" / "qualification.py"
-    ).read_text(encoding="utf-8")
-    benchmark_source = (ROOT / "scripts" / "benchmark_local.py").read_text(
-        encoding="utf-8"
-    )
-    if "OPENCLAW_LOCAL_QUALIFIED_MODELS" not in runtime_source:
-        failures.append("promotion locale: registre runtime des modèles qualifiés absent")
-    if "optional_candidates" not in qualification_source:
-        failures.append("qualification: verdict indépendant des candidats optionnels absent")
-    for flag in ("--include-specialist", "--include-deep", "--include-max"):
-        if flag not in benchmark_source:
-            failures.append(f"benchmark: option absente: {flag}")
+    for marker in ('["qwen-max"]', '["gemma-deep"]'):
+        if marker not in openclaw_source:
+            failures.append(f"OpenClaw: modèle performance par défaut non câblé: {marker}")
 
-    for relative in ("README.md", "STATUS.md"):
+    for relative in ACTIVE_TEXT_FILES:
+        path = ROOT / relative
+        if not path.is_file():
+            failures.append(f"fichier actif attendu absent: {relative}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for runtime_id in FORBIDDEN_ACTIVE_RUNTIME_IDS:
+            if runtime_id in text:
+                failures.append(f"{relative}: ancien modèle local encore actif: {runtime_id}")
+
+    for relative in ("README.md", "STATUS.md", "docs/MODELES_LOCAUX.md"):
         text = (ROOT / relative).read_text(encoding="utf-8")
-        if "qwen3.5:27b" in text or "`qwen-deep`" in text:
-            failures.append(f"{relative}: référence active obsolète à Qwen3.5 27B")
-        for runtime_id in (
-            "devstral-small-2:24b",
-            "gemma4:26b",
-            "qwen3.8:27b",
-        ):
+        for runtime_id in EXPECTED_MODELS.values():
             if runtime_id not in text:
-                failures.append(f"{relative}: modèle août 2026 absent: {runtime_id}")
+                failures.append(f"{relative}: modèle performance absent: {runtime_id}")
 
     if failures:
-        print("Model Fleet August 2026: NON CONFORME")
+        print("Performance-only Model Fleet: NON CONFORME")
         for failure in failures:
             print(f"- {failure}")
         return 1
 
-    print("Model Fleet August 2026: CONFORME")
-    print("- fast: Qwen3.5 9B + Gemma 4 12B")
-    print("- specialist: Devstral Small 2 24B (après qualification)")
-    print("- deep: Gemma 4 26B A4B (après qualification)")
-    print("- max: Qwen3.8 27B (après qualification)")
-    print("- reviewer independence: Gemma/Qwen family separation")
-    print("- optional candidates: benchmarkés et scorés séparément")
+    print("Performance-only Model Fleet: CONFORME")
+    print("- Qwen 3.8 27B: orchestration/recherche/sécurité/release")
+    print("- Gemma 4 26B: architecture/rédaction/audit")
+    print("- Devstral Small 2 24B: DevOps/software engineering")
+    print("- aucun Qwen 3.5 9B, Gemma 4 12B ou SERA 14B dans la flotte active")
+    print("- les trois modèles sont obligatoires pour la qualification matérielle")
     return 0
 
 
