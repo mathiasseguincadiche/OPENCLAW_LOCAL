@@ -61,7 +61,9 @@ Les résultats matériels B580 ne sont jamais simulés dans GitHub Actions. Ils 
 - aucun modèle `.gguf` ou `.safetensors` dans Git ;
 - aucun certificat ou keystore privé (`.key`, `.pem`, `.p12`, `.pfx`, `.jks`) ;
 - CodeQL analyse le code Python ; PowerShell est contrôlé par PSScriptAnalyzer et Pester ;
-- Dependency Review bloque les nouvelles dépendances présentant une vulnérabilité de sévérité `moderate` ou supérieure ;
+- le **GitHub Dependency Graph doit être activé** dans les paramètres du dépôt pour que `actions/dependency-review-action` compare précisément les dépendances ajoutées par une Pull Request ;
+- lorsque le Dependency Graph est disponible, Dependency Review bloque les nouvelles dépendances présentant une vulnérabilité de sévérité `moderate` ou supérieure ;
+- tant que le Dependency Graph n'est pas activé, le workflow reste fail-closed sur les dépendances Python installées grâce à un fallback `pip-audit`, et signale explicitement que le contrôle différentiel GitHub n'est pas disponible ;
 - Dependabot suit `pip` et GitHub Actions.
 
 ## Releases
