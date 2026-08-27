@@ -54,7 +54,8 @@ def main() -> int:
     formats = ingestion.get("formats", {})
     pdf = formats.get("pdf", {})
     image = formats.get("image", {})
-    if pdf.get("tool") != "pdf" or pdf.get("supports_scanned_pages_via_vision_fallback") is not True:
+    pdf_vision_fallback = pdf.get("supports_scanned_pages_via_vision_fallback")
+    if pdf.get("tool") != "pdf" or pdf_vision_fallback is not True:
         failures.append("PDF: outil local/fallback vision incomplet")
     if int(pdf.get("max_pages_per_tool_call", 0)) < 1:
         failures.append("PDF: max_pages_per_tool_call invalide")
