@@ -27,7 +27,7 @@ function Get-OpenClawCommand([string]$PlatformRoot) {
     if (Test-Path -LiteralPath $Managed) {
         return $Managed
     }
-    throw 'OpenClaw est absent. Exécutez d’abord .\menu.ps1 -Action install-core.'
+    throw 'OpenClaw est absent. Exécutez en premier .\menu.ps1 -Action install-core.'
 }
 
 function Get-PythonCommand([string]$PlatformRoot) {
@@ -39,7 +39,7 @@ function Get-PythonCommand([string]$PlatformRoot) {
     if ($Found) {
         return $Found.Source
     }
-    throw 'Python clawlocal est absent. Exécutez d’abord install-core.'
+    throw 'Python clawlocal est absent. Exécutez en premier install-core.'
 }
 
 function Invoke-Checked {
