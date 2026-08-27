@@ -29,6 +29,7 @@ REQUIRED = {
     "config/v1/runtime_versions.json",
     "config/v1/runtime_backends.yaml",
     "config/v1/project_policy.yaml",
+    "config/v1/orchestration_policy.yaml",
     "config/v1/web_policy.yaml",
     "config/v1/budget_policy.yaml",
     "config/v1/diagram_policy.yaml",
@@ -45,6 +46,7 @@ REQUIRED = {
     "docs/TROUBLESHOOTING.md",
     "docs/GITHUB_GOVERNANCE.md",
     "docs/PROJECT_INTAKE.md",
+    "docs/PROJECT_ORCHESTRATOR.md",
     "docs/WEB_LOCAL_FIRST.md",
     "docs/RUNTIME_BACKENDS.md",
     "docs/FINOPS.md",
@@ -61,6 +63,7 @@ REQUIRED = {
     "scripts/29_render_diagram.py",
     "scripts/30_record_cloud_cost.py",
     "scripts/31_sync_project_context.py",
+    "scripts/32_orchestrate_project.py",
     "scripts/benchmark_local.py",
     "scripts/windows/00_bootstrap.ps1",
     "scripts/windows/01_audit_host.ps1",
@@ -80,12 +83,14 @@ REQUIRED = {
     "src/clawlocal/routing.py",
     "src/clawlocal/project_intake.py",
     "src/clawlocal/project_context.py",
+    "src/clawlocal/project_orchestrator.py",
     "src/clawlocal/finops.py",
     "tests/test_openclaw_config.py",
     "tests/test_runtime.py",
     "tests/test_routing.py",
     "tests/test_project_intake.py",
     "tests/test_project_context.py",
+    "tests/test_project_orchestrator.py",
     "tests/test_finops.py",
     "tests/test_sbom.py",
     "tests/test_versioning.py",
@@ -146,7 +151,8 @@ def main() -> int:
 
     print(f"OK  structure du dépôt ({len(REQUIRED)} contrats/doc/scripts)")
     print(f"OK  équipe IA ({len(AGENTS)} rôles)")
-    print("OK  V0.2 Project/Web/FinOps/backends/diagrammes présents")
+    print("OK  Project Orchestrator fail-closed présent")
+    print("OK  Project/Web/FinOps/backends/diagrammes présents")
     print("Verdict: CONFORME")
     return 0
 

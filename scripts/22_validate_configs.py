@@ -16,6 +16,18 @@ SUPPORTED_CHECKS = {
     "json_keys",
     "yaml_keys",
 }
+EXPECTED_PROJECT_STATES = [
+    "INTAKE_READY",
+    "ANALYZED",
+    "CLARIFICATION_REQUIRED",
+    "PLANNED",
+    "ASSIGNED",
+    "IN_PROGRESS",
+    "VALIDATING",
+    "REVIEW",
+    "PACKAGING",
+    "COMPLETE",
+]
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -47,6 +59,106 @@ def validate_platform_versions(
             )
 
 
+def validate_orchestrator(
+    orchestration: dict[str, Any],
+    project: dict[str, Any],
+    role_ids: set[str],
+    failures: list[str],
+) -> None:
+    states = orchestration.get("status_flow", [])
+    if states != EXPECTED_PROJECT_STATES:
+        failures.append("orchestration_policy.yaml: status_flow inattendu")
+    if project.get("status_flow") != states:
+        failures.append("project_policy.yaml et orchestration_policy.yaml divergent")
+
+    engine = orchestration.get("engine", {})
+    if engine.get("fail_closed") is not True:
+        failures.append("Project Orchestrator doit rester fail-closed")
+    if engine.get("automatic_cloud_escalation") is not False:
+        failures.append("Project Orchestrator ne doit jamais auto-escalader vers le cloud")
+    if engine.get("source_repository_is_ground_truth") is not True:
+        failures.append("Project Orchestrator doit conserver le dépôt source comme vérité")
+    if engine.get("final_human_approval_required") is not True:
+        failures.append("Project Orchestrator doit exiger l'approbation humaine finale")
+
+    transitions = orchestration.get("transitions", {})
+    if set(transitions) != set(states):
+        failures.append("orchestration_policy.yaml: transitions incomplètes")
+    for source, targets in transitions.items():
+        if not isinstance(targets, list):
+            failures.append(f"orchestration: transitions {source} doit être une liste")
+            continue
+        for target in targets:
+            if target not in states:
+                failures.append(f"orchestration: transition vers état inconnu: {target}")
+    if transitions.get("COMPLETE") != []:
+        failures.append("COMPLETE doit être un état terminal")
+
+    artifacts = orchestration.get("artifacts", {})
+    required_artifacts = {
+        "analysis",
+        "clarifications",
+        "plan",
+        "assignments",
+        "task_results",
+        "validation",
+        "review",
+        "package_manifest",
+        "final_report",
+    }
+    if set(artifacts) != required_artifacts:
+        failures.append("orchestration_policy.yaml: artefacts canoniques incomplets")
+    allowed_roots = {"context", "evidence", "deliverables"}
+    for artifact_id, relative in artifacts.items():
+        path = Path(str(relative))
+        if path.is_absolute() or ".." in path.parts:
+            failures.append(f"orchestration: chemin artefact non sûr: {artifact_id}")
+            continue
+        if not path.parts or path.parts[0] not in allowed_roots:
+            failures.append(f"orchestration: racine artefact interdite: {artifact_id}")
+
+    phases = orchestration.get("phases", {})
+    allowed_phase_owners = role_ids | {"human", "assigned_agent"}
+    for phase_id, phase in phases.items():
+        owner = str(phase.get("owner", ""))
+        if owner not in allowed_phase_owners:
+            failures.append(f"orchestration phase {phase_id}: owner inconnu: {owner}")
+        reviewers = phase.get("reviewers", [])
+        if not isinstance(reviewers, list):
+            failures.append(f"orchestration phase {phase_id}: reviewers invalide")
+        elif not set(reviewers) <= role_ids:
+            failures.append(f"orchestration phase {phase_id}: reviewer inconnu")
+        security_reviewer = phase.get("security_reviewer")
+        if security_reviewer is not None and security_reviewer not in role_ids:
+            failures.append(f"orchestration phase {phase_id}: security_reviewer inconnu")
+
+    execution = orchestration.get("execution", {})
+    if execution.get("local_first") is not True:
+        failures.append("Project Orchestrator doit rester local-first")
+    if int(execution.get("max_parallel_tasks", 0)) != 1:
+        failures.append("V0.2: exécution projet doit rester séquentielle par défaut")
+    if int(execution.get("max_task_attempts", 0)) < 1:
+        failures.append("Project Orchestrator exige au moins une tentative par tâche")
+    if execution.get("collect_task_outputs") is not True:
+        failures.append("Project Orchestrator doit collecter les sorties de tâches")
+    if execution.get("task_output_namespaced_by_task") is not True:
+        failures.append("sorties de tâches doivent être namespacées")
+
+    human_gates = orchestration.get("human_gates", {})
+    required_human_gates = {
+        "blocking_clarifications",
+        "destructive_actions",
+        "remote_publication",
+        "cloud_escalation",
+        "final_completion",
+    }
+    if not required_human_gates <= set(human_gates):
+        failures.append("Project Orchestrator: gates humains incomplets")
+    for gate in required_human_gates:
+        if human_gates.get(gate) is not True:
+            failures.append(f"Project Orchestrator: gate humain désactivé: {gate}")
+
+
 def main() -> int:
     failures: list[str] = []
     repository_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -60,6 +172,7 @@ def main() -> int:
     tools = load(CONFIG / "tool_policy.yaml")
     platform = load(CONFIG / "platform.yaml")
     project = load(CONFIG / "project_policy.yaml")
+    orchestration = load(CONFIG / "orchestration_policy.yaml")
     web = load(CONFIG / "web_policy.yaml")
     budget = load(CONFIG / "budget_policy.yaml")
     backends = load(CONFIG / "runtime_backends.yaml")
@@ -86,6 +199,7 @@ def main() -> int:
         "tool_policy.yaml": tools,
         "platform.yaml": platform,
         "project_policy.yaml": project,
+        "orchestration_policy.yaml": orchestration,
         "web_policy.yaml": web,
         "budget_policy.yaml": budget,
         "runtime_backends.yaml": backends,
@@ -129,7 +243,12 @@ def main() -> int:
             failures.append(f"{alias}: route cloud doit être désactivée par défaut")
 
     for agent, route in routing.get("agents", {}).items():
-        for field in ("local_primary", "local_fallback", "local_specialist", "local_deep"):
+        for field in (
+            "local_primary",
+            "local_fallback",
+            "local_specialist",
+            "local_deep",
+        ):
             model = route.get(field)
             if model is not None and model not in model_ids:
                 failures.append(f"{agent}: {field} inconnu: {model}")
@@ -213,7 +332,7 @@ def main() -> int:
         "diagrams",
     }
     if project_dirs != expected_project_dirs:
-        failures.append("project_policy.yaml: arborescence projet V0.2 incomplète")
+        failures.append("project_policy.yaml: arborescence projet incomplète")
     project_rules = project.get("rules", {})
     if project_rules.get("overwrite_existing_project") is not False:
         failures.append("Project Intake ne doit pas écraser un projet existant")
@@ -221,6 +340,12 @@ def main() -> int:
         failures.append("le dépôt source doit rester la vérité du projet")
     if project_rules.get("rag_does_not_replace_file_reading") is not True:
         failures.append("le RAG ne doit pas remplacer la lecture des fichiers réels")
+    if project_rules.get("state_changes_require_evidence") is not True:
+        failures.append("les changements d'état projet doivent exiger des preuves")
+    if project_rules.get("final_completion_requires_human_approval") is not True:
+        failures.append("COMPLETE doit exiger une validation humaine")
+
+    validate_orchestrator(orchestration, project, role_ids, failures)
 
     if web.get("local_first") is not True:
         failures.append("la recherche Web doit rester local-first")
@@ -306,6 +431,7 @@ def main() -> int:
     print(f"OK  routes cloud optionnelles: {len(cloud_ids)}")
     print(f"OK  scénarios qualification: {len(scenarios)} ({suite_id})")
     print(f"OK  backends locaux déclarés: {len(backend_catalog)}")
+    print(f"OK  Project Orchestrator: {len(EXPECTED_PROJECT_STATES)} états fail-closed")
     print("OK  Project Intake / Web local-first / FinOps / diagrammes")
     print("Verdict: CONFORME")
     return 0
