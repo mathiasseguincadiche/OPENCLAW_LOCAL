@@ -1,0 +1,35 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+backends:
+  ollama-vulkan:
+    provider: ollama
+    mode: nominal
+    windows_native: true
+    endpoint: "http://127.0.0.1:11434"
+    activation: automatic
+    qualification_required: true
+
+  llama-cpp-sycl:
+    provider: llama_cpp
+    mode: candidate
+    windows_native: true
+    endpoint: "http://127.0.0.1:8080/v1"
+    api: openai-completions
+    accelerator: sycl
+    activation: operator_managed
+    qualification_required: true
+
+  llama-cpp-vulkan:
+    provider: llama_cpp
+    mode: candidate
+    windows_native: true
+    endpoint: "http://127.0.0.1:8080/v1"
+    api: openai-completions
+    accelerator: vulkan
+    activation: operator_managed
+    qualification_required: true
+
+selection:
+  production_backend_requires_b580_benchmark: true
+  compare_same_model_when_possible: true
+  metrics: [ttft_ms, tokens_per_second, vram_mb, ram_mb, stability, tool_calling]

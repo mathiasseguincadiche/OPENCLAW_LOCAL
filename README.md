@@ -2,108 +2,144 @@
 
 [![CI](https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL/actions/workflows/ci.yml/badge.svg)](https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL/actions/workflows/codeql.yml/badge.svg)](https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL/actions/workflows/codeql.yml)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](VERSION)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PowerShell 7](https://img.shields.io/badge/PowerShell-7%2B-blue.svg)](https://learn.microsoft.com/powershell/)
 [![Python 3.12-3.13](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue.svg)](pyproject.toml)
 
 Plateforme IA **local-first, multi-agents et multi-modèles** pour Windows 11 Pro x64.
 
-Le local absorbe le parcours nominal. Le cloud n'est jamais un fallback silencieux : il n'est accessible qu'après une décision d'escalade explicite, un motif autorisé et une activation volontaire.
+La V0.2 transforme le socle OpenClaw en workflow projet complet : l'utilisateur fournit consignes, cahier des charges, sources et livrables ; les huit agents travaillent principalement avec des modèles locaux ; les informations récentes sont récupérées sur le Web puis raisonnées localement ; OpenRouter reste une escalade explicite, budgétée et traçable.
 
-## Architecture
+## Architecture V0.2
 
 ```text
-Utilisateur
-   |
-   v
-OpenClaw / Gateway loopback
-   |
-   +--> 8 agents réellement matérialisés
-   |      +-- workspaces séparés
-   |      +-- politiques outils par rôle
-   |      +-- fallbacks persistants uniquement locaux
-   |
-   +--> Ollama natif Windows
-   |      +-- Qwen 3.5 9B
-   |      +-- Gemma 4
-   |      +-- SERA 14B (*) candidat optionnel
-   |
-   +--> clawlocal
-          +-- renderer OpenClaw
-          +-- routage local/cloud explicite
-          +-- benchmark / qualification / preuves
-          |
-          +--> OpenRouter uniquement sur escalade autorisée
+Projet utilisateur
+(consignes / sources / livrables)
+           |
+           v
+     Project Intake
+           |
+           v
+ OpenClaw / Gateway loopback
+           |
+     8 rôles spécialisés
+           |
+   +-------+----------------------+------------------+
+   |                              |                  |
+   v                              v                  v
+LOCAL_FAST                  LOCAL + WEB        LOCAL_DEEP
+Qwen 3.5 9B                web_search/fetch   Qwen 3.5 27B (*)
+Gemma 4 12B                browser recherche  SERA 14B (*)
+   |                              |                  |
+   +------------------------------+------------------+
+                                  |
+                            insuffisant ?
+                           non /        \ oui
+                              v          v
+                         livrables   OpenRouter
+                                      sous politique
+                                      + budget FinOps
 ```
 
-> `(*)` SERA 14B n'est pas activé automatiquement : son import/backend et sa qualification sont séparés.
+`(*)` Les modèles `LOCAL_DEEP` sont des **candidats**. Ils ne deviennent actifs qu'après import/backend et qualification réelle.
 
 ## Principes de conception
 
-- **Windows natif** pour OpenClaw, Gateway, Ollama et les modèles ; WSL2 reste externe/facultatif.
-- **Installation reproductible** : versions runtime centralisées dans `config/v1/runtime_versions.json`.
-- **Intégrité vérifiée** : Node.js par SHA-256 et package OpenClaw par SHA-512/SRI.
-- **Local-first** : aucune dépendance cloud n'est requise pour le parcours nominal.
-- **Cloud-on-demand** : activation + motif + rôle autorisé + secret local pour une exécution réelle.
-- **Huit rôles distincts** : séparation producteur/relecteur et permissions d'outils par agent.
-- **Fail closed** : modèle, runtime, config ou escalade non conforme échoue explicitement.
+- **Windows natif** : OpenClaw, Gateway, runtime IA et modèles tournent sous Windows 11 Pro ; WSL2 Ubuntu reste un environnement DevOps/Linux externe.
+- **Project-first** : le système prend en charge un projet structuré, pas seulement une conversation.
+- **Local-first** : aucune dépendance LLM cloud n'est requise pour le parcours nominal.
+- **Web local-first** : une donnée récente déclenche d'abord recherche/fetch Web + raisonnement local.
+- **Cloud-on-demand** : activation, motif autorisé, préconditions, budget et éventuellement validation humaine.
+- **Fail closed** : aucun fallback cloud silencieux, aucune promotion automatique de modèle/backend.
+- **Huit rôles distincts** : orchestration, recherche, architecture, DevOps, sécurité, release, documentation, audit.
+- **Séparation producteur/auditeur** lorsque cela est praticable.
 - **Workspaces confinés** : filesystem limité au workspace ; exec soumis à approbation ; elevated désactivé.
-- **Preuves avant promesses** : aucun résultat B580 ni tool-calling n'est déclaré avant exécution réelle.
-- **État local hors Git** : modèles, secrets, sessions, logs, benchmarks et preuves restent sur la workstation.
+- **FinOps** : limites quotidiennes, mensuelles et par projet ; ledger hors Git.
+- **Diagram-as-code** : D2, PlantUML et Graphviz pour les schémas techniques locaux.
+- **Preuves avant promesses** : les performances Intel Arc B580 restent à mesurer sur la machine réelle.
+
+## Modèles candidats V0.2
+
+| Alias | Runtime | Classe | Usage |
+|---|---|---|---|
+| `qwen-general` | `qwen3.5:9b` | LOCAL_FAST | généraliste, orchestration, DevOps courant |
+| `gemma-review` | `gemma4:12b` | LOCAL_FAST | rédaction, architecture, revue |
+| `qwen-deep` | `qwen3.5:27b` | LOCAL_DEEP | raisonnement plus lourd, optionnel |
+| `sera-devops` | `sera-14b` | LOCAL_DEEP | software engineering/DevOps spécialisé, import séparé |
+
+Le catalogue `config/v1/model_catalog.yaml` est la source de vérité. Les scripts Windows lisent le catalogue au lieu de recopier les identifiants de modèles.
+
+## Backends locaux
+
+La V0.2 prépare une qualification comparative sur Intel Arc B580 :
+
+- `ollama-vulkan` — chemin nominal V0.2 ;
+- `llama-cpp-sycl` — candidat ;
+- `llama-cpp-vulkan` — candidat.
+
+Le vainqueur ne sera déterminé qu'après mesures réelles : TTFT, tokens/s, VRAM, RAM, stabilité et tool calling.
 
 ## Démarrage rapide
 
-Prérequis utilisateur : **Windows 11 Pro x64, PowerShell 7 et WinGet**. Python, Node.js, OpenClaw et Ollama peuvent être provisionnés par le dépôt.
+Prérequis utilisateur : **Windows 11 Pro x64, PowerShell 7 et WinGet**.
 
 ```powershell
-# 1. Prévisualiser l'installation complète
+# Prévisualiser l'installation complète
 .\menu.ps1 -Action install-full -DryRun
 
-# 2. Installer runtime + Ollama + modèles + OpenClaw + 8 agents + Gateway
+# Installer runtime, modèles requis, OpenClaw et les 8 agents
 .\menu.ps1 -Action install-full
 
-# 3. Vérifier le parcours local
+# Vérifier le parcours local
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
 
-# 4. Vérifier réellement OpenClaw/tool-calling/réparation/stabilité
+# E2E OpenClaw réel
 .\menu.ps1 -Action e2e
 
-# 5. Qualifier les modèles sur la machine cible
+# Qualification matérielle locale (aucun cloud)
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
-Pour ne préparer que les runtimes :
+## Prendre en charge un projet
 
 ```powershell
-.\menu.ps1 -Action install-core -DryRun
-.\menu.ps1 -Action install-core
+python .\scripts\28_create_project.py `
+  --id p5-devops `
+  --title 'Projet P5 DevOps' `
+  --intake 'C:\Projets\P5\consignes.pdf' `
+  --source 'C:\Projets\P5\repository' `
+  --deliverable README `
+  --deliverable runbook
+
+python .\scripts\31_sync_project_context.py `
+  --project p5-devops `
+  --agent all
 ```
 
-Le raccourci `START_MENU.cmd` ouvre le centre de contrôle interactif.
+Le projet géré contient `intake/`, `sources/`, `context/`, `work/`, `deliverables/`, `evidence/` et `diagrams/`. Les snapshots agents refusent d'écraser un répertoire non géré.
 
-## Flotte OpenClaw
+Voir [Project Intake](docs/PROJECT_INTAKE.md).
 
-Les contrats Git sont rendus en configuration OpenClaw par `src/clawlocal/openclaw_config.py`. Chaque agent dispose d'un workspace géré sous `<OPENCLAW_LOCAL_ROOT>\workspaces\<agent-id>`.
+## Recherche Internet récente
 
-| Rôle | Mission principale | Route locale de référence | Escalade cloud |
-|---|---|---|---|
-| Chef des opérations | cadrage, orchestration, risques | Qwen 3.5 9B | arbitrage exceptionnel |
-| Expert recherche | recherche, sources, synthèse | Qwen 3.5 9B | recherche web fraîche |
-| Architecte solutions | architecture, ADR, compromis | Gemma 4 | décision complexe |
-| Ingénieur DevOps | CI/CD, IaC, conteneurs, scripts | Qwen 3.5 9B / SERA candidat | blocage persistant |
-| Ingénieur sécurité | hardening, supply chain, secrets | Qwen 3.5 9B | revue critique |
-| Ingénieur release/forges | Git, PR, releases, preuves distantes | Qwen 3.5 9B | exceptionnel |
-| Rédacteur technique | README, runbooks, vulgarisation | Gemma 4 | document stratégique |
-| Auditeur qualité | conformité, preuves, contrôle final | famille locale distincte si possible | contrôle indépendant |
+Une information récente suit d'abord :
 
-Les rôles et permissions viennent de `role_matrix.yaml`, `model_routing.yaml`, `tool_policy.yaml` et `escalation_policy.yaml`.
+```text
+LLM local -> web_search/web_fetch -> sources récentes -> synthèse locale
+```
 
-## Routage exécutable
+Le navigateur est autorisé par défaut uniquement à l'Expert recherche pour les sites nécessitant une navigation complexe.
 
-Plan local sans exécution :
+`web_freshness_only` est explicitement interdit comme raison de cloud. Une recherche premium n'est autorisée qu'après une tentative locale ou en cas de conflit de sources démontré selon la politique.
+
+Voir [Recherche Web Local-First](docs/WEB_LOCAL_FIRST.md).
+
+## Routage et cloud
+
+Plan local :
 
 ```powershell
 python .\scripts\27_route_openclaw.py `
@@ -111,41 +147,54 @@ python .\scripts\27_route_openclaw.py `
   --message 'Analyse ce problème Kubernetes.'
 ```
 
-Le même parcours avec `--execute` appelle explicitement `openclaw agent --agent ... --model ollama/...`.
+Escalade de recherche après tentative Web locale :
 
-Une route cloud exige `--cloud --reason <motif>`, `OPENCLAW_LOCAL_CLOUD_ENABLED=true` et, lors de l'exécution, `OPENROUTER_API_KEY`. Le secret n'est jamais généré ni écrit dans le dépôt.
+```powershell
+$env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'true'
+python .\scripts\27_route_openclaw.py `
+  --agent expert-recherche `
+  --message 'Approfondis cette recherche.' `
+  --cloud `
+  --reason deep_web_research `
+  --local-web-attempted `
+  --project-id p5-devops
+```
 
-## Qualification avant promotion
+Une exécution cloud réelle nécessite aussi `OPENROUTER_API_KEY` local. Aucun secret n'est écrit dans Git.
 
-Les modèles restent `candidate` jusqu'à preuve sur la workstation réelle.
+## FinOps
 
-Deux gates complémentaires existent :
+Garde-fous V0.2 :
 
-1. **E2E OpenClaw réel** : huit agents, provider Ollama, vrai appel d'outil, correction après erreur, trois runs stables ;
-2. **qualification matérielle** : inventaire, suite DevOps, TTFT, débit, contextes 8K/16K et seuils versionnés.
+- 1 EUR / jour ;
+- 5 EUR / mois ;
+- 2 EUR / projet et par mois ;
+- réservation conservatrice par défaut : 0,25 EUR avant appel lorsque le coût exact est inconnu.
 
-Un succès automatique signifie au mieux `READY_FOR_MANUAL_QUALIFICATION`. Aucune CI et aucun script ne promeuvent un modèle automatiquement.
+Le ledger reste sous `<OPENCLAW_LOCAL_ROOT>\state\finops\cloud-costs.jsonl` et n'est jamais commité.
 
-Voir [Qualification](docs/QUALIFICATION.md), [Intégration OpenClaw](docs/OPENCLAW_INTEGRATION.md) et [Benchmark](docs/BENCHMARK.md).
+Voir [FinOps](docs/FINOPS.md).
 
-## État du projet
+## Benchmark et qualification
 
-Le dépôt contient maintenant le socle, le durcissement GitHub, l'installateur reproductible, la flotte OpenClaw et les gates d'exécution. **Les résultats matériels réels restent volontairement en attente de la workstation cible.** Voir [STATUS.md](STATUS.md).
+La suite active est **`devops-v2`**. Elle couvre notamment :
 
-## Documentation
+- analyse de projet ;
+- GitLab CI ;
+- diagnostic Kubernetes ;
+- Terraform multi-fichiers ;
+- idempotence Ansible ;
+- sécurité CI ;
+- runbook/rollback ;
+- diagramme D2 ;
+- discipline Web ;
+- structure d'intention outil ;
+- réparation après erreur outil ;
+- contexte synthétique long.
 
-- [Portail documentaire](docs/README.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Installation Windows 11](docs/INSTALLATION_WINDOWS_11.md)
-- [Intégration OpenClaw](docs/OPENCLAW_INTEGRATION.md)
-- [Modèles locaux](docs/MODELES_LOCAUX.md)
-- [Routage hybride](docs/ROUTAGE_HYBRIDE.md)
-- [Qualification](docs/QUALIFICATION.md)
-- [Opérations](docs/OPERATIONS.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Sécurité](docs/SECURITY.md)
-- [Benchmark](docs/BENCHMARK.md)
-- [Gouvernance GitHub](docs/GITHUB_GOVERNANCE.md)
+Le runner charge dynamiquement la suite définie dans `qualification_policy.yaml`.
+
+Un gate automatique réussi signifie au mieux `READY_FOR_MANUAL_QUALIFICATION`. La promotion exige toujours E2E OpenClaw, stabilité, qualification matérielle B580 et revue humaine.
 
 ## Qualité et sécurité
 
@@ -153,10 +202,12 @@ La CI couvre :
 
 ```text
 Python 3.12 + 3.13
+validate_repository
+validate_configs V0.2
+validate_release
 Ruff
 mypy
-Pytest + coverage >= 75 %
-validateurs dépôt/config/version
+pytest + coverage >= 75 %
 PowerShell 7
 PSScriptAnalyzer
 Pester
@@ -164,35 +215,34 @@ CodeQL
 Dependency Review / pip-audit fallback
 ```
 
-Commandes locales principales :
+Les validateurs vérifient également la cohérence Project/Web/FinOps/backends, le tag explicite des modèles Ollama et l'absence de `runtime_id` recopiés dans les scripts Windows.
 
-```powershell
-python scripts/21_validate_repository.py
-python scripts/22_validate_configs.py
-python scripts/24_validate_release.py
-ruff check src tests scripts
-mypy src
-pytest -q --cov=clawlocal --cov-report=term-missing --cov-fail-under=75
+## Documentation
 
-Invoke-ScriptAnalyzer -Path .\scripts\windows -Recurse `
-  -Settings .\.github\powershell\PSScriptAnalyzerSettings.psd1
-Invoke-Pester -Path .\tests\powershell -CI
-```
+- [Portail documentaire](docs/README.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Project Intake](docs/PROJECT_INTAKE.md)
+- [Recherche Web Local-First](docs/WEB_LOCAL_FIRST.md)
+- [Backends locaux](docs/RUNTIME_BACKENDS.md)
+- [Modèles locaux](docs/MODELES_LOCAUX.md)
+- [Routage hybride](docs/ROUTAGE_HYBRIDE.md)
+- [FinOps](docs/FINOPS.md)
+- [Diagrammes](docs/DIAGRAMMES.md)
+- [Intégration OpenClaw](docs/OPENCLAW_INTEGRATION.md)
+- [Benchmark](docs/BENCHMARK.md)
+- [Qualification](docs/QUALIFICATION.md)
+- [Opérations](docs/OPERATIONS.md)
+- [Sécurité](docs/SECURITY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Gouvernance GitHub](docs/GITHUB_GOVERNANCE.md)
 
-## Releases
+## Version et état
 
-Le versionnage suit SemVer. `VERSION`, `pyproject.toml` et `CHANGELOG.md` doivent rester cohérents.
+La version V0.2 est cohérente entre `VERSION`, `pyproject.toml`, `clawlocal.__version__`, les contrats `platform_version` et `CHANGELOG.md`.
 
-Un tag `v<VERSION>` déclenche une release qui :
+La **qualification matérielle Intel Arc B580 n'est pas déclarée tant qu'elle n'a pas été exécutée sur la workstation cible**. Voir [STATUS.md](STATUS.md).
 
-- revalide Python et PowerShell ;
-- construit wheel + sdist ;
-- génère un **SBOM CycloneDX 1.6** ;
-- calcule les sommes SHA-256 ;
-- produit des **attestations GitHub de provenance et de SBOM** ;
-- publie les artefacts seulement si tous les gates passent.
-
-La version `1.0.0` reste réservée à un parcours local réellement qualifié sur la workstation cible.
+La version `1.0.0` reste réservée à un parcours local réellement qualifié.
 
 ## Licence
 

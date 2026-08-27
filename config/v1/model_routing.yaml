@@ -1,10 +1,11 @@
 schema_version: "1.0.0"
-platform_version: "0.1.0"
+platform_version: "0.2.0"
 fallback_policy: local_family_first
 cloud_enabled_by_default: false
 agents:
   chef-operations:
     local_primary: qwen-general
+    local_deep: qwen-deep
     local_fallback: gemma-review
     cloud_escalation: frontier-reasoning
 
@@ -15,17 +16,20 @@ agents:
 
   architecte-solutions:
     local_primary: gemma-review
+    local_deep: qwen-deep
     local_fallback: qwen-general
     cloud_escalation: frontier-review
 
   ingenieur-devops:
     local_primary: qwen-general
     local_specialist: sera-devops
+    local_deep: qwen-deep
     local_fallback: gemma-review
     cloud_escalation: frontier-reasoning
 
   ingenieur-securite:
     local_primary: qwen-general
+    local_deep: qwen-deep
     local_fallback: gemma-review
     cloud_escalation: frontier-review
 

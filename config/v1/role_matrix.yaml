@@ -1,20 +1,20 @@
 schema_version: "1.0.0"
-platform_version: "0.1.0"
+platform_version: "0.2.0"
 roles:
   chef-operations:
-    own: [cadrage, orchestration, planification, risques, verdict_global]
+    own: [cadrage, orchestration, planification, risques, verdict_global, project_intake]
     assist: [priorisation, pedagogie]
     review: [coherence_globale]
     forbidden: [code_production, fabrication_preuves, auto_approbation]
 
   expert-recherche:
-    own: [recherche, sources, benchmark, veille, verification_faits]
+    own: [recherche, sources, benchmark, veille, verification_faits, recherche_web]
     assist: [architecture, documentation]
     review: [fraicheur_sources]
     forbidden: [decision_architecture_finale, publication]
 
   architecte-solutions:
-    own: [architecture, adr, interfaces, modeles_donnees, compromis]
+    own: [architecture, adr, interfaces, modeles_donnees, compromis, schemas]
     assist: [securite, devops, documentation]
     review: [coherence_technique]
     forbidden: [implementation_complete, audit_final, approbation_finale]

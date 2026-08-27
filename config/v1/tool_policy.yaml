@@ -1,5 +1,5 @@
 schema_version: "1.0.0"
-platform_version: "0.1.0"
+platform_version: "0.2.0"
 
 security_defaults:
   profile: coding
@@ -15,6 +15,7 @@ agents:
 
   expert-recherche:
     profile: coding
+    also_allow: [browser]
     deny: [write, edit, apply_patch, exec, process]
 
   architecte-solutions:
@@ -42,6 +43,8 @@ agents:
     deny: [write, edit, apply_patch, exec, process]
 
 notes:
+  - "Le profil coding inclut group:web : web_search et web_fetch restent disponibles localement."
+  - "Seul expert-recherche reçoit browser par défaut pour les sites JS complexes."
   - "Les outils de fichiers restent bornés au workspace de chaque agent."
   - "Toute commande exec hors allowlist requiert une approbation humaine avec exec_mode=ask."
   - "Le mode elevated reste désactivé."

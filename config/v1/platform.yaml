@@ -1,5 +1,5 @@
 schema_version: "1.0.0"
-platform_version: "0.1.0"
+platform_version: "0.2.0"
 deployment_mode: windows-native
 runtime:
   preferred_root: "E:\\AI\\OpenClawLocal"
@@ -7,7 +7,8 @@ runtime:
   openclaw_gateway: native-windows
   devops_backend: external-wsl2-optional
 local_provider:
-  id: ollama
+  nominal_id: ollama-vulkan
+  backends_contract: runtime_backends.yaml
   base_url: "http://127.0.0.1:11434"
   api: ollama-native
   expose_lan: false
@@ -15,6 +16,11 @@ cloud:
   provider: openrouter
   enabled_by_default: false
   require_explicit_escalation: true
+  budget_contract: budget_policy.yaml
+web:
+  local_first_contract: web_policy.yaml
+projects:
+  intake_contract: project_policy.yaml
 state_policy:
   git_contains_expected_state_only: true
   runtime_state_outside_git: true

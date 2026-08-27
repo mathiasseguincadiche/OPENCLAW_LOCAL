@@ -1,13 +1,15 @@
 schema_version: "1.0.0"
-platform_version: "0.1.0"
+platform_version: "0.2.0"
 default: deny
 cloud_required_flags:
   - cloud_enabled
   - explicit_reason
+  - budget_ok
 triggers:
-  web_freshness:
+  deep_web_research:
     allowed_roles: [expert-recherche, chef-operations]
     preferred_cloud_route: research
+    precondition: local_web_attempted
   context_overflow:
     allowed_roles: [chef-operations, architecte-solutions, ingenieur-devops]
     preferred_cloud_route: frontier-reasoning
@@ -16,9 +18,14 @@ triggers:
     require_failure_evidence: true
   high_impact_decision:
     require_human_approval: true
+  source_conflict:
+    allowed_roles: [expert-recherche, chef-operations]
+    preferred_cloud_route: research
+    precondition: local_web_sources_conflict
   independent_final_review:
     require_human_approval: true
 forbidden_reasons:
+  - web_freshness_only
   - local_model_is_only_slower
   - convenience
   - silent_fallback
