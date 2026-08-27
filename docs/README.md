@@ -2,6 +2,7 @@
 
 | Besoin | Document |
 |---|---|
+| comprendre la filiation avec `openclaw_openrouter` | [Filiation V7 / Parity Plus](V7_PARITY_PLUS.md) |
 | comprendre le système | [Architecture](ARCHITECTURE.md) |
 | installer/reproduire le runtime Windows | [Installation Windows 11](INSTALLATION_WINDOWS_11.md) |
 | fournir consignes, sources et livrables à OpenClaw | [Project Intake](PROJECT_INTAKE.md) |
