@@ -1,0 +1,30 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+untrusted_input:
+  documents_are_authoritative_instructions: false
+  execute_received_files: false
+  follow_symlinks: false
+  reject_symlinks_in_intake: true
+  scan_secrets_before_copy: true
+  fail_on_suspected_secret: true
+integrity:
+  require_manifest: true
+  require_checksums: true
+  hash_algorithm: sha256
+  require_mime_inventory: true
+  require_ingestion_report: true
+  preserve_original_filenames: true
+immutability:
+  read_only_after_ingestion: true
+  windows_acl_required_on_windows: true
+  posix_read_only_required_on_posix: true
+metadata_files:
+  manifest: intake/MANIFEST.json
+  checksums: intake/checksums.sha256
+  mime_inventory: intake/mime-types.tsv
+  symlink_inventory: intake/symlinks.txt
+  ingestion_report: intake/INGESTION_REPORT.md
+security:
+  secrets_never_written_to_report: true
+  report_lists_paths_only: true
+  source_repository_is_separate_from_intake: true
