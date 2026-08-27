@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,7 @@ def test_validate_project_id() -> None:
         validate_project_id("../escape")
 
 
-def test_create_project_materializes_contract(tmp_path: Path) -> None:
+def test_create_project_materializes_hardened_contract(tmp_path: Path) -> None:
     intake = tmp_path / "consignes.md"
     intake.write_text("Consignes", encoding="utf-8")
     source = tmp_path / "repo"
@@ -28,8 +29,17 @@ def test_create_project_materializes_contract(tmp_path: Path) -> None:
     assert (project / "project.json").exists()
     assert (project / "intake" / "consignes.md").exists()
     assert (project / "sources" / "repo" / "README.md").exists()
-    assert (project / "deliverables").is_dir()
-    assert (project / "evidence").is_dir()
+    evidence = project / "evidence" / "intake"
+    assert (evidence / "manifest.json").is_file()
+    assert "consignes.md" in (evidence / "checksums.sha256").read_text(
+        encoding="utf-8"
+    )
+    assert "text/markdown" in (evidence / "mime-types.tsv").read_text(
+        encoding="utf-8"
+    )
+    assert (evidence / "INGESTION_REPORT.md").is_file()
+    assert (project / "context" / "learning" / "SKILLS_MATRIX.csv").is_file()
+    assert (project / "context" / "publication" / "publication.json").is_file()
 
 
 def test_create_project_refuses_overwrite(tmp_path: Path) -> None:
@@ -37,3 +47,28 @@ def test_create_project_refuses_overwrite(tmp_path: Path) -> None:
     create_project(root, "demo-projet", "Demo")
     with pytest.raises(FileExistsError):
         create_project(root, "demo-projet", "Demo")
+
+
+def test_create_project_refuses_secret_before_materialization(tmp_path: Path) -> None:
+    root = tmp_path / "platform"
+    intake = tmp_path / ".env"
+    intake.write_text("OPENAI_API_KEY=abcdefghijk", encoding="utf-8")
+    with pytest.raises(ValueError):
+        create_project(root, "secret-demo", "Secret Demo", intake_items=[intake])
+    assert not (root / "projects" / "secret-demo").exists()
+
+
+def test_create_project_refuses_intake_symlink(tmp_path: Path) -> None:
+    if os.name == "nt":
+        pytest.skip("création de symlink Windows dépend des privilèges du runner")
+    target = tmp_path / "target.md"
+    target.write_text("source", encoding="utf-8")
+    link = tmp_path / "link.md"
+    link.symlink_to(target)
+    with pytest.raises(ValueError):
+        create_project(
+            tmp_path / "platform",
+            "symlink-demo",
+            "Symlink Demo",
+            intake_items=[link],
+        )
