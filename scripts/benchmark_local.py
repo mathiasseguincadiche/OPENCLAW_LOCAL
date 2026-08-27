@@ -192,19 +192,45 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--context", action="append", type=int, dest="contexts")
     parser.add_argument("--include-specialist", action="store_true")
     parser.add_argument("--include-deep", action="store_true")
+    parser.add_argument("--include-max", action="store_true")
     parser.add_argument("--timeout", type=float, default=300.0)
     return parser.parse_args()
+
+
+def _aliases_for_class(
+    model_class: str,
+    policy: dict[str, Any],
+    catalog: dict[str, Any],
+) -> list[str]:
+    selected: list[str] = []
+    specialists = policy.get("specialists", {})
+    for alias, qualification in specialists.items():
+        if not isinstance(qualification, dict):
+            continue
+        if qualification.get("evaluate_after_required_models") is not True:
+            continue
+        model = catalog.get("models", {}).get(alias)
+        if not isinstance(model, dict):
+            continue
+        if model.get("provider") != "ollama":
+            continue
+        if model.get("class") == model_class:
+            selected.append(str(alias))
+    return selected
 
 
 def _selected_aliases(
     args: argparse.Namespace,
     policy: dict[str, Any],
+    catalog: dict[str, Any],
 ) -> list[str]:
     aliases = list(args.models or policy["automated_gates"]["required_models"])
-    if args.include_deep:
-        aliases.append("qwen-deep")
     if args.include_specialist:
-        aliases.append("sera-devops")
+        aliases.extend(_aliases_for_class("local_specialist", policy, catalog))
+    if args.include_deep:
+        aliases.extend(_aliases_for_class("local_deep", policy, catalog))
+    if args.include_max:
+        aliases.extend(_aliases_for_class("local_max", policy, catalog))
     return list(dict.fromkeys(str(alias) for alias in aliases))
 
 
@@ -219,7 +245,7 @@ def main() -> int:
         print(f"KO  suite incohérente: attendu {suite_id}, reçu {suite.get('id')}")
         return 2
 
-    aliases = _selected_aliases(args, policy)
+    aliases = _selected_aliases(args, policy, catalog)
     contexts = args.contexts or [int(value) for value in policy["required_contexts"]]
 
     try:
@@ -327,7 +353,7 @@ def main() -> int:
     RESULTS.mkdir(parents=True, exist_ok=True)
     finished_at = datetime.now(UTC)
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "suite": suite["id"],
         "started_at": started_at.isoformat(),
         "finished_at": finished_at.isoformat(),
@@ -339,6 +365,7 @@ def main() -> int:
                 "alias": model["alias"],
                 "runtime_id": model["runtime_id"],
                 "family": model.get("family"),
+                "class": model.get("class"),
                 "status": model.get("status"),
             }
             for model in selected_models
