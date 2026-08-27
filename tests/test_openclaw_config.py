@@ -1,5 +1,6 @@
-from clawlocal.openclaw_config import build_openclaw_patch
+from pathlib import Path
 
+from clawlocal.openclaw_config import build_openclaw_patch
 
 EXPECTED_AGENTS = {
     "chef-operations",
@@ -13,14 +14,8 @@ EXPECTED_AGENTS = {
 }
 
 
-def _platform_path(value: str):
-    from pathlib import Path
-
-    return Path(value)
-
-
 def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
-    patch = build_openclaw_patch(_platform_path("E:/AI/OpenClawLocal"))
+    patch = build_openclaw_patch(Path("E:/AI/OpenClawLocal"))
     entries = patch["agents"]["entries"]
 
     assert set(entries) == EXPECTED_AGENTS
@@ -38,7 +33,7 @@ def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
 
 
 def test_read_only_roles_cannot_mutate_or_exec() -> None:
-    entries = build_openclaw_patch(_platform_path("C:/OpenClawLocal"))["agents"]["entries"]
+    entries = build_openclaw_patch(Path("C:/OpenClawLocal"))["agents"]["entries"]
     for agent_id in (
         "chef-operations",
         "expert-recherche",
@@ -50,7 +45,8 @@ def test_read_only_roles_cannot_mutate_or_exec() -> None:
 
 
 def test_provider_uses_native_ollama_api_and_16k_prequalification_cap() -> None:
-    provider = build_openclaw_patch(_platform_path("C:/OpenClawLocal"))["models"]["providers"]["ollama"]
+    patch = build_openclaw_patch(Path("C:/OpenClawLocal"))
+    provider = patch["models"]["providers"]["ollama"]
     assert provider["api"] == "ollama"
     assert provider["baseUrl"] == "http://127.0.0.1:11434"
     assert "/v1" not in provider["baseUrl"]
