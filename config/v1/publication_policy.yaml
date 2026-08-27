@@ -1,0 +1,64 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+default_enabled: true
+default_visibility: private
+supported_forges: [github, gitlab]
+
+states:
+  - LOCAL_IN_PROGRESS
+  - LOCAL_VALIDATED
+  - READY_TO_PUBLISH
+  - REMOTE_CREATED
+  - BRANCH_PUSHED
+  - PR_MR_OPEN
+  - CI_GREEN
+  - REMOTE_CLONE_VALIDATED
+  - RELEASE_CREATED
+  - PUBLISHED_AND_VERIFIED
+
+transitions:
+  LOCAL_IN_PROGRESS: [LOCAL_VALIDATED]
+  LOCAL_VALIDATED: [READY_TO_PUBLISH]
+  READY_TO_PUBLISH: [REMOTE_CREATED]
+  REMOTE_CREATED: [BRANCH_PUSHED]
+  BRANCH_PUSHED: [PR_MR_OPEN]
+  PR_MR_OPEN: [CI_GREEN]
+  CI_GREEN: [REMOTE_CLONE_VALIDATED]
+  REMOTE_CLONE_VALIDATED: [RELEASE_CREATED, PUBLISHED_AND_VERIFIED]
+  RELEASE_CREATED: [PUBLISHED_AND_VERIFIED]
+  PUBLISHED_AND_VERIFIED: []
+
+defaults:
+  direct_push_to_main: false
+  pull_or_merge_request_required: true
+  remote_ci_required: true
+  clean_clone_test_required: true
+  independent_remote_audit_required: true
+  mirror_enabled: false
+
+human_approval_required:
+  - REMOTE_CREATED
+  - PR_MR_OPEN
+  - RELEASE_CREATED
+  - PUBLISHED_AND_VERIFIED
+
+prepublication_checks:
+  - local_tests_green
+  - documentation_validated
+  - secret_scan_clean
+  - dependency_scan_reviewed
+  - git_status_reviewed
+  - ignore_rules_reviewed
+  - local_paths_removed
+  - rollback_documented
+
+published_and_verified_requires:
+  - canonical_repository_url
+  - published_commit_sha
+  - remote_ci_green
+  - clean_clone_validated
+  - independent_remote_audit
+  - release_or_documented_no_release_decision
+  - human_final_approval
+
+artifact: context/publication/publication.json
