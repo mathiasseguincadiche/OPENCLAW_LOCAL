@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 
 security:
@@ -6,8 +6,10 @@ security:
   reject_nested_symlinks: true
   follow_symlinks: false
   scan_secrets_before_copy: true
+  scan_project_sources_before_copy: true
+  stream_text_secret_scan_without_size_skip: true
+  block_secret_filenames: true
   refuse_on_suspected_secret: true
-  max_text_secret_scan_bytes: 2097152
 
 integrity:
   require_manifest: true
@@ -17,6 +19,9 @@ integrity:
   require_ingestion_report: true
   canonical_archive_outside_project: true
   archive_relative_root: state/intake
+  source_inventory_required: true
+  project_phase_snapshots_required: true
+  aggregate_digest_required: true
 
 immutability:
   project_intake_read_only: true
