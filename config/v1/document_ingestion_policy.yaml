@@ -21,6 +21,7 @@ formats:
     method: openclaw_pdf_tool
     tool: pdf
     supports_scanned_pages_via_vision_fallback: true
+    max_bytes_mb: 50
     max_pages_per_tool_call: 20
     chunk_large_documents: true
   image:
@@ -62,8 +63,6 @@ formats:
       - .tf
       - .tfvars
       - .hcl
-      - .yml
-      - .yaml
       - .dockerfile
       - .js
       - .ts
