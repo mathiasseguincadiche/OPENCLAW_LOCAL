@@ -32,7 +32,10 @@ def redact_text(text: str) -> str:
 def contains_suspected_secret(text: str) -> bool:
     if any(pattern.search(text) for pattern in _TOKEN_PATTERNS):
         return True
-    return _ASSIGNMENT.search(text) is not None or _PRIVATE_KEY.search(text) is not None
+    for match in _ASSIGNMENT.finditer(text):
+        if match.group(2) not in {"<REDACTED>", "<REDACTED_TOKEN>", "<REDACTED_PRIVATE_KEY>"}:
+            return True
+    return _PRIVATE_KEY.search(text) is not None
 
 
 def sanitize_exception(exc: BaseException) -> str:
@@ -43,7 +46,12 @@ def build_support_bundle(project: Path, output: Path) -> Path:
     candidates = [project / "project.json", project / "evidence" / "orchestration"]
     entries: list[tuple[str, str]] = []
     for candidate in candidates:
-        paths = [candidate] if candidate.is_file() else list(candidate.rglob("*")) if candidate.is_dir() else []
+        if candidate.is_file():
+            paths = [candidate]
+        elif candidate.is_dir():
+            paths = list(candidate.rglob("*"))
+        else:
+            paths = []
         for path in paths:
             if not path.is_file() or path.is_symlink():
                 continue
