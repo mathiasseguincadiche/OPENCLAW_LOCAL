@@ -17,7 +17,7 @@ roles:
     own: [architecture, adr, interfaces, modeles_donnees, compromis, schemas]
     assist: [securite, devops, documentation]
     review: [coherence_technique]
-    forbidden: [implementation_complete, audit_final, approbation_finale]
+    forbidden: [implementation_complete, execution_commandes, audit_final, approbation_finale]
 
   ingenieur-devops:
     own: [automatisation, iac, conteneurs, ci_cd, tests_techniques, preuves_locales]
@@ -29,7 +29,7 @@ roles:
     own: [threat_model, secrets, hardening, supply_chain, sbom, dependances, securite_ci]
     assist: [architecture, devops, publication]
     review: [surface_attaque]
-    forbidden: [audit_final_de_son_travail, acceptation_risque_residuel]
+    forbidden: [audit_final_de_son_travail, acceptation_risque_residuel, modification_directe_sources]
 
   ingenieur-release-forges:
     own: [git, forges, pr_mr, releases, versionnage, preuves_distantes]
