@@ -62,11 +62,12 @@ function Invoke-OpenClawJson {
     }
 }
 
-function Assert-OllamaProvider([object]$Payload, [string]$Description) {
+function Test-OllamaProvider([object]$Payload, [string]$Description) {
     $Json = $Payload | ConvertTo-Json -Depth 50 -Compress
     if ($Json -notmatch '"provider"\s*:\s*"ollama"') {
         throw "$Description n'apporte pas de preuve provider=ollama. Aucun fallback cloud n'est accepté."
     }
+    return $true
 }
 
 $PlatformRoot = Get-PlatformRoot
@@ -74,7 +75,12 @@ $StateDir = Join-Path $PlatformRoot 'state'
 $ProofsRoot = Join-Path $PlatformRoot 'proofs'
 $ScratchRoot = Join-Path $PlatformRoot 'runtime\e2e-scratch'
 $ConfigPath = Join-Path $StateDir 'openclaw.json'
-$QwenModel = if ($Catalog -match 'runtime_id:\s*"(qwen3\.5:9b)"') { $Matches[1] } else { 'qwen3.5:9b' }
+$QwenModel = if ($Catalog -match 'runtime_id:\s*"(qwen3\.5:9b)"') {
+    $Matches[1]
+}
+else {
+    'qwen3.5:9b'
+}
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] E2E OpenClaw'
@@ -118,7 +124,7 @@ foreach ($AgentId in $AgentIds) {
         'agent', '--agent', $AgentId, '--message', $Prompt,
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Smoke agent $AgentId"
-    Assert-OllamaProvider -Payload $Result -Description "Smoke agent $AgentId"
+    $null = Test-OllamaProvider -Payload $Result -Description "Smoke agent $AgentId"
     $Evidence.agent_smoke += [ordered]@{ agent = $AgentId; result = $Result }
 }
 
@@ -135,7 +141,7 @@ $ToolResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     '--model', "ollama/$QwenModel", '--code-mode', 'code', '--local-model-lean',
     '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description 'Tool-calling OpenClaw/Ollama'
-Assert-OllamaProvider -Payload $ToolResult -Description 'Tool-calling OpenClaw/Ollama'
+$null = Test-OllamaProvider -Payload $ToolResult -Description 'Tool-calling OpenClaw/Ollama'
 $ToolMarker = Join-Path $ScratchRoot 'tool-call-ok.txt'
 if (-not (Test-Path -LiteralPath $ToolMarker)) {
     throw 'Le modèle n’a pas créé le marqueur tool-call-ok.txt.'
@@ -154,7 +160,7 @@ $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     '--model', "ollama/$QwenModel", '--code-mode', 'code', '--local-model-lean',
     '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description 'Réparation après erreur outil'
-Assert-OllamaProvider -Payload $RepairResult -Description 'Réparation après erreur outil'
+$null = Test-OllamaProvider -Payload $RepairResult -Description 'Réparation après erreur outil'
 $RepairMarker = Join-Path $ScratchRoot 'repair-ok.txt'
 if (-not (Test-Path -LiteralPath $RepairMarker)) {
     throw 'Le scénario de réparation n’a pas créé repair-ok.txt.'
@@ -170,7 +176,7 @@ for ($Run = 1; $Run -le 3; $Run++) {
         '--model', "ollama/$QwenModel", '--auth-env-only',
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Stabilité run $Run"
-    Assert-OllamaProvider -Payload $StableResult -Description "Stabilité run $Run"
+    $null = Test-OllamaProvider -Payload $StableResult -Description "Stabilité run $Run"
     if ([string]$StableResult.final -notmatch "STABLE_$Run") {
         throw "Stabilité run $Run: réponse finale inattendue."
     }
