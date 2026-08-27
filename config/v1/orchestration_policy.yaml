@@ -50,7 +50,6 @@ artifacts:
   plan: context/project_plan.json
   assignments: context/task_assignments.json
   task_results: evidence/task_results.json
-  remediation_history: evidence/remediation_history.json
   validation: evidence/validation_report.json
   review: evidence/review_report.json
   package_manifest: deliverables/package_manifest.json
@@ -96,6 +95,7 @@ remediation:
   fallback_to_all_tasks_when_unmapped: true
   preserve_attempt_history: true
   stop_on_attempt_limit: true
+  history_path: evidence/remediation_history.json
 
 human_gates:
   blocking_clarifications: true
