@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import clawlocal.project_orchestrator_superset as superset
 from clawlocal.project_contracts import (
     build_project_manifest,
     normalize_task_contract,
@@ -15,7 +16,11 @@ from clawlocal.project_governance import (
     required_criticality_gates,
 )
 from clawlocal.project_intake import create_project
-from clawlocal.project_integrity import snapshot_integrity, verify_integrity_snapshot
+from clawlocal.project_integrity import (
+    latest_integrity_snapshot,
+    snapshot_integrity,
+    verify_integrity_snapshot,
+)
 from clawlocal.project_learning import (
     add_learning_objective,
     record_learning_evidence,
@@ -23,7 +28,11 @@ from clawlocal.project_learning import (
 )
 from clawlocal.project_migrations import apply_project_migrations, plan_project_migration
 from clawlocal.project_security import build_support_bundle, redact_text
-from clawlocal.telemetry import automatic_run_telemetry, read_telemetry
+from clawlocal.telemetry import (
+    automatic_run_telemetry,
+    extract_observed_metrics,
+    read_telemetry,
+)
 
 
 def test_manifest_is_strict_and_governed() -> None:
@@ -231,3 +240,96 @@ def test_automatic_telemetry_records_observed_only(tmp_path: Path) -> None:
     assert rows[0]["duration_ms"] >= 0
     assert rows[0]["prompt_tokens"] == 12
     assert "prompt" not in rows[0]
+
+
+def test_observed_metric_extraction_is_recursive_and_non_fabricating() -> None:
+    metrics = extract_observed_metrics(
+        {
+            "stats": {
+                "time_to_first_token_ms": 18,
+                "tps": 7.5,
+                "input_tokens": 40,
+                "output_tokens": 12,
+                "vram_mb": 8192,
+            },
+            "tool_calls": [{"name": "read"}, {"name": "exec"}],
+        }
+    )
+    assert metrics == {
+        "ttft_ms": 18,
+        "tokens_per_second": 7.5,
+        "prompt_tokens": 40,
+        "generated_tokens": 12,
+        "vram_mb": 8192,
+        "tool_calls": 2,
+    }
+    assert "ram_mb" not in metrics
+
+
+def test_superset_orchestrator_facade_records_governance_and_integrity(
+    tmp_path: Path,
+) -> None:
+    project = create_project(
+        tmp_path / "platform",
+        "facade-demo",
+        "Facade Demo",
+    )
+    assert superset.current_status(project) == "INTAKE_READY"
+    assert superset.load_project_manifest(project)["schema_version"] == "2.0.0"
+
+    superset.store_analysis(
+        project,
+        {
+            "summary": "Projet de test",
+            "objectives": ["livrer"],
+            "constraints": [],
+            "deliverables": ["README"],
+            "ambiguities": [],
+            "missing_information": [],
+            "risks": ["Risque de dérive"],
+            "decisions_required": ["Choisir la cible"],
+        },
+    )
+    decisions = (project / "context" / "governance" / "DECISIONS.md").read_text(
+        encoding="utf-8"
+    )
+    risks = (project / "context" / "governance" / "RISKS.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Choisir la cible" in decisions
+    assert "Risque de dérive" in risks
+
+    superset.transition_project(
+        project,
+        "ANALYZED",
+        actor="chef-operations",
+        reason="analysis_tested",
+    )
+    superset.store_plan(
+        project,
+        {
+            "workstreams": ["delivery"],
+            "tasks": [
+                {
+                    "id": "write-readme",
+                    "role": "redacteur-technique",
+                    "title": "Rédiger README",
+                    "objective": "Produire la documentation",
+                    "facts": ["README requis"],
+                    "assumptions": ["format Markdown"],
+                    "unknowns": [],
+                    "required_evidence": ["README.md"],
+                }
+            ],
+        },
+    )
+    superset.transition_project(
+        project,
+        "PLANNED",
+        actor="chef-operations",
+        reason="plan_tested",
+    )
+    assert superset.current_status(project) == "PLANNED"
+    snapshot = latest_integrity_snapshot(project, "PLANNED")
+    assert snapshot is not None
+    assert verify_integrity_snapshot(project, snapshot) == []
