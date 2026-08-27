@@ -9,16 +9,21 @@
 
 Plateforme IA **local-first, multi-agents et multi-modèles** pour Windows 11 Pro x64.
 
-La V0.2 fournit maintenant un vrai parcours projet : l'utilisateur dépose consignes, cahier des charges, sources et livrables ; le **Project Orchestrator** transforme ce matériau en analyse, clarifications, plan, tâches attribuées, exécution, preuves, validation, revue indépendante et package final. Les huit agents travaillent principalement avec des modèles locaux ; les informations récentes sont récupérées sur le Web puis raisonnées localement ; OpenRouter reste une escalade explicite, budgétée et traçable.
+`OPENCLAW_LOCAL` est l'évolution locale de `openclaw_openrouter` : la même philosophie OpenClaw + huit rôles + contrats + preuves + audit, mais le parcours nominal ne dépend plus d'un LLM cloud payant. Le système utilise d'abord les modèles locaux, enrichit les faits récents par le Web puis raisonne localement, passe éventuellement en LOCAL_DEEP et ne sollicite OpenRouter qu'après une escalade explicite, autorisée, budgétée et traçable.
 
-## Architecture V0.2
+L'objectif est aussi d'être **fonctionnellement supérieur** au projet d'origine : Project Orchestrator, intake immuable, pédagogie, documentation progressive, publication gouvernée, télémétrie locale et qualification matérielle sont traités comme des contrats exécutables.
+
+## Architecture
 
 ```text
 Projet utilisateur
-(consignes / sources / livrables)
+(consignes / cahier des charges / sources / livrables attendus)
            |
            v
      Project Intake
+  secrets / symlinks
+  SHA-256 / MIME / manifest
+  lecture seule / ACL
            |
            v
    Project Orchestrator
@@ -50,25 +55,80 @@ Gemma 4 12B                browser recherche  SERA 14B (*)
                                       + budget FinOps
 ```
 
-`(*)` Les modèles `LOCAL_DEEP` sont des **candidats**. Ils ne deviennent actifs qu'après import/backend et qualification réelle.
+`(*)` Les modèles LOCAL_DEEP restent des candidats jusqu'à qualification réelle.
 
 ## Principes de conception
 
-- **Windows natif** : OpenClaw, Gateway, runtime IA et modèles tournent sous Windows 11 Pro ; WSL2 Ubuntu reste un environnement DevOps/Linux externe.
+- **Windows natif** : OpenClaw, Gateway, runtime IA et modèles tournent sous Windows 11 Pro ; WSL2 reste un backend DevOps/Linux externe et facultatif.
 - **Project-first** : le système prend en charge un projet structuré, pas seulement une conversation.
-- **Orchestration fail-closed** : une phase ne progresse que si son artefact/gate existe réellement.
-- **Clarification humaine** : une ambiguïté bloquante n'est jamais résolue arbitrairement par un agent.
+- **Intake immuable** : les entrées sont non fiables, scannées, inventoriées, hashées puis verrouillées en lecture seule.
+- **Orchestration fail-closed** : une phase ne progresse que si ses artefacts et gates existent réellement.
+- **Clarification humaine** : une ambiguïté bloquante n'est jamais tranchée arbitrairement par un agent.
 - **Local-first** : aucune dépendance LLM cloud n'est requise pour le parcours nominal.
-- **Web local-first** : une donnée récente déclenche d'abord recherche/fetch Web + raisonnement local.
-- **Cloud-on-demand** : activation, motif autorisé, préconditions, budget et éventuellement validation humaine.
+- **Web local-first** : recherche/fetch Web puis raisonnement local avant toute recherche premium.
+- **LOCAL_DEEP contrôlé** : un modèle plus lourd n'est utilisé que s'il est disponible et qualifié.
+- **Cloud-on-demand** : activation, motif autorisé, préconditions, budget et approbation humaine lorsque requise.
 - **Fail closed** : aucun fallback cloud silencieux, aucune promotion automatique de modèle/backend.
 - **Huit rôles distincts** : orchestration, recherche, architecture, DevOps, sécurité, release, documentation, audit.
-- **Séparation producteur/auditeur** lorsque cela est praticable.
-- **Workspaces confinés** : filesystem limité au workspace ; exec soumis à approbation ; elevated désactivé.
-- **FinOps** : limites quotidiennes, mensuelles et par projet ; ledger hors Git.
-- **Diagram-as-code** : D2, PlantUML et Graphviz pour les schémas techniques locaux.
-- **Preuves avant promesses** : les performances Intel Arc B580 restent à mesurer sur la machine réelle.
-- **Approbation finale humaine** : un projet ne peut pas s'auto-déclarer `COMPLETE`.
+- **Séparation producteur/auditeur** : les rôles de revue ne corrigent pas silencieusement leur propre objet d'audit.
+- **Pédagogie sans bloquer la livraison** : profils efficient/balanced/intensive et preuves d'acquisition.
+- **Documentation progressive** : Comprendre → Utiliser → Approfondir → Diagnostiquer lorsque pertinent.
+- **Publication gouvernée** : PR/MR, CI distante, clean clone, audit indépendant et validation humaine.
+- **Télémétrie privacy-first** : métriques opérationnelles hors Git, sans prompts, réponses ni secrets.
+- **Preuves avant promesses** : aucune performance Intel Arc B580 n'est déclarée sans mesure réelle.
+
+## Les huit rôles
+
+1. **Chef des opérations** — cadrage, orchestration, risques, priorités et verdict global ;
+2. **Expert recherche** — sources, veille, benchmark, vérification des faits et Web récent ;
+3. **Architecte solutions** — architecture, ADR, interfaces, compromis et schémas ;
+4. **Ingénieur DevOps** — automatisation, IaC, conteneurs, CI/CD, tests et preuves ;
+5. **Ingénieur sécurité** — threat model, secrets, hardening, supply chain et scans, sans modification directe des sources ;
+6. **Ingénieur release/forges** — Git, GitHub/GitLab, PR/MR, releases et preuves distantes ;
+7. **Rédacteur technique** — README, runbooks, vulgarisation et structure pédagogique ;
+8. **Auditeur qualité** — conformité, contrôle des preuves et revue finale indépendante.
+
+L'Architecte peut produire des ADR et schémas dans son workspace mais ne peut pas exécuter de commandes. L'Ingénieur sécurité peut analyser et lancer les contrôles autorisés mais ne peut pas `write/edit/apply_patch` sur les sources.
+
+## Project Intake renforcé
+
+La création d'un projet suit désormais :
+
+```text
+INPUT
+  ↓
+scan secrets
+  ↓
+refus des symlinks
+  ↓
+copie contrôlée
+  ↓
+SHA-256 par fichier
+  ↓
+inventaire MIME
+  ↓
+MANIFEST.json
+  ↓
+INGESTION_REPORT.md
+  ↓
+lecture seule / ACL Windows
+  ↓
+INTAKE_READY
+```
+
+Artefacts créés sous `intake/` :
+
+```text
+MANIFEST.json
+checksums.sha256
+mime-types.tsv
+symlinks.txt
+INGESTION_REPORT.md
+```
+
+Les documents entrants sont explicitement considérés comme **données non fiables**. Une instruction trouvée dans un PDF ou un README ne peut jamais redéfinir les règles de sécurité ou le contrat d'un agent.
+
+Voir [Intake Integrity](docs/INTAKE_INTEGRITY.md).
 
 ## Machine d'états projet
 
@@ -94,9 +154,94 @@ PACKAGING
 COMPLETE
 ```
 
-Les retours `VALIDATING -> IN_PROGRESS` et `REVIEW -> IN_PROGRESS` sont prévus lorsque des corrections sont nécessaires.
+Les retours `VALIDATING -> IN_PROGRESS` et `REVIEW -> IN_PROGRESS` rouvrent réellement les tâches concernées et leurs dépendants transitifs, sans perdre les tentatives antérieures.
 
-## Modèles candidats V0.2
+## Pédagogie et soutenance
+
+Chaque projet dispose d'un profil :
+
+| Profil | Exécution | Apprentissage | Usage |
+|---|---:|---:|---|
+| `efficient` | 90 % | 10 % | tâche connue, priorité à la livraison |
+| `balanced` | 70 % | 30 % | profil par défaut |
+| `intensive` | 60 % | 40 % | formation, soutenance ou évaluation |
+
+Le contexte contient :
+
+```text
+context/PROJECT_GUIDANCE.md
+context/learning/profile.json
+context/learning/SKILLS_MATRIX.csv
+context/learning/LEARNING_JOURNAL.md
+context/learning/TEACH_BACK.md
+context/learning/RETENTION_PLAN.yaml
+```
+
+Une compétence ne peut pas devenir `ACQUIRED` sur simple exposition : une validation humaine ou une preuve d'évaluation explicite est nécessaire.
+
+Voir [Learning & Accessibility](docs/LEARNING_AND_ACCESSIBILITY.md).
+
+## Documentation progressive
+
+Pour les contenus explicatifs, les agents utilisent lorsque pertinent quatre profondeurs :
+
+```text
+COMPRENDRE
+   ↓
+UTILISER
+   ↓
+APPROFONDIR
+   ↓
+DIAGNOSTIQUER
+```
+
+Un format de livrable imposé reste prioritaire, et l'accessibilité ne doit jamais masquer un prérequis critique ou simplifier faussement un risque.
+
+## Publication d'un projet utilisateur
+
+La fin locale du projet et sa publication sont deux choses différentes. La publication suit une machine d'états séparée :
+
+```text
+LOCAL_IN_PROGRESS
+       ↓
+LOCAL_VALIDATED
+       ↓
+READY_TO_PUBLISH
+       ↓
+REMOTE_CREATED
+       ↓
+BRANCH_PUSHED
+       ↓
+PR_MR_OPEN
+       ↓
+CI_GREEN
+       ↓
+REMOTE_CLONE_VALIDATED
+       ↓
+RELEASE_CREATED (si pertinente)
+       ↓
+PUBLISHED_AND_VERIFIED
+```
+
+GitHub et GitLab sont supportés par contrat. Les transitions sensibles exigent une décision humaine explicite. Une transition enregistrée ne prétend jamais qu'une action distante a été réellement exécutée sans preuve.
+
+Voir [Publication projet](docs/PROJECT_PUBLICATION.md).
+
+## Télémétrie locale
+
+Les événements opérationnels sont conservés hors Git dans :
+
+```text
+<OPENCLAW_LOCAL_ROOT>/state/telemetry/events.jsonl
+```
+
+Le système peut mesurer ou agréger : agent, modèle, backend, route, TTFT, durée, tokens, tokens/s, VRAM, RAM, tool calls, retries, LOCAL_FAST → LOCAL_DEEP, escalades cloud et coût cloud.
+
+Les champs de prompt/réponse, documents source et secrets sont interdits. Une mesure matérielle absente vaut mieux qu'une mesure inventée.
+
+Voir [Télémétrie](docs/TELEMETRY.md).
+
+## Modèles candidats
 
 | Alias | Runtime | Classe | Usage |
 |---|---|---|---|
@@ -105,21 +250,21 @@ Les retours `VALIDATING -> IN_PROGRESS` et `REVIEW -> IN_PROGRESS` sont prévus 
 | `qwen-deep` | `qwen3.5:27b` | LOCAL_DEEP | raisonnement plus lourd, optionnel |
 | `sera-devops` | `sera-14b` | LOCAL_DEEP | software engineering/DevOps spécialisé, import séparé |
 
-Le catalogue `config/v1/model_catalog.yaml` est la source de vérité. Les scripts Windows lisent le catalogue au lieu de recopier les identifiants de modèles.
+Le catalogue `config/v1/model_catalog.yaml` est la source de vérité.
 
 ## Backends locaux
 
-La V0.2 prépare une qualification comparative sur Intel Arc B580 :
+La qualification comparative cible :
 
-- `ollama-vulkan` — chemin nominal V0.2 ;
+- `ollama-vulkan` — chemin nominal ;
 - `llama-cpp-sycl` — candidat ;
 - `llama-cpp-vulkan` — candidat.
 
-Le vainqueur ne sera déterminé qu'après mesures réelles : TTFT, tokens/s, VRAM, RAM, stabilité et tool calling.
+Le backend retenu sera déterminé par mesures réelles : TTFT, tokens/s, VRAM, RAM, stabilité et tool calling.
 
 ## Démarrage rapide
 
-Prérequis utilisateur : **Windows 11 Pro x64, PowerShell 7 et WinGet**.
+Prérequis : Windows 11 Pro x64, PowerShell 7 et WinGet.
 
 ```powershell
 .\menu.ps1 -Action install-full -DryRun
@@ -144,28 +289,13 @@ python .\scripts\28_create_project.py `
   --source 'C:\Projets\P5\repository' `
   --deliverable terraform `
   --deliverable ansible `
-  --deliverable documentation
+  --deliverable documentation `
+  --learning-profile balanced `
+  --classification internal `
+  --criticality standard
 ```
 
-Le projet géré contient `intake/`, `sources/`, `context/`, `work/`, `deliverables/`, `evidence/` et `diagrams/`.
-
-### 2. Voir l'état
-
-```powershell
-python .\scripts\32_orchestrate_project.py `
-  --project p5-devops `
-  --action status
-```
-
-### 3. Prévisualiser une phase sans appeler le modèle
-
-```powershell
-python .\scripts\32_orchestrate_project.py `
-  --project p5-devops `
-  --action analyze
-```
-
-### 4. Lancer le parcours local
+### 2. Lancer l'orchestrateur
 
 ```powershell
 python .\scripts\32_orchestrate_project.py `
@@ -174,119 +304,55 @@ python .\scripts\32_orchestrate_project.py `
   --execute
 ```
 
-Le parcours s'arrête automatiquement si :
+Le parcours s'arrête automatiquement lorsqu'une clarification, correction ou approbation humaine est nécessaire.
 
-- une clarification humaine est requise ;
-- une tâche échoue ;
-- la validation échoue ;
-- la revue finale échoue ;
-- l'approbation humaine finale est attendue.
-
-### 5. Résoudre une ambiguïté
+### 3. Adapter le profil d'apprentissage
 
 ```powershell
-python .\scripts\32_orchestrate_project.py `
+python .\scripts\33_project_learning.py `
   --project p5-devops `
-  --action resolve `
-  --clarification-id clarification-001 `
-  --answer 'Utiliser le mode Docker local.'
+  --profile intensive
 ```
 
-### 6. Valider la fin du projet
-
-Après `PACKAGING` et vérification humaine :
+### 4. Inspecter la télémétrie
 
 ```powershell
-python .\scripts\32_orchestrate_project.py `
+python .\scripts\35_telemetry.py --project p5-devops --export-project-summary
+```
+
+### 5. Publier seulement si nécessaire
+
+```powershell
+python .\scripts\34_project_publication.py `
   --project p5-devops `
-  --action complete `
-  --human-approved
+  --evidence-key local_tests_green `
+  --evidence-value true
 ```
 
-Voir [Project Intake](docs/PROJECT_INTAKE.md) et [Project Orchestrator](docs/PROJECT_ORCHESTRATOR.md).
-
-## Artefacts d'orchestration
-
-```text
-context/
-├── project_analysis.json
-├── clarifications.json
-├── project_plan.json
-├── task_assignments.json
-└── tasks/
-
-evidence/
-├── orchestration/
-├── task_results.json
-├── validation_report.json
-├── review_report.json
-└── final_report.json
-
-deliverables/
-├── tasks/
-├── package_manifest.json
-└── <project-id>.zip
-```
-
-Les sorties de tâches sont historisées par tâche, agent et tentative (`run-001`, `run-002`, etc.) afin de ne pas écraser les preuves précédentes.
+Les étapes distantes restent sous contrôle humain.
 
 ## Recherche Internet récente
-
-Une information récente suit d'abord :
 
 ```text
 LLM local -> web_search/web_fetch -> sources récentes -> synthèse locale
 ```
 
-Le navigateur est autorisé par défaut uniquement à l'Expert recherche pour les sites nécessitant une navigation complexe.
-
-`web_freshness_only` est explicitement interdit comme raison de cloud. Une recherche premium n'est autorisée qu'après une tentative locale ou en cas de conflit de sources démontré selon la politique.
-
-Voir [Recherche Web Local-First](docs/WEB_LOCAL_FIRST.md).
+Le navigateur est autorisé par défaut uniquement à l'Expert recherche. `web_freshness_only` est interdit comme justification cloud.
 
 ## Routage et cloud
 
-Plan local :
-
-```powershell
-python .\scripts\27_route_openclaw.py `
-  --agent ingenieur-devops `
-  --message 'Analyse ce problème Kubernetes.'
-```
-
-Escalade de recherche après tentative Web locale :
-
-```powershell
-$env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'true'
-python .\scripts\27_route_openclaw.py `
-  --agent expert-recherche `
-  --message 'Approfondis cette recherche.' `
-  --cloud `
-  --reason deep_web_research `
-  --local-web-attempted `
-  --project-id p5-devops
-```
-
-Le **Project Orchestrator n'effectue jamais cette escalade automatiquement**. Une exécution cloud réelle nécessite aussi `OPENROUTER_API_KEY` local.
+Le Project Orchestrator ne déclenche jamais OpenRouter automatiquement. Toute escalade réelle doit respecter `escalation_policy.yaml`, FinOps et les gates humains applicables.
 
 ## FinOps
 
-Garde-fous V0.2 :
+Garde-fous actuels :
 
 - 1 EUR / jour ;
 - 5 EUR / mois ;
 - 2 EUR / projet et par mois ;
-- réservation conservatrice par défaut : 0,25 EUR avant appel lorsque le coût exact est inconnu.
+- réservation conservatrice de 0,25 EUR lorsque le coût exact est inconnu.
 
-Le ledger reste sous `<OPENCLAW_LOCAL_ROOT>\state\finops\cloud-costs.jsonl` et n'est jamais commité.
-
-Voir [FinOps](docs/FINOPS.md).
-
-## Benchmark et qualification
-
-La suite active est **`devops-v2`**. Elle couvre notamment analyse de projet, GitLab CI, Kubernetes, Terraform multi-fichiers, Ansible, sécurité, documentation, diagrammes, Web, discipline agentique et contexte long.
-
-Un gate automatique réussi signifie au mieux `READY_FOR_MANUAL_QUALIFICATION`. La promotion exige toujours E2E OpenClaw, stabilité, qualification matérielle B580 et revue humaine.
+Le ledger reste hors Git.
 
 ## Qualité et sécurité
 
@@ -296,6 +362,7 @@ La CI couvre :
 Python 3.12 + 3.13
 validate_repository
 validate_configs
+validate_v7_parity
 validate_release
 Ruff
 mypy
@@ -307,14 +374,18 @@ CodeQL
 Dependency Review / pip-audit fallback
 ```
 
-Les validateurs vérifient également la cohérence Project Intake / Project Orchestrator, la machine d'états, les gates humains, Web local-first, FinOps, les backends, le tag explicite des modèles Ollama et l'absence de `runtime_id` recopiés dans les scripts Windows.
+Le validateur de parité empêche notamment la disparition silencieuse des capacités reprises de `openclaw_openrouter` : intake robuste, pédagogie, accessibilité, publication, télémétrie et séparation des permissions.
 
 ## Documentation
 
 - [Portail documentaire](docs/README.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Project Intake](docs/PROJECT_INTAKE.md)
+- [Intake Integrity](docs/INTAKE_INTEGRITY.md)
 - [Project Orchestrator](docs/PROJECT_ORCHESTRATOR.md)
+- [Learning & Accessibility](docs/LEARNING_AND_ACCESSIBILITY.md)
+- [Publication projet](docs/PROJECT_PUBLICATION.md)
+- [Télémétrie](docs/TELEMETRY.md)
 - [Recherche Web Local-First](docs/WEB_LOCAL_FIRST.md)
 - [Backends locaux](docs/RUNTIME_BACKENDS.md)
 - [Modèles locaux](docs/MODELES_LOCAUX.md)
@@ -331,11 +402,9 @@ Les validateurs vérifient également la cohérence Project Intake / Project Orc
 
 ## Version et état
 
-La version courante reste `0.2.0`. Le Project Orchestrator complète la promesse V0.2 de **workflow projet complet** sans créer artificiellement une nouvelle génération de fichiers ou de contrats.
+La version publiée reste `0.2.0`. Les capacités de parité V7 décrites ici sont ajoutées sous `Unreleased` et constituent la base de la future V0.3 ; elles ne modifient pas la règle selon laquelle la qualification matérielle Intel Arc B580 doit être réalisée sur la workstation cible.
 
-La **qualification matérielle Intel Arc B580 n'est pas déclarée tant qu'elle n'a pas été exécutée sur la workstation cible**. Voir [STATUS.md](STATUS.md).
-
-La version `1.0.0` reste réservée à un parcours local réellement qualifié.
+La version `1.0.0` reste réservée à un parcours local réellement qualifié de bout en bout.
 
 ## Licence
 
