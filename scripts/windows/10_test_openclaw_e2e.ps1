@@ -133,7 +133,7 @@ if (Test-Path -LiteralPath $ScratchRoot) {
 }
 New-Item -ItemType Directory -Path $ScratchRoot -Force | Out-Null
 
-$ToolPrompt = "Utilise réellement l'outil d'écriture disponible. Crée tool-call-ok.txt dans le répertoire de travail avec exactement TOOL_OK. Ensuite réponds TOOL_OK."
+$ToolPrompt = 'Utilise réellement l''outil d''écriture disponible. Crée tool-call-ok.txt dans le répertoire de travail avec exactement TOOL_OK. Ensuite réponds TOOL_OK.'
 $ToolResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', 'exec', $ToolPrompt, '--cwd', $ScratchRoot,
     '--model', "ollama/$QwenModel", '--code-mode', 'code', '--local-model-lean',
@@ -150,7 +150,7 @@ if ((Get-Content -Raw -LiteralPath $ToolMarker).Trim() -ne 'TOOL_OK') {
 $Evidence.tool_call = $ToolResult
 
 Set-Content -LiteralPath (Join-Path $ScratchRoot 'fallback.txt') -Value 'FALLBACK_OK' -Encoding utf8
-$RepairPrompt = "Teste d'abord missing-intentional.txt, qui n'existe pas. Après l'erreur outil, corrige le plan: lis fallback.txt, puis crée repair-ok.txt avec exactement REPAIRED. Ne fabrique pas le premier résultat."
+$RepairPrompt = 'Teste d''abord missing-intentional.txt, qui n''existe pas. Après l''erreur outil, corrige le plan: lis fallback.txt, puis crée repair-ok.txt avec exactement REPAIRED. Ne fabrique pas le premier résultat.'
 $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', 'exec', $RepairPrompt, '--cwd', $ScratchRoot,
     '--model', "ollama/$QwenModel", '--code-mode', 'code', '--local-model-lean',
