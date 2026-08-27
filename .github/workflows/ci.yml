@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -14,10 +15,14 @@ concurrency:
 
 jobs:
   quality:
+    name: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -27,21 +32,65 @@ jobs:
         run: python scripts/21_validate_repository.py
       - name: Configuration contracts
         run: python scripts/22_validate_configs.py
+      - name: Release contracts
+        run: python scripts/24_validate_release.py
       - name: Ruff
         run: ruff check src tests scripts
       - name: Tests
         run: pytest -q
 
   windows-contract:
+    name: windows-contract
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - name: Parse PowerShell and expose docs action
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Require PowerShell 7
         shell: pwsh
         run: |
-          $errors = $null
-          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
-            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
-            if ($errors) { $errors | Format-List; exit 1 }
+          if ($PSVersionTable.PSVersion.Major -lt 7) {
+            throw "PowerShell 7+ requis, version détectée: $($PSVersionTable.PSVersion)"
           }
-          .\menu.ps1 -Action docs
+          Write-Host "PowerShell $($PSVersionTable.PSVersion)"
+      - name: Install PowerShell quality modules
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          Install-Module Pester -RequiredVersion 5.9.0 -Scope CurrentUser -Force
+      - name: Parse PowerShell
+        shell: pwsh
+        run: |
+          $allErrors = @()
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$null,
+              [ref]$parseErrors
+            )
+            $allErrors += @($parseErrors)
+          }
+          if ($allErrors) {
+            $allErrors | Format-List
+            throw "Erreurs de parsing PowerShell: $($allErrors.Count)"
+          }
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $targets = @('.\menu.ps1', '.\scripts\windows', '.\tests\powershell')
+          $findings = foreach ($target in $targets) {
+            Invoke-ScriptAnalyzer -Path $target -Recurse `
+              -Settings '.\.github\powershell\PSScriptAnalyzerSettings.psd1'
+          }
+          if ($findings) {
+            $findings | Format-Table -AutoSize
+            throw "PSScriptAnalyzer a détecté $(@($findings).Count) anomalie(s)."
+          }
+      - name: Pester
+        shell: pwsh
+        run: Invoke-Pester -Path '.\tests\powershell' -CI -Output Detailed
+      - name: Menu smoke test
+        shell: pwsh
+        run: .\menu.ps1 -Action docs
