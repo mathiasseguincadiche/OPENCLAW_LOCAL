@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from clawlocal.qualification import evaluate_benchmark
-
 
 REQUIRED_MODELS = ("qwen-max", "gemma-deep", "devstral-devops")
 
