@@ -15,10 +15,16 @@ from clawlocal.runtime import (
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Route une requête vers OpenClaw sans fallback cloud silencieux.")
+    parser = argparse.ArgumentParser(
+        description="Route une requête vers OpenClaw sans fallback cloud silencieux."
+    )
     parser.add_argument("--agent", required=True)
     parser.add_argument("--message", required=True)
-    parser.add_argument("--cloud", action="store_true", help="Demande une escalade cloud explicite.")
+    parser.add_argument(
+        "--cloud",
+        action="store_true",
+        help="Demande une escalade cloud explicite.",
+    )
     parser.add_argument("--reason", help="Motif versionné dans escalation_policy.yaml.")
     parser.add_argument("--specialist-available", action="store_true")
     parser.add_argument("--execute", action="store_true")
