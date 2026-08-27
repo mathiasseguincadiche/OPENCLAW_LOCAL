@@ -8,7 +8,6 @@ from typing import Any
 from clawlocal.config import load_contract
 
 _ASSIGNMENTS = Path("context/task_assignments.json")
-_HISTORY = Path("evidence/remediation_history.json")
 _VALID_SOURCES = {"validation", "review"}
 
 
@@ -76,6 +75,18 @@ def _dependent_closure(
     return impacted
 
 
+def _history_path(project: Path, remediation_policy: dict[str, Any]) -> Path:
+    relative = Path(str(remediation_policy.get("history_path", "")))
+    if (
+        not relative.parts
+        or relative.is_absolute()
+        or ".." in relative.parts
+        or relative.parts[0] != "evidence"
+    ):
+        raise ValueError("orchestration_policy.yaml: history_path remediation invalide")
+    return project / relative
+
+
 def reopen_tasks_for_correction(
     project: Path,
     report: dict[str, Any],
@@ -110,6 +121,8 @@ def reopen_tasks_for_correction(
 
     policy = load_contract("orchestration_policy.yaml")
     remediation = policy.get("remediation", {})
+    if remediation.get("reopen_failed_tasks") is not True:
+        raise RuntimeError("remediation désactivée par contrat")
     include_dependents = remediation.get("reopen_transitive_dependents", True) is True
     impacted = (
         _dependent_closure(requested, tasks_by_id)
@@ -142,7 +155,7 @@ def reopen_tasks_for_correction(
     assignments["updated_at"] = now
     _write_json(assignments_path, assignments)
 
-    history_path = project / _HISTORY
+    history_path = _history_path(project, remediation)
     if history_path.is_file():
         history = _load_json(history_path)
     else:
