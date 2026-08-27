@@ -50,6 +50,7 @@ artifacts:
   plan: context/project_plan.json
   assignments: context/task_assignments.json
   task_results: evidence/task_results.json
+  remediation_history: evidence/remediation_history.json
   validation: evidence/validation_report.json
   review: evidence/review_report.json
   package_manifest: deliverables/package_manifest.json
@@ -88,6 +89,13 @@ execution:
   collect_task_outputs: true
   rerun_failed_tasks: true
   task_output_namespaced_by_task: true
+
+remediation:
+  reopen_failed_tasks: true
+  reopen_transitive_dependents: true
+  fallback_to_all_tasks_when_unmapped: true
+  preserve_attempt_history: true
+  stop_on_attempt_limit: true
 
 human_gates:
   blocking_clarifications: true
