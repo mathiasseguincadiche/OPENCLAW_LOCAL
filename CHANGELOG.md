@@ -11,19 +11,43 @@ Keep a Changelog et le versionnage suit SemVer.
 - analyse structurée, clarifications humaines, plan et assignation de tâches ;
 - exécution locale des tâches OpenClaw avec dépendances et tentatives bornées ;
 - collecte namespacée des sorties par tâche/agent/tentative ;
-- validation et review indépendantes avec retour en correction ;
-- boucle de remediation exécutable avec réouverture ciblée des tâches et dépendants transitifs ;
+- validation et review indépendantes avec boucle de remediation exécutable ;
+- réouverture ciblée des tâches et dépendants transitifs après `FAIL` ;
 - historique `remediation_history.json` sans remise à zéro des tentatives ;
-- arrêt fail-closed lorsque la limite de tentatives impose une intervention humaine ;
 - packaging final ZIP avec SHA-256 et approbation humaine obligatoire ;
-- documentation `PROJECT_ORCHESTRATOR.md` et tests de la machine d'états.
+- **Intake Integrity** : pré-scan secrets, refus des symlinks, SHA-256, inventaire MIME, manifeste et rapport ;
+- verrouillage read-only de l'intake avec ACL Windows ou permissions POSIX ;
+- politique pédagogique `efficient` / `balanced` / `intensive` ;
+- `SKILLS_MATRIX.csv`, `LEARNING_JOURNAL.md`, `TEACH_BACK.md` et `RETENTION_PLAN.yaml` ;
+- `PROJECT_GUIDANCE.md` injecté dans le contexte projet ;
+- accessibilité documentaire progressive Comprendre / Utiliser / Approfondir / Diagnostiquer ;
+- machine d'états de publication projet GitHub/GitLab avec CI, clean clone, audit et approbations ;
+- télémétrie opérationnelle locale privacy-first et hors Git ;
+- agrégation des routes, agents, modèles, backends, tokens, durée, RAM/VRAM, retries et cloud ;
+- scripts `33_project_learning.py`, `34_project_publication.py`, `35_telemetry.py` ;
+- validateur `36_validate_v7_parity.py` exécuté par la CI et les releases ;
+- documentation Intake Integrity, Learning/Accessibility, Publication et Telemetry.
 
 ### Changed
 
-- `project_policy.yaml` couvre désormais tout le cycle jusqu'à `COMPLETE` ;
+- `project_policy.yaml` couvre désormais orchestration, intégrité intake, pédagogie, accessibilité, publication et télémétrie ;
+- les documents entrants sont explicitement traités comme données non fiables ;
+- `project.json` enrichi avec classification, criticité, profil pédagogique et intégrité intake ;
 - les snapshots de revue peuvent inclure les sorties centrales ;
-- le portail projet documente le parcours flou -> livrable ;
-- un `FAIL` de validation/review remet réellement les tâches concernées en état exécutable.
+- un `FAIL` de validation/review remet réellement les tâches concernées en état exécutable ;
+- l'Architecte solutions peut produire ADR et schémas mais ne peut pas exécuter de commandes ;
+- l'Ingénieur sécurité redevient read-only sur les sources ;
+- le routage peut émettre des événements de télémétrie locale sans bloquer l'exécution ;
+- la CI vérifie explicitement la non-régression des capacités importantes héritées de `openclaw_openrouter`.
+
+### Security
+
+- secret potentiel dans l'intake = refus avant matérialisation du projet ;
+- symlink dans l'intake = refus ;
+- intake rendu immuable après génération des métadonnées ;
+- prompts, réponses, documents source et secrets interdits dans la télémétrie ;
+- métriques matérielles fabriquées interdites ;
+- publication distante et états sensibles sous approbation humaine.
 
 ## [0.2.0] - 2026-08-27
 
