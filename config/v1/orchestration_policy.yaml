@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 
 engine:
@@ -7,6 +7,8 @@ engine:
   source_repository_is_ground_truth: true
   human_decision_for_blocking_clarifications: true
   final_human_approval_required: true
+  document_ingestion_required_before_analysis: true
+  artifact_exchange_fail_closed: true
 
 status_flow:
   - INTAKE_READY
@@ -88,6 +90,9 @@ execution:
   collect_task_outputs: true
   rerun_failed_tasks: true
   task_output_namespaced_by_task: true
+  propagate_passed_outputs_to_dependents: true
+  resync_affected_agents_after_task: true
+  preserve_self_attempt_history: true
 
 remediation:
   reopen_failed_tasks: true
