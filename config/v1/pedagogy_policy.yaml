@@ -1,0 +1,57 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+default_enabled: true
+default_profile: balanced
+default_mode: assisted
+delivery_priority: true
+learning_does_not_block_delivery_by_default: true
+safety_overrides_pedagogy: true
+
+profiles:
+  efficient:
+    execution_share_percent: 90
+    learning_share_percent: 10
+    max_learning_objectives: 3
+  balanced:
+    execution_share_percent: 70
+    learning_share_percent: 30
+    max_learning_objectives: 3
+  intensive:
+    execution_share_percent: 60
+    learning_share_percent: 40
+    max_learning_objectives: 6
+
+modes: [guided, assisted, autonomous, evaluation]
+
+artifacts:
+  root: context/learning
+  skills_matrix: context/learning/SKILLS_MATRIX.csv
+  learning_journal: context/learning/LEARNING_JOURNAL.md
+  teach_back: context/learning/TEACH_BACK.md
+  retention_plan: context/learning/RETENTION_PLAN.yaml
+
+principles:
+  no_systematic_quiz: true
+  no_daily_learning_report: true
+  no_duplicate_documentation: true
+  routine_tasks_execute_directly: true
+  direct_solution_allowed_on_request: true
+  incident_fix_first_debrief_after: true
+  never_mark_acquired_from_exposure_only: true
+
+specialization:
+  core:
+    - linux_operations
+    - git
+    - bash_and_python_ops
+    - terraform_or_opentofu
+    - ansible
+    - ci_cd
+    - containers
+  supporting:
+    - networking
+    - kubernetes_and_helm
+    - security_fundamentals
+    - observability
+    - reliability_and_rollback
+    - technical_documentation
