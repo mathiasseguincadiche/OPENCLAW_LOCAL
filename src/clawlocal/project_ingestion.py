@@ -342,7 +342,7 @@ def ingest_project_documents(project: Path, *, force: bool = False) -> Path:
             )
 
         _write_json(document_root / "metadata.json", entry)
-        aggregate.update(f"{relative}\0{digest}\0{kind}\0{method}\n".encode("utf-8"))
+        aggregate.update(f"{relative}\0{digest}\0{kind}\0{method}\n".encode())
         entries.append(entry)
 
     payload = {
@@ -358,8 +358,9 @@ def ingest_project_documents(project: Path, *, force: bool = False) -> Path:
     summary = root / "README.md"
     summary.write_text(
         "# Document Ingestion\n\n"
-        "Les originaux sous `intake/` sont immuables et restent la source de vérité. Cette couche "
-        "indexe chaque fichier et fournit une représentation locale ou l'outil OpenClaw à utiliser.\n\n"
+        "Les originaux sous `intake/` sont immuables et restent la source de vérité. "
+        "Cette couche indexe chaque fichier et fournit une représentation locale ou "
+        "l'outil OpenClaw à utiliser.\n\n"
         f"- Documents indexés : **{len(entries)}**\n"
         f"- Digest agrégé : `{payload['aggregate_sha256']}`\n"
         "- PDF : outil `pdf` (texte + fallback vision pour pages scannées)\n"
@@ -401,6 +402,19 @@ def validate_ingestion_index(project: Path) -> dict[str, Any]:
     return payload
 
 
+def _expected_coverage_method(entry: dict[str, Any]) -> str:
+    kind = str(entry.get("kind", ""))
+    return {
+        "pdf": "pdf",
+        "image": "view_image",
+        "docx": "local_zip_xml_extract",
+        "pptx": "local_zip_xml_extract",
+        "xlsx": "local_zip_xml_extract",
+        "text": "local_text_extract",
+        "unknown": "raw_file",
+    }.get(kind, "raw_file")
+
+
 def validate_source_coverage(
     project: Path,
     coverage: list[Any],
@@ -431,6 +445,12 @@ def validate_source_coverage(
             raise ValueError(f"source_coverage: statut invalide pour {document_id}: {status}")
         if method not in allowed_methods:
             raise ValueError(f"source_coverage: méthode invalide pour {document_id}: {method}")
+        expected_method = _expected_coverage_method(expected[document_id])
+        if method != expected_method:
+            raise ValueError(
+                f"source_coverage: méthode {method} incompatible avec {document_id}; "
+                f"attendu: {expected_method}"
+            )
         expected_path = str(expected[document_id].get("source_path", ""))
         normalized[document_id] = {
             "document_id": document_id,
@@ -449,7 +469,9 @@ def validate_source_coverage(
         if item["status"] != "UNREADABLE":
             continue
         source_path = item["path"]
-        if document_id.casefold() not in missing_text and source_path.casefold() not in missing_text:
+        document_missing = document_id.casefold() in missing_text
+        path_missing = source_path.casefold() in missing_text
+        if not document_missing and not path_missing:
             raise ValueError(
                 f"source_coverage: {document_id} UNREADABLE doit aussi apparaître dans "
                 "missing_information"
