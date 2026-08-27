@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 
 from clawlocal.openclaw_config import build_openclaw_patch
