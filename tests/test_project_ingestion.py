@@ -12,6 +12,16 @@ from clawlocal.project_ingestion import (
     validate_source_coverage,
 )
 
+_METHOD_BY_KIND = {
+    "pdf": "pdf",
+    "image": "view_image",
+    "docx": "local_zip_xml_extract",
+    "pptx": "local_zip_xml_extract",
+    "xlsx": "local_zip_xml_extract",
+    "text": "local_text_extract",
+    "unknown": "raw_file",
+}
+
 
 def _write_docx(path: Path) -> None:
     with zipfile.ZipFile(path, "w") as archive:
@@ -98,22 +108,13 @@ def test_source_coverage_requires_every_document(tmp_path: Path) -> None:
     payload = json.loads(ingest_project_documents(project).read_text(encoding="utf-8"))
     coverage = []
     missing_information: list[str] = []
-    method_by_kind = {
-        "pdf": "pdf",
-        "image": "view_image",
-        "docx": "local_zip_xml_extract",
-        "pptx": "local_zip_xml_extract",
-        "xlsx": "local_zip_xml_extract",
-        "text": "local_text_extract",
-        "unknown": "raw_file",
-    }
     for entry in payload["entries"]:
         status = "UNREADABLE" if entry["kind"] == "unknown" else "READ"
         coverage.append(
             {
                 "document_id": entry["document_id"],
                 "status": status,
-                "method": method_by_kind[entry["kind"]],
+                "method": _METHOD_BY_KIND[entry["kind"]],
                 "notes": "test",
             }
         )
@@ -133,18 +134,40 @@ def test_source_coverage_requires_every_document(tmp_path: Path) -> None:
 def test_unreadable_document_must_be_reported(tmp_path: Path) -> None:
     project = _project(tmp_path)
     payload = json.loads(ingest_project_documents(project).read_text(encoding="utf-8"))
-    coverage = []
-    for entry in payload["entries"]:
-        coverage.append(
-            {
-                "document_id": entry["document_id"],
-                "status": "UNREADABLE",
-                "method": "raw_file",
-                "notes": "illisible",
-            }
-        )
+    coverage = [
+        {
+            "document_id": entry["document_id"],
+            "status": "UNREADABLE",
+            "method": _METHOD_BY_KIND[entry["kind"]],
+            "notes": "illisible",
+        }
+        for entry in payload["entries"]
+    ]
+
     with pytest.raises(ValueError, match="missing_information"):
         validate_source_coverage(project, coverage, [])
+
+
+def test_source_coverage_rejects_method_incompatible_with_document_kind(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    payload = json.loads(ingest_project_documents(project).read_text(encoding="utf-8"))
+    pdf = next(entry for entry in payload["entries"] if entry["kind"] == "pdf")
+
+    with pytest.raises(ValueError, match="incompatible"):
+        validate_source_coverage(
+            project,
+            [
+                {
+                    "document_id": pdf["document_id"],
+                    "status": "READ",
+                    "method": "raw_file",
+                    "notes": "méthode volontairement incorrecte",
+                }
+            ],
+            [],
+        )
 
 
 def test_stale_ingestion_index_is_rejected(tmp_path: Path) -> None:
