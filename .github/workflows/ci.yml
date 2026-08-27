@@ -36,6 +36,8 @@ jobs:
         run: python scripts/35_validate_v7_parity.py
       - name: V7 full parity superset
         run: python scripts/39_validate_v7_superset.py
+      - name: Document ingestion and exchange gate
+        run: python scripts/44_validate_document_flow.py
       - name: Release contracts
         run: python scripts/24_validate_release.py
       - name: Ruff
@@ -69,6 +71,7 @@ jobs:
           python scripts/22_validate_configs.py
           python scripts/35_validate_v7_parity.py
           python scripts/39_validate_v7_superset.py
+          python scripts/44_validate_document_flow.py
       - name: Tests
         run: pytest -q
 

@@ -1,0 +1,94 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+enabled: true
+local_first: true
+source_root: intake
+artifact_root: context/ingestion
+index_path: context/ingestion/index.json
+summary_path: context/ingestion/README.md
+originals_immutable: true
+source_repository_is_not_replaced_by_extraction: true
+
+analysis_gate:
+  require_index_before_analysis: true
+  require_complete_source_coverage: true
+  unreadable_document_must_be_reported_as_missing_information: true
+  stale_index_blocks_analysis: true
+
+formats:
+  pdf:
+    extensions: [.pdf]
+    method: openclaw_pdf_tool
+    tool: pdf
+    supports_scanned_pages_via_vision_fallback: true
+    max_bytes_mb: 50
+    max_pages_per_tool_call: 20
+    chunk_large_documents: true
+  image:
+    extensions: [.png, .jpg, .jpeg, .webp, .bmp, .gif, .tif, .tiff]
+    method: openclaw_view_image
+    tool: view_image
+    max_images_per_tool_call: 20
+  office_text:
+    extensions: [.docx]
+    method: local_zip_xml_extract
+  office_slides:
+    extensions: [.pptx]
+    method: local_zip_xml_extract
+  office_sheet:
+    extensions: [.xlsx]
+    method: local_zip_xml_extract
+  text:
+    extensions:
+      - .txt
+      - .md
+      - .rst
+      - .csv
+      - .tsv
+      - .json
+      - .jsonl
+      - .yaml
+      - .yml
+      - .xml
+      - .toml
+      - .ini
+      - .cfg
+      - .conf
+      - .env.example
+      - .py
+      - .ps1
+      - .sh
+      - .bash
+      - .zsh
+      - .tf
+      - .tfvars
+      - .hcl
+      - .dockerfile
+      - .js
+      - .ts
+      - .tsx
+      - .jsx
+      - .java
+      - .go
+      - .rs
+      - .cs
+      - .sql
+    method: local_text_extract
+  unknown:
+    method: inventory_only
+
+extraction:
+  max_text_characters_per_file: 2000000
+  preserve_line_order: true
+  record_truncation: true
+  never_execute_input: true
+  never_extract_archives_in_place: true
+
+coverage_statuses: [READ, PARTIAL, UNREADABLE]
+coverage_methods: [local_text_extract, local_zip_xml_extract, pdf, view_image, raw_file]
+
+security:
+  cloud_for_document_ingestion: false
+  no_prompt_or_document_content_in_telemetry: true
+  preserve_original_sha256: true
+  workspace_only_paths: true

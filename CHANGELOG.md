@@ -23,7 +23,15 @@ Keep a Changelog et le versionnage suit SemVer.
 - machine d'états de publication des projets GitHub/GitLab avec preuves locales/distantes et gates humains ;
 - télémétrie opérationnelle locale append-only sans prompts, réponses, secrets ni documents privés ;
 - writer d'architecture borné à `context/architecture/` et `diagrams/` ;
-- validateur `35_validate_v7_parity.py` et documentation de filiation V7.
+- validateur `35_validate_v7_parity.py` et documentation de filiation V7 ;
+- manifeste projet strict, criticité/classification actives, Task Contract enrichi et migrations transactionnelles ;
+- validateur canonique `39_validate_v7_superset.py` et matrice V7 `PRESERVED/IMPROVED/REPLACED` ;
+- **Document Ingestion local-first** : index SHA-256/MIME, extraction déterministe texte/DOCX/PPTX/XLSX, PDF via l'outil OpenClaw `pdf` et images via `view_image` ;
+- `source_coverage[]` obligatoire pour démontrer la lecture de chaque document déclaré, avec statuts `READ`, `PARTIAL` ou `UNREADABLE` ;
+- **Artifact Exchange** versionné entre tâches : self-history par tentative, propagation des sorties `PASS` aux dépendants directs/transitifs, provenance et SHA-256 ;
+- resynchronisation ciblée des workspaces agents après chaque tentative afin que les consommateurs voient automatiquement les sorties amont ;
+- CLI `42_project_ingest.py` et `43_project_exchange.py` pour reconstruire/valider l'ingestion et auditer les échanges ;
+- validateur anti-régression `44_validate_document_flow.py`, exécuté par CI et Release.
 
 ### Changed
 
@@ -33,7 +41,12 @@ Keep a Changelog et le versionnage suit SemVer.
 - un `FAIL` de validation/review remet réellement les tâches concernées en état exécutable ;
 - l'Ingénieur sécurité redevient explicitement read-only pour les modifications de sources ;
 - l'Architecte produit ADR et schémas via un writer spécialisé plutôt que via des droits génériques ;
-- la CI et le workflow Release exécutent le validateur de parité V7.
+- la CI et le workflow Release exécutent les validateurs de parité V7 ;
+- les huit agents disposent désormais des outils locaux `pdf` et `view_image` tout en conservant leurs restrictions d'écriture ;
+- le patch OpenClaw configure explicitement `imageModel`, `pdfModel`, `pdfMaxBytesMb` et `pdfMaxPages` sur les modèles locaux ;
+- l'analyse projet vérifie l'index d'ingestion et refuse une couverture documentaire incomplète ;
+- les phases de validation, revue, packaging et completion refusent de progresser lorsque l'Artifact Exchange attendu est absent ou altéré ;
+- les prompts contractuels des huit rôles distinguent désormais originaux, représentations dérivées et artefacts échangés en lecture seule.
 
 ### Security
 
@@ -41,6 +54,9 @@ Keep a Changelog et le versionnage suit SemVer.
 - les symlinks sont refusés dans l'Intake et ne sont jamais suivis ;
 - les secrets potentiels bloquent l'ingestion avant matérialisation du projet ;
 - l'Intake et son archive canonique deviennent immuables après création ;
+- les représentations documentaires locales ne remplacent jamais les originaux comme source de vérité ;
+- les bundles d'échange sont hashés, versionnés et ne peuvent pas être modifiés silencieusement par les consommateurs ;
+- l'ingestion documentaire n'active aucun service cloud ;
 - la télémétrie refuse les contenus privés et les métriques négatives/fabriquées ;
 - les publications distantes restent soumises à approbation humaine et preuves observées.
 

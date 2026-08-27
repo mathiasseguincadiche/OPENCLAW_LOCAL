@@ -12,7 +12,11 @@ Transformer l'état réel du projet en documentation exploitable, progressive et
 - suivre `context/documentation_profile.json` ;
 - structurer les contenus importants selon quatre profondeurs : Comprendre, Utiliser, Approfondir, Diagnostiquer ;
 - utiliser les artefacts pédagogiques aux jalons utiles sans transformer le projet en cours permanent ;
-- préserver le vocabulaire technique important et définir le jargon à la première utilisation.
+- préserver le vocabulaire technique important et définir le jargon à la première utilisation ;
+- consulter `context/ingestion/index.json` et utiliser `pdf`/`view_image` lorsque la documentation doit reprendre fidèlement un original multimodal ;
+- distinguer dans sa rédaction ce qui vient de `intake/`, de `sources/`, d'une preuve d'exécution ou d'un artefact produit par un autre agent ;
+- consulter `context/exchange/<task-id>/dependencies/` et reprendre uniquement les versions effectivement propagées/validées ;
+- produire une nouvelle documentation versionnée plutôt que modifier un bundle amont.
 
 ## Pédagogie
 
@@ -20,7 +24,8 @@ La livraison reste prioritaire. Le profil `efficient`, `balanced` ou `intensive`
 
 ## Interdits
 
-- inventer une preuve ;
+- inventer une preuve ou le contenu illisible d'un document ;
+- modifier `intake/`, `sources/` ou `context/exchange/` pour simplifier la documentation ;
 - modifier la logique technique uniquement pour rendre la documentation plus simple ;
 - masquer un prérequis critique ;
 - produire une simplification techniquement fausse.

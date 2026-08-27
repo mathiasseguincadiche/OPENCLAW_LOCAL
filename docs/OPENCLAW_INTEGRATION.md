@@ -2,7 +2,7 @@
 
 ## Objectif
 
-`OPENCLAW_LOCAL` matérialise huit rôles versionnés dans OpenClaw. La configuration générée privilégie les modèles locaux, active les outils Web du parcours nominal et n'incorpore aucun fallback cloud silencieux ni secret.
+`OPENCLAW_LOCAL` matérialise huit rôles versionnés dans OpenClaw. La configuration générée privilégie les modèles locaux, active les outils Web et documentaires du parcours nominal et n'incorpore aucun fallback cloud silencieux ni secret.
 
 ## Sources de vérité
 
@@ -11,6 +11,8 @@
 - `config/v1/tool_policy.yaml` : posture outils par rôle ;
 - `config/v1/web_policy.yaml` : recherche/fetch Web local-first ;
 - `config/v1/project_policy.yaml` : Project Intake et snapshots ;
+- `config/v1/document_ingestion_policy.yaml` : PDF/images/Office/texte et couverture documentaire ;
+- `config/v1/artifact_exchange_policy.yaml` : propagation versionnée des productions entre tâches ;
 - `config/v1/budget_policy.yaml` : garde-fous FinOps ;
 - `agents/*` : contrat, identité et posture de chaque agent ;
 - `src/clawlocal/openclaw_config.py` : rendu du patch OpenClaw ;
@@ -37,7 +39,11 @@ Le patch configure notamment :
 - modèles Ollama lus depuis `model_catalog.yaml` ;
 - contexte conservateur de 16K avant qualification ;
 - métadonnées `text` / `image` pour les modèles concernés ;
+- `imageModel` local Qwen avec fallback local Gemma ;
+- `pdfModel` local Qwen avec fallback local Gemma ;
+- limites PDF explicites `pdfMaxBytesMb` et `pdfMaxPages` ;
 - huit entrées `agents.entries` avec workspaces séparés ;
+- outils `pdf` et `view_image` autorisés pour les huit rôles sans élargir leurs droits d'écriture ;
 - fallbacks persistants uniquement entre modèles locaux ;
 - `tools.fs.workspaceOnly=true` ;
 - `tools.exec.mode=ask` ;
@@ -78,7 +84,49 @@ Pour un projet, `scripts/31_sync_project_context.py` crée en plus un snapshot p
 <OPENCLAW_LOCAL_ROOT>\workspaces\<agent-id>\projects\<project-id>
 ```
 
-Voir `docs/PROJECT_INTAKE.md`.
+Le snapshot contient `intake/`, `sources/` et `context/`. `context/ingestion/` fournit les représentations documentaires locales et `context/exchange/` transporte les sorties versionnées des tâches amont. Les workspaces restent jetables : le projet central demeure la source de vérité et l'orchestrateur resynchronise les agents concernés après chaque tentative.
+
+Voir `docs/PROJECT_INTAKE.md` et `docs/DOCUMENT_INGESTION_AND_EXCHANGE.md`.
+
+## Documents multimodaux
+
+Lors de la création d'un projet, `scripts/28_create_project.py` construit `context/ingestion/index.json` :
+
+```text
+intake/original.pdf
+        ↓
+SHA-256 + MIME + document_id
+        ↓
+context/ingestion/<document-id>/
+        ├── metadata.json
+        └── tool.md / extracted.md
+```
+
+- PDF : l'agent utilise `pdf`; les documents longs sont parcourus par tranches et le chemin local peut exploiter le fallback vision pour les pages scannées/pauvres en texte ;
+- images : l'agent utilise `view_image` ;
+- DOCX/PPTX/XLSX : extraction locale déterministe des parties XML utiles ;
+- texte/code : normalisation locale ;
+- format inconnu : inventaire puis déclaration explicite `UNREADABLE` si aucun outil compatible n'est disponible.
+
+L'analyse du Chef doit rendre `source_coverage[]` avec une entrée par document. Un index absent/périmé ou une couverture incomplète bloque l'analyse. Les originaux sous `intake/` ne sont jamais modifiés par cette couche.
+
+## Artifact Exchange
+
+Lorsqu'une tâche termine une tentative, ses sorties collectées sont conservées dans l'historique central et publiées dans :
+
+```text
+context/exchange/<task-id>/self/run-001/
+```
+
+Si la tentative est `PASS`, elles sont également propagées aux tâches dépendantes :
+
+```text
+context/exchange/<consumer>/dependencies/<producer>/run-001/
+```
+
+Chaque bundle contient un `manifest.json`, les SHA-256 individuels et un digest agrégé. Les consommateurs lisent ces bundles mais ne les modifient jamais en place. Une correction crée `run-002`, `run-003`, etc. Les agents impactés sont resynchronisés automatiquement depuis le projet central.
+
+Les transitions vers validation/revue/packaging/completion sont fail-closed si l'échange attendu est absent ou corrompu.
 
 ## Routage runtime
 
@@ -144,7 +192,7 @@ Le routeur refuse une escalade si :
 - une précondition n'est pas démontrée ;
 - une approbation humaine requise manque.
 
-`web_freshness_only` est un motif explicitement interdit.
+`web_freshness_only` est un motif explicitement interdit. La Document Ingestion elle-même n'est jamais un motif d'escalade cloud automatique.
 
 ## SERA et autres backends
 
@@ -168,6 +216,8 @@ Le test vérifie :
 - une erreur d'outil contrôlée suivie d'une réparation ;
 - trois exécutions locales stables ;
 - absence de dépendance cloud sur le parcours nominal.
+
+Les contrats CI vérifient en plus le câblage `pdf`/`view_image`, `imageModel`/`pdfModel`, la couverture documentaire et l'Artifact Exchange. Leur qualité sémantique réelle sur PDF/images doit toutefois être qualifiée sur la workstation avec les vrais modèles locaux : GitHub CI ne possède ni l'Arc B580 ni les modèles Ollama de la machine.
 
 Les preuves sont écrites sous `<OPENCLAW_LOCAL_ROOT>\proofs\` et restent hors Git.
 

@@ -4,6 +4,13 @@ from pathlib import Path
 from typing import Any
 
 from clawlocal import project_orchestrator as base
+from clawlocal.project_artifact_exchange import (
+    affected_agents_after_publish,
+    publish_task_outputs,
+    validate_exchange_completeness,
+    validate_exchange_for_task,
+)
+from clawlocal.project_context import sync_project_context
 from clawlocal.project_contracts import normalize_plan_payload, validate_project_manifest
 from clawlocal.project_governance import (
     append_decision,
@@ -12,15 +19,16 @@ from clawlocal.project_governance import (
     record_criticality_gate,
     required_criticality_gates,
 )
+from clawlocal.project_ingestion import (
+    ingest_project_documents,
+    validate_ingestion_index,
+    validate_source_coverage,
+)
 from clawlocal.project_integrity import snapshot_integrity
 
-all_tasks_finished = base.all_tasks_finished
-build_phase_prompt = base.build_phase_prompt
 create_assignments = base.create_assignments
 open_blocking_clarifications = base.open_blocking_clarifications
-pending_tasks = base.pending_tasks
 project_path = base.project_path
-record_task_result = base.record_task_result
 resolve_clarification = base.resolve_clarification
 store_clarifications_from_analysis = base.store_clarifications_from_analysis
 store_review_report = base.store_review_report
@@ -35,7 +43,59 @@ def current_status(project: Path) -> str:
     return str(load_project_manifest(project)["status"])
 
 
+def build_phase_prompt(project_id: str, phase: str, *, task_id: str | None = None) -> str:
+    prompt = base.build_phase_prompt(project_id, phase, task_id=task_id)
+    if phase == "analyze":
+        return prompt + (
+            " Lis aussi context/ingestion/index.json avant de conclure. Pour chaque document "
+            "indexé, utilise derived_path quand status=READY_TEXT/PARTIAL_TEXT; utilise l'outil "
+            "pdf sur source_path pour un PDF et view_image pour une image. Un PDF long doit être "
+            "parcouru par tranches jusqu'à couvrir le document utile; le fallback PDF local peut "
+            "rendre les pages scannées en images. Ajoute source_coverage[] avec exactement une "
+            "entrée par document: {document_id,status,method,notes}; status vaut READ, PARTIAL ou "
+            "UNREADABLE, et method vaut local_text_extract, local_zip_xml_extract, pdf, view_image "
+            "ou raw_file. Tout UNREADABLE doit aussi être expliqué dans missing_information[]."
+        )
+    if phase == "plan":
+        return prompt + (
+            " Utilise context/ingestion/index.json et source_coverage de project_analysis.json. "
+            "Une source PARTIAL/UNREADABLE ne peut pas être silencieusement considérée comme lue."
+        )
+    if phase == "execute" and task_id is not None:
+        return prompt + (
+            f" Consulte aussi context/exchange/{task_id}/ si ce dossier existe: dependencies/ "
+            "contient les sorties validées des tâches amont et self/ contient les tentatives "
+            "précédentes de cette tâche. Ces artefacts sont des entrées versionnées en lecture "
+            "seule; ne les modifie pas en place. Produis une nouvelle sortie dans les répertoires "
+            "de la tâche."
+        )
+    if phase in {"validate", "review"}:
+        return prompt + (
+            " Vérifie aussi context/ingestion/index.json et source_coverage dans "
+            "project_analysis.json, ainsi que les manifests sous context/exchange/. Un document "
+            "déclaré non couvert ou un échange d'artefact incohérent est un finding bloquant, pas "
+            "une hypothèse à combler."
+        )
+    return prompt
+
+
 def store_analysis(project: Path, payload: dict[str, Any]) -> Path:
+    ingestion_index = project / "context" / "ingestion" / "index.json"
+    if not ingestion_index.is_file():
+        ingest_project_documents(project)
+    validate_ingestion_index(project)
+    coverage = payload.get("source_coverage", [])
+    missing_information = payload.get("missing_information", [])
+    if not isinstance(coverage, list):
+        raise ValueError("analyse: source_coverage doit être une liste")
+    if not isinstance(missing_information, list):
+        raise ValueError("analyse: missing_information doit être une liste")
+    payload = dict(payload)
+    payload["source_coverage"] = validate_source_coverage(
+        project,
+        coverage,
+        missing_information,
+    )
     path = base.store_analysis(project, payload)
     for value in payload.get("risks", []):
         text = str(value.get("description") if isinstance(value, dict) else value).strip()
@@ -55,6 +115,66 @@ def store_analysis(project: Path, payload: dict[str, Any]) -> Path:
 
 def store_plan(project: Path, payload: dict[str, Any]) -> Path:
     return base.store_plan(project, normalize_plan_payload(payload))
+
+
+def pending_tasks(project: Path) -> list[dict[str, Any]]:
+    ready = base.pending_tasks(project)
+    for task in ready:
+        task_id = str(task.get("task_id", ""))
+        failures = validate_exchange_for_task(project, task_id)
+        if failures:
+            raise ValueError(
+                f"artifact exchange invalide pour {task_id}: " + "; ".join(failures)
+            )
+    return ready
+
+
+def all_tasks_finished(project: Path) -> bool:
+    if not base.all_tasks_finished(project):
+        return False
+    return not validate_exchange_completeness(project)
+
+
+def record_task_result(
+    project: Path,
+    task_id: str,
+    *,
+    agent: str,
+    success: bool,
+    returncode: int,
+    evidence_file: str,
+    collected_outputs: list[str],
+) -> dict[str, Any]:
+    assignment = base.record_task_result(
+        project,
+        task_id,
+        agent=agent,
+        success=success,
+        returncode=returncode,
+        evidence_file=evidence_file,
+        collected_outputs=collected_outputs,
+    )
+    attempt = int(assignment["attempts"])
+    status = str(assignment["status"])
+    publish_task_outputs(
+        project,
+        producer_task_id=task_id,
+        agent=agent,
+        attempt=attempt,
+        status=status,
+        collected_outputs=collected_outputs,
+    )
+
+    platform_root = project.resolve().parents[1]
+    if (platform_root / "workspaces").is_dir():
+        for affected_agent in affected_agents_after_publish(project, task_id, status=status):
+            sync_project_context(
+                platform_root,
+                project.name,
+                affected_agent,
+                include_outputs=False,
+            )
+    return assignment
 
 
 def _record_automatic_gate_evidence(
@@ -99,6 +219,13 @@ def transition_project(
     human_approved: bool = False,
 ) -> dict[str, Any]:
     validate_project_manifest(base.load_project_manifest(project))
+    if target in {"VALIDATING", "REVIEW", "PACKAGING", "COMPLETE"}:
+        failures = validate_exchange_completeness(project)
+        if failures:
+            raise PermissionError(
+                f"transition vers {target} bloquée; artifact exchange incomplet: "
+                + "; ".join(failures)
+            )
     base._assert_transition_gates(project, target, human_approved=human_approved)
     _record_automatic_gate_evidence(
         project,
@@ -121,6 +248,10 @@ def transition_project(
 
 
 def package_project(project: Path) -> tuple[Path, Path]:
+    failures = validate_exchange_completeness(project)
+    if failures:
+        details = "; ".join(failures)
+        raise PermissionError(f"packaging bloqué; artifact exchange incomplet: {details}")
     snapshot_integrity(project, "PRE_PACKAGE")
     archive, manifest = base.package_project(project)
     snapshot_integrity(

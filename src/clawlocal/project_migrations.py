@@ -12,6 +12,7 @@ from clawlocal.project_contracts import (
     validate_project_manifest,
 )
 from clawlocal.project_governance import initialize_governance
+from clawlocal.project_ingestion import ingest_project_documents, validate_ingestion_index
 from clawlocal.project_learning import initialize_learning
 
 _BACKUP_PATHS = (
@@ -183,3 +184,8 @@ def apply_project_migrations(project: Path) -> list[str]:
 def ensure_current_project_schema(project: Path) -> None:
     apply_project_migrations(project)
     validate_project_manifest(_load(project / "project.json"))
+    ingestion_index = project / "context" / "ingestion" / "index.json"
+    if ingestion_index.is_file():
+        validate_ingestion_index(project)
+    else:
+        ingest_project_documents(project)
