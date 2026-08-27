@@ -11,24 +11,24 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Benchmark = Join-Path $RepoRoot 'scripts\benchmark_local.py'
 
-$Args = @($Benchmark)
+$BenchmarkArgs = @($Benchmark)
 if ($Quick) {
-    $Args += @('--context', '8192')
+    $BenchmarkArgs += @('--context', '8192')
 }
 if ($IncludeDeep) {
-    $Args += '--include-deep'
+    $BenchmarkArgs += '--include-deep'
 }
 if ($IncludeSpecialist) {
-    $Args += '--include-specialist'
+    $BenchmarkArgs += '--include-specialist'
 }
 
 if ($DryRun) {
-    Write-Host "[DRY-RUN] python $($Args -join ' ')"
+    Write-Host "[DRY-RUN] python $($BenchmarkArgs -join ' ')"
     Write-Host '[DRY-RUN] La suite est lue depuis qualification_policy.yaml.'
     exit 0
 }
 
-& python @Args
+& python @BenchmarkArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Benchmark local en échec (code $LASTEXITCODE)."
 }
