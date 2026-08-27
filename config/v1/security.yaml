@@ -16,9 +16,27 @@ web:
 agents:
   least_privilege_tools: true
   producer_cannot_self_approve: true
+  security_reviewer_cannot_modify_sources: true
 models:
   small_local_model_is_security_boundary: false
   qualify_tool_calling_before_promotion: true
   prompt_injection_tests_required: true
 projects:
   unmanaged_workspace_overwrite_forbidden: true
+  intake_is_untrusted_data: true
+  intake_symlinks_forbidden: true
+  intake_checksums_required: true
+  intake_read_only_after_ingestion: true
+  source_repository_is_ground_truth: true
+publication:
+  direct_push_to_main_forbidden: true
+  human_approval_for_remote_creation: true
+  human_approval_for_merge: true
+  human_approval_for_release: true
+  clean_clone_required: true
+telemetry:
+  commit_runtime_events: false
+  record_prompt_content: false
+  record_response_content: false
+  record_secrets: false
+  fabricated_hardware_metrics_forbidden: true
