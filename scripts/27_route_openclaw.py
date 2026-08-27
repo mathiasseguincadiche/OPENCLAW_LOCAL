@@ -41,8 +41,25 @@ def parse_args() -> argparse.Namespace:
         help="Demande une escalade cloud explicite.",
     )
     parser.add_argument("--reason", help="Motif versionné dans escalation_policy.yaml.")
-    parser.add_argument("--specialist-available", action="store_true")
-    parser.add_argument("--deep-local-available", action="store_true")
+    parser.add_argument(
+        "--specialist-available",
+        action="store_true",
+        help="Force le tier spécialiste local pour un test/diagnostic explicite.",
+    )
+    parser.add_argument(
+        "--deep-local-available",
+        action="store_true",
+        help="Force le tier deep local pour un test/diagnostic explicite.",
+    )
+    parser.add_argument(
+        "--max-local-available",
+        action="store_true",
+        help="Force le tier max local pour un test/diagnostic explicite.",
+    )
+    parser.add_argument(
+        "--producer-model-alias",
+        help="Alias du modèle producteur pour renforcer l'indépendance de l'auditeur.",
+    )
     parser.add_argument("--local-web-attempted", action="store_true")
     parser.add_argument("--source-conflict-observed", action="store_true")
     parser.add_argument("--failure-evidence", action="store_true")
@@ -98,6 +115,8 @@ def main() -> int:
         reason=args.reason,
         specialist_available=args.specialist_available,
         deep_local_available=args.deep_local_available,
+        max_local_available=args.max_local_available,
+        producer_model_alias=args.producer_model_alias,
         budget_ok=budget_ok,
         local_web_attempted=args.local_web_attempted,
         source_conflict_observed=args.source_conflict_observed,
