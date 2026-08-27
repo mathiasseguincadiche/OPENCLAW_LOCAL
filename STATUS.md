@@ -2,36 +2,15 @@
 
 ## Version courante
 
-**0.2.0 — Local-First Project Workflow + Project Orchestrator + V7 Parity Plus**
+**0.2.0 — Local-First Project Workflow + Project Orchestrator + V7 Superset + Document Flow + flotte IA août 2026**
 
-La V0.2 ne se limite plus au Project Intake. Le dépôt contient maintenant une machine d'états fail-closed capable de transformer un projet fourni en analyse, clarifications, plan, tâches assignées, exécution, preuves, validation, revue et package final.
+`OPENCLAW_LOCAL` est le successeur local-first de `openclaw_openrouter` : huit rôles spécialisés, contrats, projets, preuves, séparation producteur/auditeur, pédagogie, publication gouvernée et garde-fous V7 sont préservés ou renforcés. Le parcours LLM nominal reste local ; le cloud est une escalade explicite, budgétée et contrôlée.
 
-La filiation avec `openclaw_openrouter` est explicitement conservée : les huit rôles, les projets, les preuves, la séparation producteur/auditeur, la pédagogie, la publication gouvernée et les garde-fous d'ingestion sont présents, mais le chemin IA nominal est désormais local-first.
+La CI valide l'architecture logicielle et les contrats. Elle **ne qualifie pas** les performances des modèles, le backend Intel Arc ni la qualité sémantique multimodale sur la workstation réelle.
 
-Le code, les contrats et la CI décrivent l'état attendu ; les performances Intel Arc B580 et la qualité réelle des modèles restent des preuves à produire sur la workstation cible.
+## Parcours projet implémenté
 
-## Implémenté
-
-### Project Intake renforcé
-
-- `project.json` et arborescence projet gérée ;
-- consignes, sources, contexte, travail, livrables, preuves et diagrammes ;
-- archive canonique indépendante sous `state/intake/<project>/<timestamp>/` ;
-- scan de secrets avant copie ;
-- refus des symlinks dans l'Intake ;
-- SHA-256 de chaque fichier ingéré ;
-- inventaire MIME et symlink ;
-- `manifest.json` et `INGESTION_REPORT.md` ;
-- copie projet + archive canonique rendues en lecture seule ;
-- ACL Windows RX obligatoire pour l'utilisateur courant ;
-- documents entrants traités comme données non fiables ;
-- synchronisation contrôlée vers les huit agents ;
-- snapshots protégés contre l'écrasement d'un répertoire non géré ;
-- dépôt/source réelle conservé comme vérité.
-
-### Project Orchestrator
-
-Machine d'états :
+Machine d'états principale :
 
 ```text
 INTAKE_READY
@@ -46,51 +25,51 @@ INTAKE_READY
   -> COMPLETE
 ```
 
-Implémenté :
+Le système dispose de :
 
-- analyse structurée par le Chef des opérations ;
-- génération de clarifications explicites ;
-- arrêt humain sur clarification bloquante ;
-- plan de tâches validé : rôles connus, IDs uniques, dépendances existantes, absence de cycle ;
-- packets de tâches versionnables dans `context/tasks/` ;
-- assignation aux huit rôles OpenClaw ;
-- exécution locale séquentielle par défaut ;
-- maximum de tentatives contrôlé par contrat ;
-- collecte des sorties par tâche/agent/tentative sans écrasement ;
-- snapshots de revue incluant les sorties centrales ;
-- validation indépendante `PASS/FAIL` ;
-- review finale repartant des consignes originales ;
-- remediation avec réouverture ciblée + dépendants transitifs ;
-- historique des tentatives conservé ;
-- packaging ZIP avec SHA-256 ;
-- `package_manifest.json` et `final_report.json` ;
-- `COMPLETE` impossible sans approbation humaine ;
-- cloud automatique explicitement interdit dans l'orchestrateur.
+- Project Intake durci avec archive canonique, scan de secrets, refus symlinks, SHA-256, MIME et ACL/lecture seule ;
+- manifeste projet strict avec classification et criticité ;
+- analyse structurée, clarifications humaines, plan et Task Contracts enrichis ;
+- exécution locale versionnée avec tentatives bornées ;
+- remediation ciblée après échec de validation/review ;
+- checksums et preuves d'intégrité par phase ;
+- package final avec SHA-256 et approbation humaine obligatoire.
 
-### Pédagogie et compréhension
+## Document Ingestion et Artifact Exchange
+
+Les fichiers utilisateur peuvent être indexés et traités sans modifier les originaux :
+
+- texte/code/configuration : représentation locale ;
+- DOCX/PPTX/XLSX : extraction locale déterministe ;
+- PDF : outil OpenClaw `pdf`, avec parcours borné et fallback vision lorsque nécessaire ;
+- images : `view_image` ;
+- index SHA-256/MIME/document_id et provenance ;
+- `source_coverage[]` obligatoire pour chaque document, avec `READ`, `PARTIAL` ou `UNREADABLE` ;
+- une méthode de lecture doit être compatible avec le type réel du document ;
+- un document illisible ne peut pas être présenté comme compris.
+
+Les sorties de tâches sont échangées via des bundles versionnés :
+
+```text
+context/exchange/<task-id>/
+├── self/run-NNN/
+└── dependencies/<producer>/run-NNN/
+```
+
+Les sorties `PASS` sont propagées aux dépendants ; les sorties `FAIL` restent dans l'historique mais ne deviennent jamais des entrées valides. Provenance, tentative et SHA-256 sont conservés, et les consommateurs ne modifient pas les bundles reçus.
+
+## Pédagogie et accessibilité
 
 - profils `efficient` 90/10, `balanced` 70/30 et `intensive` 60/40 ;
 - modes guided/assisted/autonomous/evaluation ;
-- priorité à la livraison et à la sécurité ;
-- `SKILLS_MATRIX.csv` ;
-- `LEARNING_JOURNAL.md` ;
-- `TEACH_BACK.md` ;
-- `RETENTION_PLAN.yaml` ;
-- changement de profil sans effacer l'historique pédagogique ;
-- spécialisation Ops/DevOps : Linux, Git, Bash/Python Ops, Terraform/OpenTofu, Ansible, CI/CD, conteneurs, Kubernetes/Helm, sécurité, observabilité et rollback.
+- `SKILLS_MATRIX.csv`, `LEARNING_JOURNAL.md`, `TEACH_BACK.md`, `RETENTION_PLAN.yaml` et Learning Contract ;
+- verdict pédagogique distinct du verdict technique ;
+- quatre profondeurs documentaires : Comprendre, Utiliser, Approfondir, Diagnostiquer ;
+- exactitude technique et sécurité prioritaires sur la simplification.
 
-### Accessibilité documentaire
+## Publication gouvernée
 
-- quatre profondeurs : Comprendre, Utiliser, Approfondir, Diagnostiquer ;
-- exactitude technique prioritaire ;
-- simplification fausse interdite ;
-- jargon explicité ;
-- sécurité jamais affaiblie pour simplifier ;
-- `context/documentation_profile.json` distribué aux agents.
-
-### Publication des projets utilisateur
-
-Machine d'états distincte du cycle d'orchestration :
+Machine de publication distincte :
 
 ```text
 LOCAL_IN_PROGRESS
@@ -105,117 +84,143 @@ LOCAL_IN_PROGRESS
 → PUBLISHED_AND_VERIFIED
 ```
 
-- checks locaux obligatoires avant publication ;
-- GitHub et GitLab supportés ;
-- CI distante, clone propre, audit indépendant et SHA publié comme preuves ;
-- gates humains pour création distante, PR/MR, release et verdict final ;
-- CLI `33_project_publication.py`.
+State gates et action gates protègent notamment création distante, visibilité, PR/MR, merge, release, branch protection, force-push et suppression. Les preuves distantes, clone propre et approbations humaines ne sont jamais supposés.
 
-### Permissions et séparation des rôles
+## Permissions et séparation des responsabilités
 
-- Ingénieur sécurité read-only pour les modifications directes de sources ;
-- corrections sécurité renvoyées au producteur puis ré-auditées ;
-- Architecte sans droits génériques `write/edit/apply_patch/exec/process` ;
-- writer `architecture_scoped` limité à `context/architecture/` et `diagrams/` ;
-- Auditeur qualité toujours interdit de correction silencieuse.
+- Chef et Expert Recherche : lecture/orchestration, pas de production silencieuse de code ;
+- Architecte : writer borné à `context/architecture/` et `diagrams/`, sans écriture générique ;
+- DevOps : modification/exécution dans son workspace selon politique ;
+- Sécurité : audit/read-only sur les sources auditées ;
+- Release/Forges : Git/PR/MR/release sous gates ;
+- Rédacteur : documentation versionnée, sans réécriture des sources de vérité ;
+- Auditeur : contrôle indépendant, sans correction silencieuse.
 
-### Télémétrie opérationnelle
+## Flotte IA locale — référence août 2026
 
-- stockage local append-only dans `evidence/telemetry/runs.jsonl` ;
-- agent, modèle, backend, route, durée ;
-- TTFT, tokens/s, tokens, VRAM/RAM lorsque réellement observés ;
-- tool calls, retries, LOCAL_DEEP, cloud escalation et coût connu ;
+### Modèles fast requis
+
+| Alias | Runtime | Rôle |
+|---|---|---|
+| `qwen-general` | `qwen3.5:9b` | généraliste rapide, orchestration courante, DevOps courant |
+| `gemma-review` | `gemma4:12b` | architecture, rédaction et revue rapide |
+
+### Candidats performance optionnels
+
+| Alias | Runtime | Tier | Usage cible |
+|---|---|---|---|
+| `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST | DevOps/software engineering agentique |
+| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP | architecture, rédaction et audit approfondis |
+| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX | raisonnement, orchestration, recherche et sécurité complexes |
+
+`sera-devops` / `sera-14b` est conservé comme candidat historique mais **hors routage actif** tant que son backend GGUF dédié n'est pas importé et qualifié.
+
+Les modèles optionnels restent `optional_candidate`. Ils ne deviennent automatiquement nominaux qu'après qualification réelle et exposition locale de leurs alias via `OPENCLAW_LOCAL_QUALIFIED_MODELS`. Sans qualification, le routeur revient au modèle fast requis et n'utilise jamais le cloud comme fallback silencieux.
+
+### Routage par rôle après qualification
+
+```text
+Chef opérations       -> Qwen3.8 27B max ; fallback Qwen3.5 9B
+Expert recherche      -> Qwen3.8 27B max + Web ; fallback Qwen3.5 9B
+Architecte solutions  -> Gemma 4 26B deep ; fallback Gemma 4 12B
+Ingénieur DevOps      -> Devstral Small 2 24B ; fallback Qwen3.5 9B
+Ingénieur sécurité    -> Qwen3.8 27B max ; fallback Qwen3.5 9B
+Release/Forges        -> Qwen3.5 9B nominal
+Rédacteur technique   -> Gemma 4 26B deep ; fallback Gemma 4 12B
+Auditeur qualité      -> Gemma 4 26B deep ; changement vers Qwen si famille producteur=Gemma
+```
+
+Cette table est une **politique de préférence**, pas une preuve de performance B580.
+
+## Qualification de la flotte
+
+La suite active reste `devops-v2`. Les modèles requis sont évalués pour le gate global ; les candidats optionnels peuvent être inclus séparément :
+
+```powershell
+.\scripts\windows\07_run_qualification.ps1 -IncludeSpecialist
+.\scripts\windows\07_run_qualification.ps1 -IncludeDeep
+.\scripts\windows\07_run_qualification.ps1 -IncludeMax
+```
+
+Chaque candidat optionnel reçoit désormais son propre rapport automatique. Son échec n'altère pas artificiellement le verdict des modèles fast requis et ne déclenche aucune promotion automatique.
+
+Toute promotion réelle exige encore les critères de `qualification_policy.yaml`, notamment E2E OpenClaw, tool-calling, réparation après erreur, stabilité sur trois runs, parcours Project Intake/Web, absence de dépendance cloud nominale et revue humaine.
+
+## Backends Intel Arc
+
+Candidats :
+
+- `ollama-vulkan` — nominal pré-qualification ;
+- `llama-cpp-sycl` — candidat ;
+- `llama-cpp-vulkan` — candidat.
+
+La sélection finale exige des mesures B580 réelles : TTFT, tokens/s, VRAM, RAM, stabilité, contexte et tool-calling. Aucun backend n'est déclaré vainqueur par la CI.
+
+## Télémétrie
+
+- stockage local append-only ;
+- modèle, agent, backend, route et durée ;
+- TTFT, tokens/s, tokens, VRAM/RAM seulement lorsqu'ils sont observés ;
+- tool calls, retries, transition local deep/max et escalade cloud ;
 - prompts, réponses, secrets et documents privés interdits ;
-- métriques inconnues jamais fabriquées ;
-- CLI `34_record_telemetry.py` et synthèse projet.
+- métriques inconnues jamais fabriquées.
 
-### Modèles et routage
+## Gates anti-régression
 
-- `qwen-general` -> `qwen3.5:9b` ;
-- `gemma-review` -> `gemma4:12b` ;
-- `qwen-deep` -> `qwen3.5:27b` comme candidat LOCAL_DEEP ;
-- `sera-devops` comme candidat spécialisé ;
-- cloud désactivé par défaut et escalade contrôlée par `clawlocal`.
+La CI et Release couvrent notamment :
 
-### Recherche Web Local-First
+```text
+21_validate_repository.py
+22_validate_configs.py
+35_validate_v7_parity.py
+39_validate_v7_superset.py
+44_validate_document_flow.py
+45_validate_model_fleet.py
+24_validate_release.py
+Ruff
+mypy
+pytest + coverage >= 75 %
+Python 3.12 / 3.13
+PowerShell 7
+PSScriptAnalyzer
+Pester
+CodeQL
+Dependency Review
+```
 
-- `web_search` et `web_fetch` sur le parcours nominal ;
-- navigateur autorisé par défaut uniquement à `expert-recherche` ;
-- fait actuel -> recherche de sources récentes -> raisonnement local ;
-- `web_freshness_only` interdit comme justification cloud.
-
-### Backends Intel Arc
-
-- `ollama-vulkan` comme backend nominal ;
-- `llama-cpp-sycl` candidat ;
-- `llama-cpp-vulkan` candidat ;
-- comparaison requise sur B580 avant promotion ;
-- aucune promotion automatique depuis la CI.
-
-### FinOps
-
-- cloud désactivé par défaut ;
-- limites quotidiennes, mensuelles et par projet ;
-- réservation conservatrice avant appel cloud ;
-- ledger JSONL hors Git.
-
-### Benchmark et qualification
-
-- suite active `devops-v2` ;
-- runner chargé dynamiquement depuis `qualification_policy.yaml` ;
-- gate automatique puis qualification manuelle obligatoire ;
-- E2E OpenClaw réel requis avant promotion.
-
-### Diagrammes
-
-- politique diagram-as-code ;
-- D2, PlantUML et Graphviz ;
-- rendu local vers SVG/PNG ;
-- renderer distant interdit par défaut.
-
-### Qualité, sécurité et gouvernance
-
-- validateurs dépôt/configuration/version ;
-- validateur dédié `35_validate_v7_parity.py` ;
-- validations dédiées à la machine d'états du Project Orchestrator ;
-- Python 3.12/3.13, Ruff, mypy, pytest + coverage ;
-- PowerShell 7, PSScriptAnalyzer et Pester ;
-- CodeQL et Dependency Review ;
-- secrets hors Git, provider local loopback, exec `ask`, elevated désactivé.
+Le gate flotte août 2026 vérifie les IDs runtime, les tiers, les rôles, l'absence d'auto-promotion des modèles lourds, l'indépendance de l'Auditeur et le câblage de qualification.
 
 ## À exécuter sur matériel réel
 
 Les points suivants **ne peuvent pas être validés par GitHub Actions** :
 
-1. installation complète sur Windows 11 Pro de la workstation cible ;
-2. ACL d'Intake dans l'environnement Windows final ;
-3. E2E OpenClaw réel avec les modèles chargés ;
-4. parcours Project Orchestrator sur un vrai projet multi-documents ;
-5. qualité de l'analyse et du plan produits par les modèles locaux ;
-6. parcours pédagogique réel et qualité du teach-back ;
-7. publication d'un vrai projet jusqu'au clone propre et audit distant ;
-8. télémétrie réelle en usage projet ;
-9. benchmark Intel Arc B580 pour Ollama/Vulkan ;
-10. comparaison Ollama/Vulkan vs llama.cpp/SYCL vs llama.cpp/Vulkan ;
-11. qualification 8K/16K et éventuellement 32K ;
-12. mesure TTFT, tokens/s, VRAM, RAM, stabilité et tool-calling ;
-13. validation de la multimodalité avant usage de production ;
-14. qualification séparée de SERA 14B ;
-15. validation du coût réel des rares escalades OpenRouter.
+1. installation complète Windows 11 Pro sur la workstation cible ;
+2. ACL d'Intake dans l'environnement final ;
+3. E2E OpenClaw avec les modèles réellement chargés ;
+4. vrai projet multi-documents PDF/images/Office/code ;
+5. qualité sémantique de lecture de PDF scannés et images ;
+6. benchmark Qwen3.5 9B et Gemma 4 12B ;
+7. benchmark séparé Devstral Small 2 24B, Gemma 4 26B et Qwen3.8 27B ;
+8. comparaison Ollama/Vulkan vs llama.cpp/SYCL vs llama.cpp/Vulkan ;
+9. mesure TTFT, tokens/s, VRAM, RAM, stabilité, tool-calling et consommation avec offload ;
+10. qualification 8K/16K puis éventuelle montée 32K/64K selon preuves ;
+11. test d'indépendance réelle producteur/auditeur sur des tâches représentatives ;
+12. télémétrie réelle sur un projet complet ;
+13. publication réelle jusqu'au clone propre/audit distant ;
+14. validation du coût réel des rares escalades OpenRouter.
 
 ## Non prétendu
 
 - équivalence systématique d'un modèle local avec un modèle frontier cloud ;
-- débit garanti sur Intel Arc B580 avant benchmark réel ;
-- compréhension parfaite d'un projet flou avant E2E réel ;
-- capacité à résoudre automatiquement une consigne contradictoire ;
-- fiabilité du tool-calling avant E2E sur la machine cible ;
-- activation automatique d'un gros modèle LOCAL_DEEP ;
+- débit garanti sur Intel Arc B580 avant benchmark ;
+- résidence VRAM complète des modèles 24–27B sur 12 Go ;
+- contexte 256K/384K utilisable avec un bon débit sur cette workstation ;
+- compréhension parfaite des PDF/images avant E2E ;
+- auto-qualification ou auto-promotion d'un modèle lourd ;
 - escalade cloud automatique par le Project Orchestrator ;
-- auto-approbation d'un projet ;
-- publication distante sans preuve ;
-- résultats matériels inventés par la CI.
+- publication distante sans preuve et approbation ;
+- résultat matériel inventé par la CI.
 
 ## Critère pour V1.0.0
 
-La version `1.0.0` reste réservée à un parcours nominal réellement qualifié sur la workstation Windows 11 + Intel Arc B580, avec au moins un projet complet exécuté de `INTAKE_READY` jusqu'au package final, preuves reproductibles, télémétrie réelle, limites documentées et validation humaine.
+La version `1.0.0` reste réservée à un parcours nominal réellement qualifié sur la workstation Windows 11 + Intel Arc B580, avec au moins un projet complet exécuté de `INTAKE_READY` jusqu'au package final, preuves reproductibles, multimodalité réelle, télémétrie observée, limites documentées et validation humaine.
