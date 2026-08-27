@@ -19,7 +19,11 @@ from clawlocal.project_governance import (
     record_criticality_gate,
     required_criticality_gates,
 )
-from clawlocal.project_ingestion import validate_ingestion_index, validate_source_coverage
+from clawlocal.project_ingestion import (
+    ingest_project_documents,
+    validate_ingestion_index,
+    validate_source_coverage,
+)
 from clawlocal.project_integrity import snapshot_integrity
 
 create_assignments = base.create_assignments
@@ -74,8 +78,11 @@ def build_phase_prompt(project_id: str, phase: str, *, task_id: str | None = Non
 
 
 def store_analysis(project: Path, payload: dict[str, Any]) -> Path:
+    ingestion_index = project / "context" / "ingestion" / "index.json"
+    if not ingestion_index.is_file():
+        ingest_project_documents(project)
     validate_ingestion_index(project)
-    coverage = payload.get("source_coverage")
+    coverage = payload.get("source_coverage", [])
     missing_information = payload.get("missing_information", [])
     if not isinstance(coverage, list):
         raise ValueError("analyse: source_coverage doit être une liste")
