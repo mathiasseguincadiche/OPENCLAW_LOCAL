@@ -19,6 +19,32 @@ PROJECT_DIRS = (
 )
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"""(?im)^\s*(?:OPENROUTER_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|"""
+    r"""AWS_SECRET_ACCESS_KEY|GITHUB_TOKEN)\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{8,}"""
+)
+_BLOCKED_SECRET_NAMES = {
+    ".env",
+    ".env.local",
+    ".env.production",
+    "id_rsa",
+    "id_ed25519",
+}
+_BLOCKED_SECRET_SUFFIXES = {".key", ".pem", ".p12", ".pfx"}
+_TEXT_SUFFIXES = {
+    ".txt",
+    ".md",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".ps1",
+    ".sh",
+}
+_MAX_SECRET_SCAN_BYTES = 2 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -50,12 +76,46 @@ def _safe_destination(root: Path, project_id: str) -> Path:
     return destination
 
 
-def _copy_items(items: Iterable[Path], destination: Path) -> list[str]:
+def _iter_files(item: Path) -> Iterable[Path]:
+    if item.is_file():
+        yield item
+        return
+    if item.is_dir():
+        yield from (path for path in item.rglob("*") if path.is_file())
+
+
+def _assert_intake_has_no_obvious_secret(item: Path) -> None:
+    for path in _iter_files(item):
+        if (
+            path.name.casefold() in _BLOCKED_SECRET_NAMES
+            or path.suffix.casefold() in _BLOCKED_SECRET_SUFFIXES
+        ):
+            raise ValueError(f"secret potentiel interdit dans l'intake: {path.name}")
+        if path.suffix.casefold() not in _TEXT_SUFFIXES:
+            continue
+        try:
+            if path.stat().st_size > _MAX_SECRET_SCAN_BYTES:
+                continue
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if _SECRET_ASSIGNMENT_RE.search(text):
+            raise ValueError(f"secret potentiel interdit dans l'intake: {path.name}")
+
+
+def _copy_items(
+    items: Iterable[Path],
+    destination: Path,
+    *,
+    scan_secrets: bool = False,
+) -> list[str]:
     copied: list[str] = []
     for item in items:
         source = item.expanduser().resolve()
         if not source.exists():
             raise FileNotFoundError(source)
+        if scan_secrets:
+            _assert_intake_has_no_obvious_secret(source)
         target = destination / source.name
         if target.exists():
             raise FileExistsError(target)
@@ -82,11 +142,22 @@ def create_project(
         raise FileExistsError(destination)
 
     for name in PROJECT_DIRS:
-        (destination / name).mkdir(parents=True, exist_ok=False if name == PROJECT_DIRS[0] else True)
+        (destination / name).mkdir(
+            parents=True,
+            exist_ok=False if name == PROJECT_DIRS[0] else True,
+        )
 
-    copied_intake = _copy_items(intake_items, destination / "intake")
+    copied_intake = _copy_items(
+        intake_items,
+        destination / "intake",
+        scan_secrets=True,
+    )
     copied_sources = _copy_items(source_items, destination / "sources")
-    deliverables = [value.strip() for value in expected_deliverables if value.strip()]
+    deliverables = [
+        value.strip()
+        for value in expected_deliverables
+        if value.strip()
+    ]
 
     manifest = ProjectManifest(
         schema_version="1.0.0",

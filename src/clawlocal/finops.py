@@ -46,7 +46,11 @@ def _row_timestamp(row: dict[str, Any]) -> datetime:
     return datetime.fromisoformat(str(row["timestamp"]).replace("Z", "+00:00"))
 
 
-def current_spend_eur(path: Path, *, now: datetime | None = None) -> dict[str, float]:
+def current_spend_eur(
+    path: Path,
+    *,
+    now: datetime | None = None,
+) -> dict[str, float]:
     moment = now or datetime.now(UTC)
     daily = 0.0
     monthly = 0.0
@@ -57,10 +61,18 @@ def current_spend_eur(path: Path, *, now: datetime | None = None) -> dict[str, f
             monthly += cost
             if timestamp.date() == moment.date():
                 daily += cost
-    return {"daily": round(daily, 6), "monthly": round(monthly, 6)}
+    return {
+        "daily": round(daily, 6),
+        "monthly": round(monthly, 6),
+    }
 
 
-def project_spend_eur(path: Path, project_id: str, *, now: datetime | None = None) -> float:
+def project_spend_eur(
+    path: Path,
+    project_id: str,
+    *,
+    now: datetime | None = None,
+) -> float:
     moment = now or datetime.now(UTC)
     total = 0.0
     for row in _read_ledger(path):
@@ -72,9 +84,16 @@ def project_spend_eur(path: Path, project_id: str, *, now: datetime | None = Non
     return round(total, 6)
 
 
-def cloud_budget_allowed(ledger_path: Path | None = None, *, proposed_cost_eur: float = 0.0, project_id: str | None = None, now: datetime | None = None) -> tuple[bool, str]:
+def cloud_budget_allowed(
+    ledger_path: Path | None = None,
+    *,
+    proposed_cost_eur: float = 0.0,
+    project_id: str | None = None,
+    now: datetime | None = None,
+) -> tuple[bool, str]:
     if proposed_cost_eur < 0:
         raise ValueError("proposed_cost_eur doit être positif")
+
     policy = load_contract("budget_policy.yaml")
     path = ledger_path or default_ledger_path()
     spend = current_spend_eur(path, now=now)
@@ -82,24 +101,55 @@ def cloud_budget_allowed(ledger_path: Path | None = None, *, proposed_cost_eur: 
     monthly_limit = float(policy["limits"]["monthly_eur"])
     projected_daily = spend["daily"] + proposed_cost_eur
     projected_monthly = spend["monthly"] + proposed_cost_eur
+
     if projected_daily > daily_limit:
-        return False, f"daily_budget_exceeded:{projected_daily:.4f}>{daily_limit:.4f}"
+        return (
+            False,
+            f"daily_budget_exceeded:{projected_daily:.4f}>{daily_limit:.4f}",
+        )
     if projected_monthly > monthly_limit:
-        return False, f"monthly_budget_exceeded:{projected_monthly:.4f}>{monthly_limit:.4f}"
+        return (
+            False,
+            f"monthly_budget_exceeded:{projected_monthly:.4f}>{monthly_limit:.4f}",
+        )
+
     if project_id:
         project_limit = float(policy["limits"]["per_project_eur"])
-        projected_project = project_spend_eur(path, project_id, now=now) + proposed_cost_eur
+        projected_project = (
+            project_spend_eur(path, project_id, now=now) + proposed_cost_eur
+        )
         if projected_project > project_limit:
-            return False, f"project_budget_exceeded:{projected_project:.4f}>{project_limit:.4f}"
+            return (
+                False,
+                f"project_budget_exceeded:{projected_project:.4f}>"
+                f"{project_limit:.4f}",
+            )
+
     return True, "budget_ok"
 
 
-def append_cloud_cost(ledger_path: Path | None = None, *, role: str, model: str, reason: str, cost_eur: float, project_id: str | None = None) -> Path:
+def append_cloud_cost(
+    ledger_path: Path | None = None,
+    *,
+    role: str,
+    model: str,
+    reason: str,
+    cost_eur: float,
+    project_id: str | None = None,
+) -> Path:
     if cost_eur < 0:
         raise ValueError("cost_eur doit être positif")
+
     path = ledger_path or default_ledger_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    row = {"timestamp": datetime.now(UTC).isoformat(), "role": role, "model": model, "reason": reason, "project_id": project_id, "cost_eur": round(float(cost_eur), 8)}
+    row = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "role": role,
+        "model": model,
+        "reason": reason,
+        "project_id": project_id,
+        "cost_eur": round(float(cost_eur), 8),
+    }
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False) + "\n")
     return path

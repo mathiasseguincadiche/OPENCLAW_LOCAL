@@ -1,34 +1,41 @@
 # Changelog
 
-Toutes les modifications notables sont documentées ici. Le format s'inspire de Keep a Changelog et le versionnage suit SemVer.
+Toutes les modifications notables sont documentées ici. Le format s'inspire de
+Keep a Changelog et le versionnage suit SemVer.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-27
+
 ### Added
 
-- protocole de qualification matérielle sans cloud ;
-- inventaire Windows de preuves ;
-- suite DevOps `devops-v1` ;
-- benchmark Ollama streaming avec TTFT et débit ;
-- gate automatique configurable et promotion manuelle uniquement ;
-- orchestrateur PowerShell de qualification ;
-- analyse CodeQL, Dependency Review, PSScriptAnalyzer et Pester ;
-- validation SemVer et workflow GitHub Release ;
-- bootstrap Windows reproductible avec lock Python/Node/OpenClaw/Ollama ;
-- validation SHA-256 du runtime Node.js et SHA-512/SRI du package OpenClaw ;
-- installation complète runtime + modèles + OpenClaw + Gateway ;
-- renderer déterministe de la flotte OpenClaw ;
-- matérialisation des huit workspaces agents ;
-- politique d'outils par rôle, filesystem workspace-only, exec avec approbation et elevated désactivé ;
-- pont de routage `clawlocal` vers les références modèles OpenClaw ;
-- commande de routage local/cloud explicite sans fallback silencieux ;
-- gate E2E OpenClaw réel : huit agents, tool-calling, réparation après erreur et stabilité sur trois runs ;
-- couverture Python avec seuil, mypy et matrice Python 3.12/3.13 ;
-- SBOM CycloneDX de release ;
-- attestations GitHub de provenance et SBOM ;
-- documentation d'intégration OpenClaw et troubleshooting approfondi ;
-- documentation de gouvernance GitHub et politique de protection de `main` ;
-- badges CI, CodeQL, version, licence, PowerShell et Python dans le README.
+- Project Intake avec manifeste, arborescence gérée et snapshots par agent ;
+- garde-fou contre les secrets évidents dans l'intake ;
+- recherche Web local-first avec raisonnement local ;
+- politique d'escalade cloud à préconditions exécutables ;
+- budget FinOps quotidien, mensuel et par projet ;
+- Qwen 3.5 27B comme candidat LOCAL_DEEP ;
+- matrice de backends Ollama/Vulkan, llama.cpp/SYCL et llama.cpp/Vulkan ;
+- support de qualification multimodale text/image ;
+- diagram-as-code local D2, PlantUML et Graphviz ;
+- suite de qualification `devops-v2` ;
+- documentation Project Intake, Web, runtime backends, FinOps et diagrammes.
+
+### Changed
+
+- Gemma est désormais épinglé explicitement sur `gemma4:12b` ;
+- la fraîcheur Web seule ne déclenche plus Perplexity/Sonar ;
+- les modèles téléchargés et smoke-testés sont lus depuis `model_catalog.yaml` ;
+- le runner charge la suite déclarée dans `qualification_policy.yaml` ;
+- les validateurs couvrent les nouveaux contrats V0.2 ;
+- la version plateforme/package passe à `0.2.0`.
+
+### Security
+
+- aucun fallback cloud silencieux ;
+- dépassement de budget refusé par défaut ;
+- approbation humaine appliquée aux motifs qui l'exigent ;
+- snapshots de projet non gérés protégés contre l'écrasement.
 
 ## [0.1.0] - 2026-08-25
 

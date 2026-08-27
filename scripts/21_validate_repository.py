@@ -27,7 +27,13 @@ REQUIRED = {
     "config/v1/security.yaml",
     "config/v1/tool_policy.yaml",
     "config/v1/runtime_versions.json",
+    "config/v1/runtime_backends.yaml",
+    "config/v1/project_policy.yaml",
+    "config/v1/web_policy.yaml",
+    "config/v1/budget_policy.yaml",
+    "config/v1/diagram_policy.yaml",
     "benchmarks/suites/devops_v1.yaml",
+    "benchmarks/suites/devops_v2.yaml",
     "docs/ARCHITECTURE.md",
     "docs/INSTALLATION_WINDOWS_11.md",
     "docs/OPENCLAW_INTEGRATION.md",
@@ -38,12 +44,24 @@ REQUIRED = {
     "docs/OPERATIONS.md",
     "docs/TROUBLESHOOTING.md",
     "docs/GITHUB_GOVERNANCE.md",
-    "scripts/benchmark_local.py",
+    "docs/PROJECT_INTAKE.md",
+    "docs/WEB_LOCAL_FIRST.md",
+    "docs/RUNTIME_BACKENDS.md",
+    "docs/FINOPS.md",
+    "docs/DIAGRAMMES.md",
+    "scripts/20_list_models.py",
+    "scripts/21_validate_repository.py",
+    "scripts/22_validate_configs.py",
     "scripts/23_evaluate_benchmark.py",
     "scripts/24_validate_release.py",
     "scripts/25_generate_sbom.py",
     "scripts/26_render_openclaw_config.py",
     "scripts/27_route_openclaw.py",
+    "scripts/28_create_project.py",
+    "scripts/29_render_diagram.py",
+    "scripts/30_record_cloud_cost.py",
+    "scripts/31_sync_project_context.py",
+    "scripts/benchmark_local.py",
     "scripts/windows/00_bootstrap.ps1",
     "scripts/windows/01_audit_host.ps1",
     "scripts/windows/02_configure_local.ps1",
@@ -59,8 +77,16 @@ REQUIRED = {
     "src/clawlocal/versioning.py",
     "src/clawlocal/openclaw_config.py",
     "src/clawlocal/runtime.py",
+    "src/clawlocal/routing.py",
+    "src/clawlocal/project_intake.py",
+    "src/clawlocal/project_context.py",
+    "src/clawlocal/finops.py",
     "tests/test_openclaw_config.py",
     "tests/test_runtime.py",
+    "tests/test_routing.py",
+    "tests/test_project_intake.py",
+    "tests/test_project_context.py",
+    "tests/test_finops.py",
     "tests/test_sbom.py",
     "tests/test_versioning.py",
     "tests/powershell/Repository.Tests.ps1",
@@ -75,6 +101,7 @@ FORBIDDEN_SUFFIXES = {
     ".pfx",
     ".jks",
 }
+
 AGENTS = {
     "chef-operations",
     "expert-recherche",
@@ -98,14 +125,17 @@ def main() -> int:
         directory = ROOT / "agents" / agent
         for filename in ("IDENTITY.md", "SOUL.md", "AGENTS.md"):
             if not (directory / filename).is_file():
-                failures.append(f"contrat agent absent: agents/{agent}/{filename}")
+                failures.append(
+                    f"contrat agent absent: agents/{agent}/{filename}"
+                )
 
     for path in ROOT.rglob("*"):
         if path.is_file() and path.suffix.lower() in FORBIDDEN_SUFFIXES:
-            failures.append(f"artefact interdit dans Git: {path.relative_to(ROOT)}")
+            failures.append(
+                f"artefact interdit dans Git: {path.relative_to(ROOT)}"
+            )
 
-    env_file = ROOT / ".env"
-    if env_file.exists():
+    if (ROOT / ".env").exists():
         failures.append(".env réel présent dans le dépôt")
 
     if failures:
@@ -114,8 +144,9 @@ def main() -> int:
         print(f"\nVerdict: KO ({len(failures)} anomalie(s))")
         return 2
 
-    print(f"OK  structure du dépôt ({len(REQUIRED)} contrats racine/doc/scripts)")
+    print(f"OK  structure du dépôt ({len(REQUIRED)} contrats/doc/scripts)")
     print(f"OK  équipe IA ({len(AGENTS)} rôles)")
+    print("OK  V0.2 Project/Web/FinOps/backends/diagrammes présents")
     print("Verdict: CONFORME")
     return 0
 

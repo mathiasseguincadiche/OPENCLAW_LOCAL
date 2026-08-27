@@ -1,53 +1,34 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [string[]]$Models = @('qwen3.5:9b', 'gemma4')
+    [switch]$Quick,
+    [switch]$IncludeDeep,
+    [switch]$IncludeSpecialist
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$ResultsDir = Join-Path $RepoRoot 'benchmarks\results'
+$Benchmark = Join-Path $RepoRoot 'scripts\benchmark_local.py'
 
-$Prompts = @(
-    'Résume en trois points les avantages d''un déploiement local-first.',
-    'Écris un fragment YAML CI/CD minimal et valide contenant un job de test.'
-)
+$Args = @($Benchmark)
+if ($Quick) {
+    $Args += @('--context', '8192')
+}
+if ($IncludeDeep) {
+    $Args += '--include-deep'
+}
+if ($IncludeSpecialist) {
+    $Args += '--include-specialist'
+}
 
 if ($DryRun) {
-    Write-Host "[DRY-RUN] Benchmark de $($Models -join ', ') ; résultats dans $ResultsDir"
+    Write-Host "[DRY-RUN] python $($Args -join ' ')"
+    Write-Host '[DRY-RUN] La suite est lue depuis qualification_policy.yaml.'
     exit 0
 }
 
-New-Item -ItemType Directory -Force -Path $ResultsDir | Out-Null
-$Rows = @()
-
-foreach ($Model in $Models) {
-    foreach ($Prompt in $Prompts) {
-        $Watch = [System.Diagnostics.Stopwatch]::StartNew()
-        $Output = (& ollama run $Model $Prompt | Out-String).Trim()
-        $ExitCode = $LASTEXITCODE
-        $Watch.Stop()
-
-        $Rows += [pscustomobject]@{
-            model = $Model
-            seconds = [math]::Round($Watch.Elapsed.TotalSeconds, 3)
-            exit_code = $ExitCode
-            output_chars = $Output.Length
-            prompt = $Prompt
-        }
-    }
+& python @Args
+if ($LASTEXITCODE -ne 0) {
+    throw "Benchmark local en échec (code $LASTEXITCODE)."
 }
-
-$Gpu = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
-    Select-Object Name, DriverVersion
-$Payload = [pscustomobject]@{
-    timestamp = (Get-Date).ToString('o')
-    note = 'Latence murale simple; ne pas interpréter comme tokens/s.'
-    gpu = $Gpu
-    results = $Rows
-}
-
-$Path = Join-Path $ResultsDir ("benchmark_{0}.json" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
-$Payload | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $Path -Encoding UTF8
-Write-Host "Benchmark enregistré : $Path"

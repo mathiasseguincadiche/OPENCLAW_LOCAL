@@ -4,19 +4,31 @@ import argparse
 import os
 from pathlib import Path
 
-from clawlocal.project_context import AGENT_IDS, sync_project_context, sync_project_to_all_agents
+from clawlocal.project_context import (
+    AGENT_IDS,
+    sync_project_context,
+    sync_project_to_all_agents,
+)
 
 
 def default_root() -> Path:
-    return Path(os.environ.get("OPENCLAW_LOCAL_ROOT", "E:/AI/OpenClawLocal"))
+    configured = os.environ.get("OPENCLAW_LOCAL_ROOT")
+    if configured:
+        return Path(configured)
+    if Path("E:/").exists():
+        return Path("E:/AI/OpenClawLocal")
+    return Path(os.environ.get("LOCALAPPDATA", ".")) / "OpenClawLocal"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Synchronise un Project Intake vers les workspaces.")
+    parser = argparse.ArgumentParser(
+        description="Synchronise un Project Intake vers les workspaces."
+    )
     parser.add_argument("--project", required=True)
     parser.add_argument("--agent", choices=[*AGENT_IDS, "all"], default="all")
     parser.add_argument("--root", type=Path, default=default_root())
     args = parser.parse_args()
+
     targets = (
         sync_project_to_all_agents(args.root, args.project)
         if args.agent == "all"

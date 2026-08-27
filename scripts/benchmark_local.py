@@ -24,6 +24,17 @@ def load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+def suite_path(suite_id: str) -> Path:
+    candidates = (
+        ROOT / "benchmarks" / "suites" / f"{suite_id}.yaml",
+        ROOT / "benchmarks" / "suites" / f"{suite_id.replace('-', '_')}.yaml",
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(f"suite de benchmark introuvable: {suite_id}")
+
+
 def request_json(url: str, timeout: float = 5.0) -> dict[str, Any]:
     with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
         return json.load(response)
@@ -49,20 +60,29 @@ def strip_fence(text: str) -> str:
     return value
 
 
+def _contains(cleaned: str, values: list[object], *, require_all: bool) -> bool:
+    lowered = cleaned.casefold()
+    matches = [str(value).casefold() in lowered for value in values]
+    return all(matches) if require_all else any(matches)
+
+
 def run_checks(output: str, checks: list[dict[str, Any]]) -> tuple[bool, list[str]]:
     details: list[str] = []
     cleaned = strip_fence(output)
     overall = True
     for check in checks:
-        check_type = check["type"]
+        check_type = str(check["type"])
+        values = list(check.get("values", []))
         passed = False
+
         if check_type == "nonempty":
             passed = bool(cleaned.strip())
         elif check_type == "contains_any":
-            lowered = cleaned.casefold()
-            passed = any(
-                str(value).casefold() in lowered for value in check.get("values", [])
-            )
+            passed = _contains(cleaned, values, require_all=False)
+        elif check_type == "contains_all":
+            passed = _contains(cleaned, values, require_all=True)
+        elif check_type == "not_contains_any":
+            passed = not _contains(cleaned, values, require_all=False)
         elif check_type == "json_keys":
             try:
                 parsed = json.loads(cleaned)
@@ -81,6 +101,7 @@ def run_checks(output: str, checks: list[dict[str, Any]]) -> tuple[bool, list[st
                 passed = False
         else:
             raise ValueError(f"Type de contrôle inconnu: {check_type}")
+
         overall = overall and passed
         details.append(f"{check_type}:{'pass' if passed else 'fail'}")
     return overall, details
@@ -91,11 +112,15 @@ def add_synthetic_context(prompt: str, target_chars: int) -> str:
         return prompt
     rows: list[str] = []
     index = 1
-    while sum(len(row) + 1 for row in rows) < target_chars:
-        rows.append(
-            f"service-{index:04d}: namespace=dev; replicas=2; image=example/app:{index % 7}; "
-            f"owner=team-{index % 5}; drift={'yes' if index % 11 == 0 else 'no'}"
+    current_chars = 0
+    while current_chars < target_chars:
+        row = (
+            f"service-{index:04d}: namespace=dev; replicas=2; "
+            f"image=example/app:{index % 7}; owner=team-{index % 5}; "
+            f"drift={'yes' if index % 11 == 0 else 'no'}"
         )
+        rows.append(row)
+        current_chars += len(row) + 1
         index += 1
     return "INVENTAIRE SYNTHÉTIQUE:\n" + "\n".join(rows) + "\n\nCONSIGNE:\n" + prompt
 
@@ -126,6 +151,7 @@ def run_generation(
     first_token_at: float | None = None
     chunks: list[str] = []
     final: dict[str, Any] = {}
+
     with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
         for raw_line in response:
             line = raw_line.decode("utf-8").strip()
@@ -138,10 +164,13 @@ def run_generation(
             chunks.append(chunk)
             if event.get("done"):
                 final = event
+
     ended = time.perf_counter()
     eval_count = int(final.get("eval_count") or 0)
     eval_duration = int(final.get("eval_duration") or 0)
-    tokens_per_second = (eval_count / eval_duration * 1_000_000_000) if eval_duration else None
+    tokens_per_second = (
+        eval_count / eval_duration * 1_000_000_000 if eval_duration else None
+    )
     return {
         "output": "".join(chunks).strip(),
         "ttft_ms": (first_token_at - started) * 1000 if first_token_at else None,
@@ -162,19 +191,35 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", action="append", dest="models")
     parser.add_argument("--context", action="append", type=int, dest="contexts")
     parser.add_argument("--include-specialist", action="store_true")
+    parser.add_argument("--include-deep", action="store_true")
     parser.add_argument("--timeout", type=float, default=300.0)
     return parser.parse_args()
+
+
+def _selected_aliases(
+    args: argparse.Namespace,
+    policy: dict[str, Any],
+) -> list[str]:
+    aliases = list(args.models or policy["automated_gates"]["required_models"])
+    if args.include_deep:
+        aliases.append("qwen-deep")
+    if args.include_specialist:
+        aliases.append("sera-devops")
+    return list(dict.fromkeys(str(alias) for alias in aliases))
 
 
 def main() -> int:
     args = parse_args()
     catalog = load_yaml(CONFIG / "model_catalog.yaml")
     policy = load_yaml(CONFIG / "qualification_policy.yaml")
-    suite = load_yaml(ROOT / "benchmarks" / "suites" / "devops_v1.yaml")
-    aliases = args.models or list(policy["automated_gates"]["required_models"])
-    if args.include_specialist:
-        aliases.append("sera-devops")
-    aliases = list(dict.fromkeys(aliases))
+    suite_id = str(policy["suite"])
+    suite = load_yaml(suite_path(suite_id))
+
+    if str(suite.get("id")) != suite_id:
+        print(f"KO  suite incohérente: attendu {suite_id}, reçu {suite.get('id')}")
+        return 2
+
+    aliases = _selected_aliases(args, policy)
     contexts = args.contexts or [int(value) for value in policy["required_contexts"]]
 
     try:
@@ -191,15 +236,23 @@ def main() -> int:
     }
     missing: list[str] = []
     selected_models: list[dict[str, Any]] = []
+
     for alias in aliases:
         model = catalog["models"].get(alias)
-        if not model:
+        if not isinstance(model, dict):
             print(f"KO  alias modèle inconnu: {alias}")
+            return 2
+        if model.get("provider") != "ollama":
+            print(
+                f"KO  {alias}: provider={model.get('provider')} non exécutable "
+                "par le runner Ollama"
+            )
             return 2
         runtime_id = str(model["runtime_id"])
         if not model_available(runtime_id, available):
             missing.append(f"{alias} ({runtime_id})")
         selected_models.append({"alias": alias, **model})
+
     if missing:
         print("KO  modèles absents dans Ollama: " + ", ".join(missing))
         return 2
@@ -208,6 +261,7 @@ def main() -> int:
     cases: list[dict[str, Any]] = []
     total = len(selected_models) * len(contexts) * len(suite["scenarios"])
     current = 0
+
     for model in selected_models:
         for context in contexts:
             for scenario in suite["scenarios"]:
@@ -234,11 +288,17 @@ def main() -> int:
                         runtime_id,
                         prompt,
                         context,
-                        float(scenario.get("temperature", suite["default_temperature"])),
+                        float(
+                            scenario.get(
+                                "temperature",
+                                suite["default_temperature"],
+                            )
+                        ),
                         args.timeout,
                     )
                     passed, details = run_checks(
-                        result["output"], list(scenario.get("checks", []))
+                        result["output"],
+                        list(scenario.get("checks", [])),
                     )
                     cases.append(
                         {
@@ -286,7 +346,10 @@ def main() -> int:
         "cases": cases,
     }
     path = RESULTS / f"benchmark_{finished_at.strftime('%Y%m%d_%H%M%S')}.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     errors = sum(case["status"] != "ok" for case in cases)
     checks = sum(case.get("check_passed") is True for case in cases)
     print(f"EVIDENCE={path}")

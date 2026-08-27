@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$Catalog = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'config\v1\model_catalog.yaml')
+$ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
 $AgentIds = @(
     'chef-operations',
     'expert-recherche',
@@ -70,20 +70,9 @@ function Test-OllamaProvider([object]$Payload, [string]$Description) {
     return $true
 }
 
-$PlatformRoot = Get-PlatformRoot
-$StateDir = Join-Path $PlatformRoot 'state'
-$ProofsRoot = Join-Path $PlatformRoot 'proofs'
-$ScratchRoot = Join-Path $PlatformRoot 'runtime\e2e-scratch'
-$ConfigPath = Join-Path $StateDir 'openclaw.json'
-$QwenModel = if ($Catalog -match 'runtime_id:\s*"(qwen3\.5:9b)"') {
-    $Matches[1]
-}
-else {
-    'qwen3.5:9b'
-}
-
 if ($DryRun) {
     Write-Host '[DRY-RUN] E2E OpenClaw'
+    Write-Host '[DRY-RUN] modèle primaire lu depuis model_catalog.yaml'
     Write-Host '[DRY-RUN] 8 agents -> Gateway -> Ollama'
     Write-Host '[DRY-RUN] agent exec -> tool write'
     Write-Host '[DRY-RUN] erreur outil contrôlée -> réparation'
@@ -91,6 +80,24 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] aucune escalade cloud'
     exit 0
 }
+
+$RequiredModels = @(
+    & python $ListModels --provider ollama --required
+)
+if ($LASTEXITCODE -ne 0) {
+    throw 'Impossible de lire model_catalog.yaml.'
+}
+$RequiredModels = @($RequiredModels | Where-Object { $_ -and $_.Trim() })
+if ($RequiredModels.Count -eq 0) {
+    throw 'Aucun modèle required Ollama dans model_catalog.yaml.'
+}
+$PrimaryModel = $RequiredModels[0]
+
+$PlatformRoot = Get-PlatformRoot
+$StateDir = Join-Path $PlatformRoot 'state'
+$ProofsRoot = Join-Path $PlatformRoot 'proofs'
+$ScratchRoot = Join-Path $PlatformRoot 'runtime\e2e-scratch'
+$ConfigPath = Join-Path $StateDir 'openclaw.json'
 
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
     throw 'Configuration OpenClaw absente. Exécutez configure-openclaw.'
@@ -111,6 +118,7 @@ $Evidence = [ordered]@{
     schema_version = '1.0.0'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     platform_root = $PlatformRoot
+    primary_model = $PrimaryModel
     cloud_enabled = $false
     agent_smoke = @()
     tool_call = $null
@@ -133,10 +141,13 @@ if (Test-Path -LiteralPath $ScratchRoot) {
 }
 New-Item -ItemType Directory -Path $ScratchRoot -Force | Out-Null
 
-$ToolPrompt = 'Utilise réellement l''outil d''écriture disponible. Crée tool-call-ok.txt dans le répertoire de travail avec exactement TOOL_OK. Ensuite réponds TOOL_OK.'
+$ToolPrompt = @'
+Utilise réellement l'outil d'écriture disponible. Crée tool-call-ok.txt dans le
+répertoire de travail avec exactement TOOL_OK. Ensuite réponds TOOL_OK.
+'@
 $ToolResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', 'exec', $ToolPrompt, '--cwd', $ScratchRoot,
-    '--model', "ollama/$QwenModel", '--code-mode', 'code', '--local-model-lean',
+    '--model', "ollama/$PrimaryModel", '--code-mode', 'code', '--local-model-lean',
     '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description 'Tool-calling OpenClaw/Ollama'
 $null = Test-OllamaProvider -Payload $ToolResult -Description 'Tool-calling OpenClaw/Ollama'
@@ -149,11 +160,16 @@ if ((Get-Content -Raw -LiteralPath $ToolMarker).Trim() -ne 'TOOL_OK') {
 }
 $Evidence.tool_call = $ToolResult
 
-Set-Content -LiteralPath (Join-Path $ScratchRoot 'fallback.txt') -Value 'FALLBACK_OK' -Encoding utf8
-$RepairPrompt = 'Teste d''abord missing-intentional.txt, qui n''existe pas. Après l''erreur outil, corrige le plan: lis fallback.txt, puis crée repair-ok.txt avec exactement REPAIRED. Ne fabrique pas le premier résultat.'
+Set-Content -LiteralPath (Join-Path $ScratchRoot 'fallback.txt') `
+    -Value 'FALLBACK_OK' -Encoding utf8
+$RepairPrompt = @'
+Teste d'abord missing-intentional.txt, qui n'existe pas. Après l'erreur outil,
+corrige le plan: lis fallback.txt, puis crée repair-ok.txt avec exactement
+REPAIRED. Ne fabrique pas le premier résultat.
+'@
 $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', 'exec', $RepairPrompt, '--cwd', $ScratchRoot,
-    '--model', "ollama/$QwenModel", '--code-mode', 'code', '--local-model-lean',
+    '--model', "ollama/$PrimaryModel", '--code-mode', 'code', '--local-model-lean',
     '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description 'Réparation après erreur outil'
 $null = Test-OllamaProvider -Payload $RepairResult -Description 'Réparation après erreur outil'
@@ -169,7 +185,7 @@ $Evidence.tool_feedback_repair = $RepairResult
 for ($Run = 1; $Run -le 3; $Run++) {
     $StableResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
         'agent', 'exec', "Réponds exactement STABLE_$Run", '--cwd', $ScratchRoot,
-        '--model', "ollama/$QwenModel", '--auth-env-only',
+        '--model', "ollama/$PrimaryModel", '--auth-env-only',
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Stabilité run $Run"
     $null = Test-OllamaProvider -Payload $StableResult -Description "Stabilité run $Run"
@@ -182,7 +198,8 @@ for ($Run = 1; $Run -le 3; $Run++) {
 New-Item -ItemType Directory -Path $ProofsRoot -Force | Out-Null
 $Stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 $ProofPath = Join-Path $ProofsRoot "openclaw_e2e_$Stamp.json"
-$Evidence | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath $ProofPath -Encoding utf8
+$Evidence | ConvertTo-Json -Depth 50 |
+    Set-Content -LiteralPath $ProofPath -Encoding utf8
 Write-Host "OK  E2E OpenClaw terminé: $ProofPath"
-Write-Host 'Ce succès ne promeut aucun modèle automatiquement; revue humaine et qualification matérielle restent requises.'
+Write-Host 'Aucune promotion automatique: revue humaine et qualification matérielle restent requises.'
 exit 0

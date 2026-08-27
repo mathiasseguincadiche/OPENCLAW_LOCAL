@@ -22,9 +22,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def latest_benchmark() -> Path:
-    candidates = sorted(RESULTS.glob("benchmark_*.json"), key=lambda path: path.stat().st_mtime)
+    candidates = sorted(
+        RESULTS.glob("benchmark_*.json"),
+        key=lambda path: path.stat().st_mtime,
+    )
     if not candidates:
-        raise FileNotFoundError("aucun benchmark trouvé dans benchmarks/results")
+        raise FileNotFoundError(
+            "aucun benchmark trouvé dans benchmarks/results"
+        )
     return candidates[-1]
 
 
@@ -34,17 +39,26 @@ def main() -> int:
     payload = json.loads(path.read_text(encoding="utf-8"))
     with POLICY.open(encoding="utf-8") as handle:
         policy = yaml.safe_load(handle)
+    if not isinstance(policy, dict):
+        raise ValueError("qualification_policy.yaml invalide")
+
     report = evaluate_benchmark(payload, policy)
     output = path.with_suffix(".evaluation.json")
-    output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    output.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     for alias, model in report["models"].items():
         print(
-            f"{alias}: gate={model['automated_gate']} pass={model['check_pass_rate']:.3f} "
-            f"tps={model['median_tokens_per_second']} p95_ttft_ms={model['p95_ttft_ms']}"
+            f"{alias}: gate={model['automated_gate']} "
+            f"pass={model['check_pass_rate']:.3f} "
+            f"tps={model['median_tokens_per_second']} "
+            f"p95_ttft_ms={model['p95_ttft_ms']}"
         )
         for failure in model["failures"]:
             print(f"  KO  {failure}")
+
     print(f"VERDICT={report['verdict']}")
     print(f"EVALUATION={output}")
     return 0 if report["automated_gate"] == "pass" else 2
