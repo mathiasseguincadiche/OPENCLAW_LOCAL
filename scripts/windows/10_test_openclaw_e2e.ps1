@@ -142,7 +142,7 @@ $ToolResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
 $null = Test-OllamaProvider -Payload $ToolResult -Description 'Tool-calling OpenClaw/Ollama'
 $ToolMarker = Join-Path $ScratchRoot 'tool-call-ok.txt'
 if (-not (Test-Path -LiteralPath $ToolMarker)) {
-    throw 'Le modèle n’a pas créé le marqueur tool-call-ok.txt.'
+    throw "Le modèle n'a pas créé le marqueur tool-call-ok.txt."
 }
 if ((Get-Content -Raw -LiteralPath $ToolMarker).Trim() -ne 'TOOL_OK') {
     throw 'Le contenu du marqueur tool-call-ok.txt est incorrect.'
@@ -159,7 +159,7 @@ $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
 $null = Test-OllamaProvider -Payload $RepairResult -Description 'Réparation après erreur outil'
 $RepairMarker = Join-Path $ScratchRoot 'repair-ok.txt'
 if (-not (Test-Path -LiteralPath $RepairMarker)) {
-    throw 'Le scénario de réparation n’a pas créé repair-ok.txt.'
+    throw "Le scénario de réparation n'a pas créé repair-ok.txt."
 }
 if ((Get-Content -Raw -LiteralPath $RepairMarker).Trim() -ne 'REPAIRED') {
     throw 'Le contenu de repair-ok.txt est incorrect.'
