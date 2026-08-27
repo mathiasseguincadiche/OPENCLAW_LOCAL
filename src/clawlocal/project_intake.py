@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 PROJECT_DIRS = (
     "intake",
