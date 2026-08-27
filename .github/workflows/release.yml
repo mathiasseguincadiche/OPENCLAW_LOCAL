@@ -33,6 +33,8 @@ jobs:
         run: python scripts/35_validate_v7_parity.py
       - name: Validate V7 full parity superset
         run: python scripts/39_validate_v7_superset.py
+      - name: Validate document ingestion and exchange
+        run: python scripts/44_validate_document_flow.py
       - name: Validate SemVer tag
         run: python scripts/24_validate_release.py --tag "${GITHUB_REF_NAME}"
       - name: Ruff
