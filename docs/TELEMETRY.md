@@ -20,13 +20,25 @@ VRAM
 RAM
 tool calls
 retries
-local → deep transition
+local tier transition
 cloud escalation
 cloud cost
 success / error class
 ```
 
 Une métrique inconnue doit rester absente ou `null`. Elle ne doit jamais être inventée.
+
+## Modèles locaux suivis
+
+La télémétrie opérationnelle de la flotte locale concerne uniquement :
+
+```text
+qwen-max          -> qwen3.8:27b
+gemma-deep        -> gemma4:26b
+devstral-devops   -> devstral-small-2:24b
+```
+
+Le cloud, lorsqu'il est explicitement autorisé, est enregistré comme une route distincte et ne fait pas partie de la flotte locale supportée.
 
 ## Stockage
 
@@ -44,9 +56,9 @@ Le format est append-only et reste local au projet géré.
 python .\scripts\34_record_telemetry.py `
   --project p5-devops `
   --agent ingenieur-devops `
-  --model qwen-general `
+  --model devstral-devops `
   --backend ollama-vulkan `
-  --route-kind local_primary `
+  --route-kind local_specialist `
   --duration-ms 8120 `
   --ttft-ms 430 `
   --tokens-per-second 18.7 `
@@ -64,6 +76,6 @@ python .\scripts\34_record_telemetry.py `
   --summary
 ```
 
-La synthèse donne le nombre de runs, la durée totale observée, les tokens générés connus, les escalades cloud, les passages LOCAL_DEEP et le coût cloud connu.
+La synthèse donne le nombre de runs, la durée totale observée, les tokens générés connus, les escalades cloud, les transitions locales et le coût cloud connu.
 
-Cette télémétrie complète la qualification matérielle : elle permet d'étudier la B580 en usage projet réel au lieu de se limiter à un benchmark synthétique.
+Cette télémétrie complète la qualification matérielle : elle permet d'étudier les trois modèles de performance et les backends sur la workstation réelle au lieu de se limiter à un benchmark synthétique.

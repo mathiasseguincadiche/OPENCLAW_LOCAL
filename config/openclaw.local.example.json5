@@ -14,9 +14,9 @@
         api: "ollama",
         timeoutSeconds: 300,
         models: [
-          { id: "qwen3.5:9b", name: "qwen3.5:9b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
-          { id: "gemma4:12b", name: "gemma4:12b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
-          { id: "qwen3.5:27b", name: "qwen3.5:27b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "5m" } },
+          { id: "qwen3.8:27b", name: "qwen3.8:27b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
+          { id: "gemma4:26b", name: "gemma4:26b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
+          { id: "devstral-small-2:24b", name: "devstral-small-2:24b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
         ],
       },
     },
@@ -25,7 +25,9 @@
     ownership: "explicit",
     defaults: {
       skipBootstrap: true,
-      model: { primary: "ollama/qwen3.5:9b", fallbacks: ["ollama/gemma4:12b"] },
+      model: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
+      imageModel: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
+      pdfModel: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
     },
     entries: {},
   },

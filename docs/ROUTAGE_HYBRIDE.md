@@ -4,47 +4,47 @@
 
 Le local traite le parcours nominal. Le cloud n'est pas un fallback technique : c'est une **escalade explicite** soumise à politique, preuve et budget.
 
+La flotte locale est performance-only : toutes les routes locales doivent rester dans cet ensemble fermé :
+
 ```text
-LOCAL_PRIMARY / FAST
-        ↓ si rôle spécialisé et modèle qualifié
-LOCAL_SPECIALIST
-        ↓ si besoin de profondeur et modèle qualifié
-LOCAL_DEEP
-        ↓ si besoin maximal et modèle qualifié
-LOCAL_MAX
-        ↓ seulement si besoin démontré
-CLOUD_ESCALATION
+qwen-max          -> qwen3.8:27b
+gemma-deep        -> gemma4:26b
+devstral-devops   -> devstral-small-2:24b
 ```
+
+Aucun quatrième modèle local n'est supporté.
+
+## Routage nominal
+
+```text
+Chef opérations       -> Qwen 3.8 27B
+Expert recherche      -> Qwen 3.8 27B + Web
+Architecte solutions  -> Gemma 4 26B
+Ingénieur DevOps      -> Devstral Small 2 24B
+Ingénieur sécurité    -> Qwen 3.8 27B
+Release/Forges        -> Qwen 3.8 27B
+Rédacteur technique   -> Gemma 4 26B
+Auditeur qualité      -> Gemma 4 26B
+```
+
+Les champs de tier `local_specialist`, `local_deep` et `local_max` restent présents pour exprimer la spécialité d'un rôle et pour les diagnostics, mais ils ne donnent jamais accès à un modèle hors de la flotte supportée.
 
 La recherche d'informations récentes suit un chemin parallèle **LOCAL + WEB** et ne justifie pas à elle seule un appel LLM cloud.
 
-## Sélection automatique du meilleur tier qualifié
+## Fallback local
 
-Chaque rôle possède un `default_preferred_tier` dans `config/v1/model_routing.yaml`. Un modèle optionnel n'est sélectionné automatiquement que si son alias figure dans `OPENCLAW_LOCAL_QUALIFIED_MODELS`.
+Le fallback local reste lui aussi performance-only :
 
-Si le tier préféré n'est pas qualifié, le routeur retombe fail-safe sur le `local_primary` requis. Il ne saute jamais automatiquement vers le cloud.
-
-Flotte de référence août 2026 :
-
-```text
-Chef opérations       -> Qwen3.8 27B max, sinon Qwen3.5 9B
-Expert recherche      -> Qwen3.8 27B max, sinon Qwen3.5 9B
-Architecte            -> Gemma 4 26B deep, sinon Gemma 4 12B
-DevOps                 -> Devstral Small 2 24B spécialiste, sinon Qwen3.5 9B
-Sécurité               -> Qwen3.8 27B max, sinon Qwen3.5 9B
-Release/Forges         -> Qwen3.5 9B
-Rédacteur              -> Gemma 4 26B deep, sinon Gemma 4 12B
-Auditeur               -> Gemma 4 26B deep, sinon Gemma 4 12B
-```
+- rôles Qwen -> Gemma 4 26B lorsque pertinent ;
+- rôles Gemma -> Qwen 3.8 27B ;
+- DevOps -> Qwen 3.8 27B si Devstral est indisponible ;
+- aucune indisponibilité locale ne déclenche automatiquement OpenRouter.
 
 ## Indépendance de l'Auditeur
 
-L'Auditeur doit utiliser une famille différente de celle du producteur lorsque cela est praticable. Sa famille nominale est Gemma. Si un livrable a été produit par Gemma, le routeur peut utiliser une alternative Qwen :
+L'Auditeur utilise Gemma 4 26B nominalement. Si le producteur est de famille Gemma, le routeur sélectionne **Qwen 3.8 27B** comme revue indépendante lorsque cela est praticable.
 
-- `qwen-max` si qualifié ;
-- sinon `qwen-general`, qui reste requis.
-
-Le paramètre `producer_model_alias` permet au routeur de vérifier cette séparation explicitement.
+Le paramètre `producer_model_alias` permet au routeur de vérifier explicitement cette séparation de famille.
 
 ## Tiers explicites de diagnostic
 
@@ -57,7 +57,7 @@ Le paramètre `producer_model_alias` permet au routeur de vérifier cette sépar
 --producer-model-alias
 ```
 
-Ces options servent aux tests/diagnostics opérateur. Une seule route locale explicite peut être forcée à la fois. Le parcours nominal s'appuie plutôt sur la qualification runtime.
+Ces options servent aux tests et diagnostics opérateur. Elles ne permettent pas de contourner le catalogue : toute route locale doit résoudre l'un des trois alias supportés.
 
 ## Motifs cloud versionnés
 
@@ -105,7 +105,7 @@ Le routeur ne doit jamais accepter :
 - l'absence de benchmark local comme prétexte automatique au cloud ;
 - l'envoi d'un secret ;
 - l'envoi automatique d'un document privé ;
-- la promotion automatique d'un modèle lourd non qualifié.
+- un modèle local absent de la flotte performance-only.
 
 ## Conditions générales du cloud
 
@@ -121,17 +121,15 @@ cloud_enabled
 
 Le script `scripts/27_route_openclaw.py` applique ces règles avant de construire la commande OpenClaw.
 
-## Exemple : activation locale après qualification
+## Exemple : DevOps local
 
 ```powershell
-$env:OPENCLAW_LOCAL_QUALIFIED_MODELS = 'qwen-max,gemma-deep,devstral-devops'
-
 python .\scripts\27_route_openclaw.py `
   --agent ingenieur-devops `
   --message 'Analyse ce dépôt et propose la correction.'
 ```
 
-Le DevOps choisit alors son spécialiste qualifié. Sans cette qualification, il revient à Qwen3.5 9B.
+La route nominale est `devstral-devops` / `devstral-small-2:24b`. Si un fallback local est nécessaire, il reste dans les trois modèles supportés.
 
 ## Exemple : recherche approfondie cloud explicite
 

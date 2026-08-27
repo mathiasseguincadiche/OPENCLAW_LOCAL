@@ -116,7 +116,7 @@ def main() -> int:
         if not {"pdf", "view_image"} <= allowed:
             failures.append(f"{role}: pdf/view_image doivent être explicitement autorisés")
 
-    for alias in ("qwen-general", "gemma-review"):
+    for alias in ("qwen-max", "gemma-deep", "devstral-devops"):
         model = catalog.get("models", {}).get(alias, {})
         if "image" not in model.get("input", []):
             failures.append(f"{alias}: entrée image requise pour le parcours documentaire")
