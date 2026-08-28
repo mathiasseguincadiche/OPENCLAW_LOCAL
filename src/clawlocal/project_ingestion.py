@@ -368,7 +368,10 @@ def ingest_project_documents(project: Path, *, force: bool = False) -> Path:
         elif kind == "pdf":
             max_bytes = int(policy["formats"]["pdf"].get("max_bytes_mb", 50)) * _MIB
             if path.stat().st_size > max_bytes:
-                raise ValueError(f"PDF dépasse la limite locale de {max_bytes // _MIB} Mo: {path.name}")
+                raise ValueError(
+                    "PDF dépasse la limite locale de "
+                    f"{max_bytes // _MIB} Mo: {path.name}"
+                )
             entry["status"] = "READY_TOOL"
             guide = document_root / "tool.md"
             entry["derived_path"] = guide.relative_to(project).as_posix()
