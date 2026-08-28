@@ -1,6 +1,7 @@
-schema_version: "1.0.0"
+schema_version: "2.0.0"
 platform_version: "0.2.0"
 local_first: true
+
 nominal_path:
   reasoning: local_model
   search_provider: parallel-free
@@ -10,14 +11,64 @@ nominal_path:
   max_results: 8
   search_timeout_seconds: 30
   cache_ttl_minutes: 15
+
 freshness_policy:
   current_fact_requires_web: true
-  source_count_target: 2
   prefer_primary_sources: true
+  retrieval_max_age_hours: 24
+  runtime_observation_max_age_hours: 24
+  future_clock_skew_minutes: 5
+  published_or_updated_required_when_exposed: true
+  allow_undated_authoritative_source_if_retrieved_currently: true
+  current_month_or_year_alone_is_not_proof_of_currency: true
+
+source_verification:
+  required_evidence_filename: web_evidence.json
+  source_count_target: 2
+  distinct_publishers_for_corroboration: true
+  authoritative_source_of_truth_may_stand_alone: true
+  current_claim_requires_authoritative_currentness_source: true
+  machine_verifiable_claim_requires_runtime_evidence: true
+  unresolved_conflict_blocks_acceptance: true
+  unverified_claim_blocks_acceptance: true
+  minimum_confidence:
+    low: MEDIUM
+    standard: MEDIUM
+    high: HIGH
+    critical: HIGH
+  source_authority_order:
+    - source_of_truth
+    - primary
+    - secondary
+    - community
+  accepted_currentness_basis:
+    - official_latest_release
+    - official_current_docs
+    - official_registry
+    - official_advisory
+    - official_api
+    - live_runtime
+    - other_authoritative_current_state
+  runtime_evidence_kinds:
+    - cli
+    - schema
+    - api
+    - dry_run
+    - test
+    - registry
+
+project_enforcement:
+  web_required_evidence_marker: web_evidence
+  runtime_required_evidence_marker: runtime_evidence
+  require_before_task_pass: true
+  revalidate_before_states: [VALIDATING, REVIEW, PACKAGING, COMPLETE]
+
 cloud_escalation:
   allowed_only_after_local_web_attempt: true
   reasons: [deep_web_research, source_conflict]
+
 security:
   private_network_fetch: false
   browser_login_requires_human: true
   secrets_in_queries_forbidden: true
+  web_results_are_untrusted_input: true

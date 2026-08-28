@@ -25,6 +25,10 @@ from clawlocal.project_ingestion import (
     validate_source_coverage,
 )
 from clawlocal.project_integrity import snapshot_integrity
+from clawlocal.project_web_evidence import (
+    project_web_evidence_failures,
+    task_web_evidence_failures,
+)
 from clawlocal.safe_fs import assert_no_link_like
 
 create_assignments = base.create_assignments
@@ -66,9 +70,47 @@ def _pedagogy_phase_context(phase: str) -> str:
     return context
 
 
+def _web_verification_context(phase: str, task_id: str | None = None) -> str:
+    if phase == "analyze":
+        return (
+            " Identifie explicitement les faits externes susceptibles d'avoir changé: versions, "
+            "releases, compatibilités, vulnérabilités, règles, état d'un service ou documentation "
+            "courante. Ne transforme jamais l'âge de publication d'une page en preuve que le fait "
+            "est encore actuel: la currentness doit être vérifiée au moment de la recherche."
+        )
+    if phase == "plan":
+        return (
+            " Pour chaque tâche qui doit établir un fait Web actuel ou volatil, ajoute "
+            "web_evidence dans required_evidence. Si une affirmation technique peut être "
+            "vérifiée sur le runtime, le schéma, la CLI, une API, un dry-run, un test ou un "
+            "registre, ajoute aussi runtime_evidence. Ces marqueurs sont des gates bloquants."
+        )
+    if phase == "execute" and task_id is not None:
+        return (
+            f" Si context/tasks/{task_id}.json exige web_evidence, produis exactement "
+            f"evidence/{task_id}/web_evidence.json selon config/v1/web_policy.yaml. Enregistre "
+            "published_at/updated_at quand la source les expose, toujours retrieved_at, son niveau "
+            "d'autorité, les affirmations supportées, la currentness, les contradictions et le "
+            "niveau de confiance. Pour toute affirmation machine_verifiable, joins une preuve "
+            "runtime PASS récente. Une contradiction ouverte ou une affirmation non vérifiée ne "
+            "doit jamais être masquée par une synthèse affirmative."
+        )
+    if phase in {"validate", "review"}:
+        return (
+            " Audite aussi les required_evidence des tâches. Toute tâche exigeant web_evidence "
+            "doit posséder un web_evidence.json valide: source autoritative actuelle pour les "
+            "faits volatils, corroboration suffisante, éditeurs distincts lorsque requis, aucune "
+            "contradiction ouverte, confiance minimale respectée et preuve runtime pour les faits "
+            "machine_verifiable. Si un fait externe actuel est utilisé sans avoir été classé comme "
+            "nécessitant web_evidence, signale cette omission comme finding bloquant."
+        )
+    return ""
+
+
 def build_phase_prompt(project_id: str, phase: str, *, task_id: str | None = None) -> str:
     prompt = base.build_phase_prompt(project_id, phase, task_id=task_id)
     prompt += _pedagogy_phase_context(phase)
+    prompt += _web_verification_context(phase, task_id)
     if phase == "analyze":
         return prompt + (
             " Lis aussi context/ingestion/index.json avant de conclure. Pour chaque document "
@@ -169,6 +211,12 @@ def record_task_result(
     evidence_file: str,
     collected_outputs: list[str],
 ) -> dict[str, Any]:
+    if success:
+        web_failures = task_web_evidence_failures(project, task_id)
+        if web_failures:
+            raise ValueError(
+                f"tâche {task_id}: preuves Web invalides: " + "; ".join(web_failures)
+            )
     assignment = base.record_task_result(
         project,
         task_id,
@@ -250,6 +298,12 @@ def transition_project(
                 f"transition vers {target} bloquée; artifact exchange incomplet: "
                 + "; ".join(failures)
             )
+        web_failures = project_web_evidence_failures(project)
+        if web_failures:
+            raise PermissionError(
+                f"transition vers {target} bloquée; preuves Web invalides: "
+                + "; ".join(web_failures)
+            )
     base._assert_transition_gates(project, target, human_approved=human_approved)
     _record_automatic_gate_evidence(
         project,
@@ -276,6 +330,10 @@ def package_project(project: Path) -> tuple[Path, Path]:
     if failures:
         details = "; ".join(failures)
         raise PermissionError(f"packaging bloqué; artifact exchange incomplet: {details}")
+    web_failures = project_web_evidence_failures(project)
+    if web_failures:
+        details = "; ".join(web_failures)
+        raise PermissionError(f"packaging bloqué; preuves Web invalides: {details}")
     for name in ("deliverables", "diagrams", "context"):
         root = project / name
         if root.exists():
