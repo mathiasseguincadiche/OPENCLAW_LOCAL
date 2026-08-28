@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$env:OPENCLAW_LOCAL_REPO_ROOT = $RepoRoot
 $Bootstrap = Join-Path $PSScriptRoot '00_bootstrap.ps1'
 $ConfigureOllama = Join-Path $PSScriptRoot '02_configure_local.ps1'
 $PullModels = Join-Path $PSScriptRoot '03_pull_models.ps1'
