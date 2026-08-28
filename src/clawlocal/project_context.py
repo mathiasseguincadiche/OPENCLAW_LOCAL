@@ -45,6 +45,8 @@ def sync_project_context(
     target = platform_root / "workspaces" / agent_id / "projects" / normalized
     if target.exists():
         marker = target / _SNAPSHOT_MARKER
+        if not marker.exists():
+            raise FileExistsError(f"snapshot non géré, refus d'écraser: {target}")
         secure_path_within(marker, target, require_file=True, label="snapshot géré")
         shutil.rmtree(target)
 
