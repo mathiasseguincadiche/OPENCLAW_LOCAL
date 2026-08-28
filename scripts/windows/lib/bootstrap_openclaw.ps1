@@ -27,10 +27,11 @@ function Install-OpenClawPreferred {
         Write-BootstrapFailure "Runtime Node.js introuvable avant installation OpenClaw: $Node"
     }
 
-    $PathParts = @($env:PATH -split ';' | Where-Object { $_ })
-    if ($PathParts -notcontains $NodeHome) {
-        $env:PATH = "$NodeHome;$env:PATH"
-    }
+    $PathParts = @(
+        $env:PATH -split ';' |
+            Where-Object { $_ -and $_ -ne $NodeHome }
+    )
+    $env:PATH = (@($NodeHome) + $PathParts) -join ';'
 
     $ResolvedNode = Get-Command node.exe -ErrorAction SilentlyContinue
     if (-not $ResolvedNode -or $ResolvedNode.Source -ne $Node) {
@@ -78,7 +79,8 @@ function Install-OpenClawPreferred {
         }
         New-Item -ItemType Directory -Path $NpmPrefix -Force | Out-Null
         Invoke-NativeChecked -Command $Npm -Arguments @(
-            'install', '--global', '--prefix', $NpmPrefix, '--ignore-scripts=false', $Tarball
+            'install', '--global', '--prefix', $NpmPrefix,
+            '--ignore-scripts=false', '--allow-scripts', 'openclaw', $Tarball
         ) -Description 'Installation OpenClaw'
     }
     finally {
