@@ -55,18 +55,20 @@ Describe 'Contrat interne du bootstrap Windows' {
         $FirstInstall | Should -BeGreaterThan $DryRunBlock
     }
 
-    It 'rend le runtime Node local disponible avant les scripts npm OpenClaw' {
+    It 'rend le runtime Node local prioritaire avant les scripts npm OpenClaw' {
         $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $OpenClawHelperPath = Join-Path $RepoRoot 'scripts\windows\lib\bootstrap_openclaw.ps1'
         $Content = (Get-Content -Raw -LiteralPath $OpenClawHelperPath) -replace "`r`n", "`n"
 
-        $PathMutation = $Content.IndexOf('$env:PATH = "$NodeHome;$env:PATH"'.Replace('\', ''))
+        $PathMutation = $Content.IndexOf("`$env:PATH = (@(`$NodeHome) + `$PathParts) -join ';'")
         $NodeResolution = $Content.IndexOf('Get-Command node.exe -ErrorAction SilentlyContinue')
         $NpmInstall = $Content.IndexOf('Invoke-NativeChecked -Command $Npm -Arguments @(')
+        $AllowScripts = $Content.IndexOf("'--allow-scripts', 'openclaw'")
 
         $PathMutation | Should -BeGreaterOrEqual 0
         $NodeResolution | Should -BeGreaterThan $PathMutation
         $NpmInstall | Should -BeGreaterThan $NodeResolution
+        $AllowScripts | Should -BeGreaterThan $NpmInstall
     }
 
     It 'interdit les guillemets typographiques dans les sources PowerShell' {
