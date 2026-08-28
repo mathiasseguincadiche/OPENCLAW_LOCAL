@@ -7,6 +7,16 @@ delivery_priority: true
 learning_does_not_block_delivery_by_default: true
 safety_overrides_pedagogy: true
 
+transversal_enforcement:
+  required: true
+  applies_to_all_agents: true
+  applies_to_all_supported_local_models: true
+  applies_to_all_orchestrator_phases: true
+  shared_prompt_contract: agents/_shared/PEDAGOGY.md
+  beginner_accessible_by_default: true
+  preserve_expert_depth: true
+  no_role_or_model_bypass: true
+
 profiles:
   efficient:
     execution_share_percent: 90
@@ -32,6 +42,8 @@ help_ladder:
 rules:
   ladder_steps_may_be_skipped: true
   direct_solution_allowed_on_request: true
+  user_requested_conciseness_respected: true
+  essential_prerequisites_risks_and_validation_never_omitted: true
 
 competence_evidence:
   - explain_purpose
@@ -59,6 +71,12 @@ principles:
   incident_fix_first_debrief_after: true
   never_mark_acquired_from_exposure_only: true
   technical_verdict_is_distinct_from_learning_verdict: true
+  explain_purpose_before_procedure_when_useful: true
+  define_jargon_on_first_use: true
+  explain_expected_result_and_validation: true
+  explain_risk_limit_and_rollback_when_relevant: true
+  no_false_simplification: true
+  professional_non_infantilizing_tone: true
 
 specialization:
   core:
