@@ -37,6 +37,8 @@ jobs:
         run: python scripts/44_validate_document_flow.py
       - name: Validate August 2026 model fleet
         run: python scripts/45_validate_model_fleet.py
+      - name: Validate transversal pedagogy
+        run: python scripts/46_validate_transversal_pedagogy.py
       - name: Validate SemVer tag
         run: python scripts/24_validate_release.py --tag "${GITHUB_REF_NAME}"
       - name: Ruff
