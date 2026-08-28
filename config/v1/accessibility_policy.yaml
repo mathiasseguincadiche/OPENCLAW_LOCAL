@@ -7,6 +7,7 @@ transversal_enforcement:
   required: true
   applies_to_all_agents: true
   applies_to_all_supported_local_models: true
+  applies_to_cloud_escalation_when_used: true
   beginner_accessible_by_default: true
   preserve_expert_depth: true
   no_false_simplification: true
