@@ -44,7 +44,7 @@ function Get-LogsRoot {
     return (Join-Path (Get-PlatformRoot) 'proofs\logs')
 }
 
-function Start-ActionTranscript {
+function Write-ActionTranscriptStart {
     param([Parameter(Mandatory)][string]$Name)
 
     try {
@@ -67,7 +67,7 @@ function Start-ActionTranscript {
     }
 }
 
-function Stop-ActionTranscript {
+function Write-ActionTranscriptStop {
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][ValidateSet('PASS', 'FAIL')][string]$Result
@@ -84,7 +84,7 @@ function Stop-ActionTranscript {
     Write-Host "LOG_SAVED=$Path"
 }
 
-function Show-Logs {
+function Show-LogSummary {
     $LogsRoot = Get-LogsRoot
     Write-Host "LOG_ROOT=$LogsRoot"
     Write-Host "STRUCTURED_PROOFS=$(Join-Path (Get-PlatformRoot) 'proofs')"
@@ -141,7 +141,7 @@ function Invoke-Action {
     }
 
     if ($Name -eq 'logs') {
-        Show-Logs
+        Show-LogSummary
         return
     }
 
@@ -153,7 +153,7 @@ function Invoke-Action {
     $LogPath = $null
     $Result = 'FAIL'
     if (-not $DryRunMode -and -not $NoLogMode) {
-        $LogPath = Start-ActionTranscript -Name $Name
+        $LogPath = Write-ActionTranscriptStart -Name $Name
     }
 
     try {
@@ -170,7 +170,7 @@ function Invoke-Action {
     }
     finally {
         if ($LogPath) {
-            Stop-ActionTranscript -Path $LogPath -Result $Result
+            Write-ActionTranscriptStop -Path $LogPath -Result $Result
         }
     }
 }
