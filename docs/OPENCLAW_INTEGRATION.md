@@ -6,6 +6,7 @@
 
 ## Sources de vérité
 
+- `config/v1/runtime_versions.json` : version OpenClaw verrouillée ;
 - `config/v1/model_catalog.yaml` : exactement trois modèles locaux supportés ;
 - `config/v1/model_routing.yaml` : route nominale et fallbacks dans cette flotte fermée ;
 - `config/v1/tool_policy.yaml` : permissions par rôle ;
@@ -28,6 +29,22 @@ devstral-devops   -> ollama/devstral-small-2:24b
 
 Aucun quatrième modèle, petit modèle ou candidat legacy n'est supporté.
 
+## Contrat de schéma OpenClaw
+
+La configuration est générée pour la version OpenClaw **réellement verrouillée** dans `config/v1/runtime_versions.json`.
+
+Pour `2026.7.1-2`, les huit rôles sont matérialisés dans :
+
+```text
+agents.list[]
+```
+
+Chaque entrée contient notamment son `id`, son workspace, son modèle et sa politique d'outils. `chef-operations` est marqué `default: true` afin de ne pas dépendre implicitement de l'ordre de la liste.
+
+Les modèles du provider Ollama utilisent uniquement des clés acceptées par le schéma OpenClaw verrouillé. Les métadonnées propres à `OPENCLAW_LOCAL` restent dans les contrats du dépôt et ne sont pas injectées arbitrairement dans `models.providers.ollama.models[]`.
+
+Une montée de version OpenClaw doit donc être traitée comme un changement de contrat : mettre à jour le runtime lock, examiner le schéma vivant, adapter le générateur et repasser CI + dry-run + E2E.
+
 ## Générer le patch
 
 ```powershell
@@ -49,7 +66,8 @@ Le patch configure notamment :
 - les trois modèles lus depuis `model_catalog.yaml` ;
 - contexte prudent avant qualification ;
 - `imageModel` et `pdfModel` locaux ;
-- huit `agents.entries` ;
+- huit entrées dans `agents.list` ;
+- `chef-operations` comme agent par défaut explicite ;
 - workspaces séparés ;
 - outils documentaires ;
 - fallbacks persistants uniquement dans la flotte supportée ;
@@ -69,12 +87,16 @@ Le patch configure notamment :
 Le parcours :
 
 1. crée la baseline OpenClaw si nécessaire ;
-2. déploie les workspaces gérés ;
-3. génère le patch ;
-4. exécute `openclaw config patch --dry-run` ;
-5. applique uniquement si la validation réussit ;
-6. exécute `openclaw config validate --json` ;
-7. vérifie `openclaw agents list --json`.
+2. capture le schéma vivant avec `openclaw config schema` ;
+3. conserve ce schéma sous `<OPENCLAW_LOCAL_ROOT>\runtime\generated\openclaw.schema.json` ;
+4. déploie les workspaces gérés ;
+5. génère le patch ;
+6. exécute `openclaw config patch --dry-run` ;
+7. applique uniquement si la validation réussit ;
+8. exécute `openclaw config validate --json` ;
+9. vérifie `openclaw agents list --json`.
+
+Le transcript affiche `OPENCLAW_SCHEMA=<chemin>` afin que le schéma exact puisse être joint à un diagnostic futur.
 
 ## Stockage et workspaces
 
