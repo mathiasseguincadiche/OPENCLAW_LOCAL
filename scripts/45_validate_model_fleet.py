@@ -69,12 +69,13 @@ DOCUMENTATION_FILES = (
     "docs/TROUBLESHOOTING.md",
 )
 
-FORBIDDEN_DOCUMENTATION_MARKERS = (
-    "LOCAL_FAST",
+FORBIDDEN_DOCUMENTATION_COMMANDS = (
     "-IncludeDeep",
     "-IncludeSpecialist",
     "-IncludeMax",
 )
+
+ALLOWED_LOCAL_FAST_NEGATION = "aucun modèle LOCAL_FAST"
 
 
 def load_yaml(name: str) -> dict[str, Any]:
@@ -200,9 +201,13 @@ def main() -> int:
 
     for relative in DOCUMENTATION_FILES:
         text = read_required(relative, failures)
-        for marker in FORBIDDEN_DOCUMENTATION_MARKERS:
+        for marker in FORBIDDEN_DOCUMENTATION_COMMANDS:
             if marker in text:
-                failures.append(f"{relative}: marqueur documentaire legacy interdit: {marker}")
+                failures.append(f"{relative}: commande documentaire legacy interdite: {marker}")
+        local_fast_count = text.count("LOCAL_FAST")
+        allowed_negations = text.count(ALLOWED_LOCAL_FAST_NEGATION)
+        if local_fast_count != allowed_negations:
+            failures.append(f"{relative}: taxonomie LOCAL_FAST legacy encore active")
 
     for relative in (
         "README.md",
