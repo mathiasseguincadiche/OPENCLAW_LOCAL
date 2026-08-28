@@ -48,7 +48,7 @@ Describe 'Contrat interne du bootstrap Windows' {
     }
 
     It 'exécute le contrat interne avant le dry-run et avant toute installation' {
-        $Content = Get-Content -Raw -LiteralPath $BootstrapPath
+        $Content = (Get-Content -Raw -LiteralPath $BootstrapPath) -replace "`r`n", "`n"
         $ContractCall = $Content.IndexOf("Test-BootstrapFunctionContract`n`nif (-not `$IsWindows)")
         $DryRunBlock = $Content.IndexOf('if ($DryRun)')
         $FirstInstall = $Content.LastIndexOf("Install-PythonPreferred`nInstall-NodePreferred")
