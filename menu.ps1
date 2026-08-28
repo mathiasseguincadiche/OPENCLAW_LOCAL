@@ -157,6 +157,10 @@ function Invoke-Action {
     }
 
     try {
+        # $LASTEXITCODE peut conserver l'état d'une commande native antérieure,
+        # y compris une commande utilisée par l'infrastructure de transcript.
+        # Une action PowerShell pure comme audit ne doit pas hériter de cet état.
+        $global:LASTEXITCODE = 0
         if ($Name -in @('install-core', 'install-full')) {
             & $Script -DryRun:$DryRunMode -AllowRuntimeDrift:$AllowRuntimeDriftMode
         }
