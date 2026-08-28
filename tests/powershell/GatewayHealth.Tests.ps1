@@ -90,4 +90,13 @@ Describe 'Gateway readiness Windows' {
         $Installer | Should -Match 'GATEWAY_FAILURE_CLASS='
         $Installer | Should -Match 'GATEWAY_DIAGNOSTIC='
     }
+
+    It 'réutilise la même readiness avant le scénario E2E' {
+        $E2E = Get-Content -Raw -LiteralPath (
+            Join-Path $RepoRoot 'scripts\windows\10_test_openclaw_e2e.ps1'
+        )
+        $E2E | Should -Match 'Wait-OpenClawGatewayReady'
+        $E2E | Should -Match 'Write-OpenClawGatewayDiagnostic'
+        $E2E | Should -Match 'GatewayReadyTimeoutSeconds'
+    }
 }
