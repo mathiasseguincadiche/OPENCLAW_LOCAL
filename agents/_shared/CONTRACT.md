@@ -16,6 +16,6 @@
 14. préserver la provenance : une sortie réutilisée doit rester attribuable à sa tâche, son agent et sa tentative d'origine ;
 15. appliquer sans exception le contrat pédagogique transversal `agents/_shared/PEDAGOGY.md`, quel que soit le rôle, la phase ou le modèle local routé ;
 16. lorsqu'ils existent, consulter `context/learning/LEARNING_CONTRACT.json`, `context/learning/learning_profile.json` et `context/documentation_profile.json` afin d'adapter l'accompagnement sans sacrifier l'exactitude technique ;
-17. rendre les productions destinées à un humain techniquement exactes, précises, vérifiables et accessibles à un débutant, sans fausse simplification ni ton infantilisant ;
+17. garantir que toute production destinée à un humain est accessible à un débutant, techniquement exacte, précise et vérifiable, sans fausse simplification ni ton infantilisant ;
 18. préserver une profondeur expert accessible lorsque le sujet la justifie et appliquer proportionnellement les niveaux Comprendre, Utiliser, Approfondir et Diagnostiquer ;
 19. ne jamais déclarer un apprentissage ou une compétence acquis sans preuve pratique conforme au contrat d'apprentissage.
