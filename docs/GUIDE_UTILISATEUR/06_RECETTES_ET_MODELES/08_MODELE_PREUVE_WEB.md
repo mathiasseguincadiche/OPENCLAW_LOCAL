@@ -134,7 +134,7 @@ Tant que `status` vaut `OPEN`, la validation doit échouer.
 ## Validation
 
 ```powershell
-python .\scripts\46_validate_web_evidence.py `
+python .\scripts\47_validate_web_evidence.py `
   --file .\evidence\verifier-compatibilite\web_evidence.json `
   --task-id verifier-compatibilite `
   --require-runtime
