@@ -12,8 +12,15 @@ function Test-OpenClawPreferred {
     return $Installed -eq [string]$Lock.openclaw.preferred
 }
 
-function Enable-OpenClawNodeRuntime {
-    param([Parameter(Mandatory)][string]$NodeHome)
+function Install-OpenClawPreferred {
+    param([Parameter(Mandatory)][string]$RuntimeHome)
+
+    $NodeHome = Join-Path $RuntimeHome 'node'
+    $NpmPrefix = Join-Path $RuntimeHome 'npm-global'
+    if (Test-OpenClawPreferred -NpmPrefix $NpmPrefix) {
+        Write-Host "OK  OpenClaw $($Lock.openclaw.preferred) déjà présent."
+        return
+    }
 
     $Node = Join-Path $NodeHome 'node.exe'
     if (-not (Test-Path -LiteralPath $Node)) {
@@ -34,19 +41,6 @@ function Enable-OpenClawNodeRuntime {
     if ($DetectedVersion -ne "v$($Lock.node.preferred)") {
         Write-BootstrapFailure "Node.js $DetectedVersion détecté pour OpenClaw, attendu: v$($Lock.node.preferred)."
     }
-}
-
-function Install-OpenClawPreferred {
-    param([Parameter(Mandatory)][string]$RuntimeHome)
-
-    $NodeHome = Join-Path $RuntimeHome 'node'
-    $NpmPrefix = Join-Path $RuntimeHome 'npm-global'
-    if (Test-OpenClawPreferred -NpmPrefix $NpmPrefix) {
-        Write-Host "OK  OpenClaw $($Lock.openclaw.preferred) déjà présent."
-        return
-    }
-
-    Enable-OpenClawNodeRuntime -NodeHome $NodeHome
 
     $Npm = Join-Path $NodeHome 'npm.cmd'
     if (-not (Test-Path -LiteralPath $Npm)) {
