@@ -12,6 +12,7 @@ from clawlocal.finops import (
     cloud_budget_allowed,
     default_cloud_reservation_eur,
     default_ledger_path,
+    reserve_cloud_budget,
 )
 from clawlocal.project_governance import cloud_policy_for_project
 from clawlocal.project_migrations import ensure_current_project_schema
@@ -131,6 +132,7 @@ def main() -> int:
         "allowed": budget_ok if args.cloud else None,
         "reason": budget_reason,
         "reservation_eur": reservation_eur,
+        "reservation_id": None,
     }
     command = build_openclaw_agent_command(decision, resolved_model, args.message)
     evidence["command"] = command[:-3] + ["<message>", "--json"]
@@ -142,6 +144,23 @@ def main() -> int:
         "OPENROUTER_API_KEY"
     ):
         raise RuntimeError("OPENROUTER_API_KEY absent: escalade cloud refusée.")
+
+    if decision.route_kind == "cloud_escalation":
+        if reservation_eur is None or not args.reason:
+            raise RuntimeError("réservation FinOps impossible: coût ou motif absent")
+        reserved, reserve_reason, reservation_id = reserve_cloud_budget(
+            default_ledger_path(),
+            role=args.agent,
+            model=resolved_model,
+            reason=args.reason,
+            reserved_eur=reservation_eur,
+            project_id=args.project_id,
+        )
+        if not reserved or not reservation_id:
+            raise PermissionError(f"escalade cloud refusée: {reserve_reason}")
+        evidence["budget"]["allowed"] = True
+        evidence["budget"]["reason"] = reserve_reason
+        evidence["budget"]["reservation_id"] = reservation_id
 
     observed: dict[str, Any]
     telemetry_context = (
