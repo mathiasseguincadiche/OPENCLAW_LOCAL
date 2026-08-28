@@ -72,12 +72,12 @@ Describe 'Gateway readiness Windows' {
     }
 
     It 'redige les valeurs sensibles dans les extraits de diagnostic' {
-        $Input = 'Authorization: Bearer secret-value token=abc123 OPENROUTER_API_KEY=xyz'
-        $Output = Protect-OpenClawDiagnosticText -Text $Input
-        $Output | Should -Not -Match 'secret-value'
-        $Output | Should -Not -Match 'abc123'
-        $Output | Should -Not -Match '=xyz'
-        $Output | Should -Match '<redacted>'
+        $SensitiveText = 'Authorization: Bearer secret-value token=abc123 OPENROUTER_API_KEY=xyz'
+        $ProtectedText = Protect-OpenClawDiagnosticText -Text $SensitiveText
+        $ProtectedText | Should -Not -Match 'secret-value'
+        $ProtectedText | Should -Not -Match 'abc123'
+        $ProtectedText | Should -Not -Match '=xyz'
+        $ProtectedText | Should -Match '<redacted>'
     }
 
     It 'branche install-full sur la readiness et le diagnostic bornés' {
