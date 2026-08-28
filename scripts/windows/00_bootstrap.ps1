@@ -123,7 +123,7 @@ function Install-NodePreferred([string]$RuntimeHome) {
         }
     }
     if (-not (Test-NodePreferred $NodeHome)) {
-        Write-BootstrapFailure 'Node.js n’est pas conforme après installation.'
+        Write-BootstrapFailure "Node.js n'est pas conforme après installation."
     }
 }
 
@@ -186,7 +186,7 @@ function Install-OpenClawPreferred([string]$RuntimeHome) {
         }
     }
     if (-not (Test-OpenClawPreferred $NpmPrefix)) {
-        Write-BootstrapFailure 'OpenClaw n’est pas conforme après installation.'
+        Write-BootstrapFailure "OpenClaw n'est pas conforme après installation."
     }
 }
 
