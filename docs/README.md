@@ -1,7 +1,14 @@
 # Portail documentaire
 
+## Première utilisation
+
+Si vous découvrez l'IA locale ou OpenClaw, commencez ici : **[Premiers pas avec OPENCLAW_LOCAL et OpenClaw](PREMIERS_PAS_OPENCLAW_LOCAL.md)**.
+
+Ce guide explique le système depuis zéro : OpenClaw/Ollama/modèles/agents, première requête, choix du bon rôle, menu, projet orchestré, clarifications humaines, versioning, livrables, logs, preuves, pédagogie et diagnostic.
+
 | Besoin | Document |
 |---|---|
+| **utiliser OPENCLAW_LOCAL pour la première fois** | **[Premiers pas OpenClaw Local](PREMIERS_PAS_OPENCLAW_LOCAL.md)** |
 | comprendre la filiation avec `openclaw_openrouter` | [Filiation V7 / Parity Plus](V7_PARITY_PLUS.md) |
 | comprendre le système | [Architecture](ARCHITECTURE.md) |
 | installer/reproduire le runtime Windows | [Installation Windows 11](INSTALLATION_WINDOWS_11.md) |
@@ -39,7 +46,7 @@
 7. EXECUTE : travailler principalement avec les modèles locaux
 8. apprendre aux jalons utiles selon efficient/balanced/intensive
 9. utiliser le Web pour les faits récents
-10. passer en LOCAL_DEEP si une tâche le justifie et si le modèle est qualifié
+10. utiliser LOCAL_DEEP lorsque la spécialité de la tâche le justifie
 11. VALIDATE + REVIEW : auditer indépendamment les résultats
 12. PACKAGE : produire le ZIP et les hashes
 13. COMPLETE : validation humaine finale
