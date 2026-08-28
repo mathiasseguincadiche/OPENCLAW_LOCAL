@@ -4,30 +4,33 @@
 
 Un modèle local compact ou fortement quantifié n'est pas une barrière de sécurité. L'absence de fournisseur cloud ne supprime pas les risques d'injection de prompt, d'abus d'outil, d'exfiltration ou d'action incorrecte.
 
-Les surfaces Project Intake, Web, publication distante et télémétrie sont traitées comme des frontières explicites de confiance.
+Les surfaces Project Intake, filesystem projet, Web, publication distante, FinOps et télémétrie sont traitées comme des frontières explicites de confiance.
 
 ## Mesures structurantes
 
 - backend local et Gateway en loopback ;
 - permissions minimales par rôle ;
 - filesystem borné au workspace ;
+- symlinks, junctions et reparse points refusés aux frontières gérées ;
 - `exec` en mode `ask` ;
 - elevated désactivé ;
 - secrets hors Git, prompts, requêtes Web et preuves publiables ;
 - validation humaine pour publication, fusion, suppression et opérations sensibles ;
 - séparation producteur/auditeur ;
 - cloud désactivé par défaut ;
-- budget fail-closed ;
+- budget fail-closed avec réservation atomique avant appel cloud réel ;
 - aucune promotion automatique depuis la CI.
 
-## Project Intake
+## Project Intake et confinement filesystem
 
-Les fichiers déposés dans `intake/` et `sources/` peuvent contenir des instructions hostiles ou contradictoires.
+Les fichiers déposés dans `intake/` et `sources/` peuvent contenir des instructions hostiles, des chemins trompeurs ou des objets filesystem capables de sortir de la racine attendue.
 
 Le parcours Intake applique :
 
 - documents entrants = données non fiables ;
-- refus des symlinks dans l'Intake ;
+- refus des symlinks, junctions et autres reparse points dans `intake/` **et** `sources/` ;
+- vérification de confinement lexical et résolu avant lecture/copie des sorties agents ;
+- mêmes garde-fous lors de la synchronisation des snapshots, de l'Artifact Exchange et du packaging ;
 - scan de secrets avant copie ;
 - archive canonique hors projet ;
 - SHA-256, MIME, manifest et rapport d'ingestion ;
@@ -38,6 +41,21 @@ Le parcours Intake applique :
 Le dépôt source réel reste la vérité pour le code et le RAG ne remplace pas la lecture de fichier.
 
 Voir [Intégrité Intake](INTAKE_INTEGRITY.md).
+
+## Documents Office et PDF
+
+DOCX, PPTX et XLSX sont des conteneurs ZIP et sont donc traités comme des archives non fiables avant toute lecture XML. La politique impose :
+
+- taille maximale de l'archive ;
+- nombre maximal de membres ;
+- taille maximale d'un membre ;
+- taille décompressée totale maximale ;
+- ratio de compression maximal ;
+- rejet des membres chiffrés ;
+- rejet des chemins absolus ou contenant `..` ;
+- aucune extraction en place.
+
+Les PDF dépassant la limite `max_bytes_mb` sont refusés avant d'être déclarés prêts pour l'outil OpenClaw. Le nombre de pages par appel reste borné par la configuration OpenClaw.
 
 ## Permissions des rôles
 
@@ -90,6 +108,7 @@ Une escalade exige :
 - motif versionné ;
 - préconditions démontrées ;
 - budget disponible ;
+- réservation FinOps atomique immédiatement avant l'exécution réelle ;
 - approbation humaine lorsque le motif l'exige.
 
 Par défaut, les documents privés ne sont pas transmis au cloud. Les secrets ne doivent jamais l'être.
@@ -98,7 +117,13 @@ Par défaut, les documents privés ne sont pas transmis au cloud. Les secrets ne
 
 Le budget n'est pas uniquement économique : il empêche aussi une boucle d'agent ou un fallback mal configuré de générer une dépense cloud non bornée.
 
+Une vérification budgétaire de planification ne suffit pas pour une exécution concurrente. Le routeur acquiert un verrou local, relit le ledger, réserve le budget de façon append-only puis seulement ensuite autorise l'appel cloud. Les réservations actives sont prises en compte dans les limites quotidiennes, mensuelles et par projet.
+
 Le ledger de coûts reste hors Git et ne doit pas contenir de secret.
+
+## Supply-chain CI
+
+Les actions GitHub critiques utilisées par CI, CodeQL, Dependency Review et Release sont référencées par SHA de commit immuable. Les commentaires de version restent informatifs et Dependabot peut proposer les évolutions, mais une exécution donnée ne dépend pas d'un tag GitHub Actions mutable.
 
 ## Diagrammes et renderers
 
