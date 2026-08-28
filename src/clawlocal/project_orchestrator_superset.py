@@ -81,9 +81,9 @@ def _web_verification_context(phase: str, task_id: str | None = None) -> str:
     if phase == "plan":
         return (
             " Pour chaque tâche qui doit établir un fait Web actuel ou volatil, ajoute "
-            "web_evidence dans required_evidence. Si une affirmation technique peut être vérifiée "
-            "sur le runtime, le schéma, la CLI, une API, un dry-run, un test ou un registre, ajoute "
-            "aussi runtime_evidence. Ces marqueurs sont des gates bloquants."
+            "web_evidence dans required_evidence. Si une affirmation technique peut être "
+            "vérifiée sur le runtime, le schéma, la CLI, une API, un dry-run, un test ou un "
+            "registre, ajoute aussi runtime_evidence. Ces marqueurs sont des gates bloquants."
         )
     if phase == "execute" and task_id is not None:
         return (
