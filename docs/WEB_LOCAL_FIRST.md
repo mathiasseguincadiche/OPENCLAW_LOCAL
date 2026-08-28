@@ -26,7 +26,9 @@ Le patch OpenClaw active :
 - `web_fetch` ;
 - `browser` uniquement pour `expert-recherche` par défaut, pour les sites nécessitant une navigation plus complexe.
 
-La recherche nominale utilise le provider configuré dans `web_policy.yaml`. Le provider est un détail interchangeable : l'architecture ne doit pas dépendre d'un moteur de recherche particulier.
+La recherche nominale utilise `parallel-free`. Ce provider ne demande pas de clé API, mais OpenClaw l'expose via son plugin officiel `@openclaw/parallel-plugin`. OPENCLAW_LOCAL verrouille la version du plugin dans `config/v1/runtime_versions.json`, vérifie sa présence, l'installe si nécessaire, l'active et effectue un `plugins inspect --runtime` avant de valider le patch OpenClaw.
+
+Cette dépendance n'est pas une escalade vers un LLM cloud : les sources viennent du Web, tandis que le raisonnement et la synthèse restent assurés par les modèles locaux. Le provider de recherche reste une dépendance interchangeable du contrat Web, pas une dépendance du routage LLM.
 
 ## Fraîcheur des informations
 
