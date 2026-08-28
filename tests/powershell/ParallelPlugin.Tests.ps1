@@ -23,7 +23,7 @@ Describe 'Contrat Parallel Search OpenClaw' {
         $InitializeIndex | Should -BeLessThan $PatchIndex
         $Script | Should -Match "'plugins', 'install'"
         $Script | Should -Match "'plugins', 'enable'"
-        $Script | Should -Match "'plugins', 'inspect'"
+        $Script | Should -Match "'plugins'\s+'inspect'"
         $Script | Should -Match '--runtime'
         $Script | Should -Match '--pin'
     }
