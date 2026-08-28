@@ -38,9 +38,37 @@ L'arborescence opérationnelle est :
 ├── workspaces\
 ├── state\
 └── proofs\
+    └── logs\
 ```
 
 `OLLAMA_MODELS` est configuré sur `<OPENCLAW_LOCAL_ROOT>\models\ollama` **avant le téléchargement des modèles** afin d'éviter un stockage implicite dans le profil utilisateur du disque système.
+
+## Journalisation automatique
+
+Toute action **réelle** exécutée via `menu.ps1` crée automatiquement un transcript PowerShell sous :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\proofs\logs\
+```
+
+Exemple :
+
+```text
+20260828_142530123_install-full.log
+20260828_151004772_audit.log
+20260828_151115904_verify.log
+20260828_153812441_qualification.log
+```
+
+Le chemin est affiché dès le début sous la forme `LOG=<chemin>` puis, à la fermeture, `LOG_SAVED=<chemin>`. Le transcript contient aussi `ACTION_RESULT=PASS` ou `ACTION_RESULT=FAIL`.
+
+Les `-DryRun` ne créent volontairement aucun transcript afin de conserver le contrat sans mutation. La journalisation automatique peut être désactivée explicitement avec `-NoLog` si nécessaire.
+
+Afficher les derniers logs et emplacements de preuves :
+
+```powershell
+.\menu.ps1 -Action logs
+```
 
 ## 1. Prévisualiser
 
@@ -48,7 +76,7 @@ L'arborescence opérationnelle est :
 .\menu.ps1 -Action install-full -DryRun
 ```
 
-Le dry-run ne télécharge rien, n'installe rien et ne modifie aucune variable persistante.
+Le dry-run ne télécharge rien, n'installe rien, ne modifie aucune variable persistante et ne crée pas de transcript automatique.
 
 ## 2. Installation complète
 
@@ -73,6 +101,8 @@ Le parcours effectue dans l'ordre :
 13. génération, dry-run et application du patch OpenClaw ;
 14. installation/démarrage du Gateway local ;
 15. vérification finale du parcours local.
+
+Le transcript de cette exécution reste disponible même si l'installation échoue avant la fin, ce qui permet de transmettre l'erreur exacte sans relancer aveuglément le parcours.
 
 Après la première installation, fermer puis rouvrir PowerShell.
 
@@ -100,6 +130,8 @@ OPENCLAW_STATE_DIR  = E:\AI\OpenClawLocal\state
 .\menu.ps1 -Action e2e
 ```
 
+Chaque action réelle possède son propre transcript sous `proofs\logs`. Le test E2E conserve en plus sa preuve JSON structurée sous `proofs`.
+
 Résultat attendu :
 
 - runtime conforme ;
@@ -125,6 +157,8 @@ qwen3.8:27b
 gemma4:26b
 devstral-small-2:24b
 ```
+
+Le transcript `qualification` capture la console de la campagne complète. Les résultats structurés d'inventaire et benchmark restent sous `benchmarks\results` dans le dépôt.
 
 Un succès automatique mène au maximum à `READY_FOR_MANUAL_QUALIFICATION`.
 
@@ -183,10 +217,12 @@ Priorité de sauvegarde :
 ```text
 projects\
 state\
-proofs\        (si les preuves doivent être conservées)
+proofs\        (y compris proofs\logs si les diagnostics doivent être conservés)
 ```
 
 `runtime\` et `workspaces\` sont reconstruisibles. Les modèles peuvent être retéléchargés.
+
+Avant de partager un transcript, vérifier qu'il ne contient pas de secret saisi ou affiché par un outil externe. Ne jamais transmettre `.env`, `OPENROUTER_API_KEY`, token Gateway ou document privé.
 
 Voir aussi :
 

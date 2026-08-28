@@ -63,9 +63,9 @@ Describe 'Contrats PowerShell 7' {
         }
     }
 
-    It 'expose les actions runtime et E2E via le menu' {
+    It 'expose les actions runtime, E2E et logs via le menu' {
         $Menu = Get-Content -LiteralPath (Join-Path $RepoRoot 'menu.ps1') -Raw
-        foreach ($Action in @('install-core', 'install-full', 'configure-openclaw', 'deploy-agents', 'e2e')) {
+        foreach ($Action in @('install-core', 'install-full', 'configure-openclaw', 'deploy-agents', 'e2e', 'logs')) {
             $Menu | Should -Match ([regex]::Escape("'$Action'"))
         }
     }
@@ -101,6 +101,86 @@ Describe 'Contrats PowerShell 7' {
         $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $RepoRoot 'menu.ps1') -Action docs 2>&1
         $LASTEXITCODE | Should -Be 0
         ($Output -join "`n") | Should -Match 'docs[\\/]README\.md'
+    }
+
+    It 'journalise automatiquement une action opérationnelle réelle' {
+        $PreviousRoot = $env:OPENCLAW_LOCAL_ROOT
+        $PlatformRoot = Join-Path $TestDrive 'logging-platform'
+        try {
+            $env:OPENCLAW_LOCAL_ROOT = $PlatformRoot
+            $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $RepoRoot 'menu.ps1') `
+                -Action audit 2>&1
+            $Text = $Output -join "`n"
+            $LASTEXITCODE | Should -Be 0 -Because $Text
+            $Text | Should -Match 'LOG='
+            $Text | Should -Match 'LOG_SAVED='
+
+            $LogsRoot = Join-Path $PlatformRoot 'proofs\logs'
+            Test-Path -LiteralPath $LogsRoot | Should -BeTrue
+            $Logs = @(Get-ChildItem -LiteralPath $LogsRoot -Filter '*_audit.log' -File)
+            $Logs.Count | Should -Be 1
+            $Transcript = Get-Content -Raw -LiteralPath $Logs[0].FullName
+            $Transcript | Should -Match 'ACTION=audit'
+            $Transcript | Should -Match 'Audit OPENCLAW_LOCAL'
+            $Transcript | Should -Match 'ACTION_RESULT=PASS'
+        }
+        finally {
+            if ($null -eq $PreviousRoot) {
+                Remove-Item Env:OPENCLAW_LOCAL_ROOT -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:OPENCLAW_LOCAL_ROOT = $PreviousRoot
+            }
+        }
+    }
+
+    It 'préserve le DryRun sans créer de transcript' {
+        $PreviousRoot = $env:OPENCLAW_LOCAL_ROOT
+        $PlatformRoot = Join-Path $TestDrive 'dryrun-no-log-platform'
+        try {
+            $env:OPENCLAW_LOCAL_ROOT = $PlatformRoot
+            $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $RepoRoot 'menu.ps1') `
+                -Action e2e -DryRun 2>&1
+            $LASTEXITCODE | Should -Be 0
+            ($Output -join "`n") | Should -Match '(?i)DRY-RUN'
+            Test-Path -LiteralPath (Join-Path $PlatformRoot 'proofs\logs') | Should -BeFalse
+        }
+        finally {
+            if ($null -eq $PreviousRoot) {
+                Remove-Item Env:OPENCLAW_LOCAL_ROOT -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:OPENCLAW_LOCAL_ROOT = $PreviousRoot
+            }
+        }
+    }
+
+    It 'expose le dernier transcript via l''action logs' {
+        $PreviousRoot = $env:OPENCLAW_LOCAL_ROOT
+        $PlatformRoot = Join-Path $TestDrive 'show-logs-platform'
+        try {
+            $env:OPENCLAW_LOCAL_ROOT = $PlatformRoot
+            $LogsRoot = Join-Path $PlatformRoot 'proofs\logs'
+            New-Item -ItemType Directory -Path $LogsRoot -Force | Out-Null
+            $FakeLog = Join-Path $LogsRoot '20260828_000000000_audit.log'
+            Set-Content -LiteralPath $FakeLog -Value 'AUDIT_LOG' -Encoding utf8
+
+            $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $RepoRoot 'menu.ps1') `
+                -Action logs 2>&1
+            $LASTEXITCODE | Should -Be 0
+            $Text = $Output -join "`n"
+            $Text | Should -Match 'LOG_ROOT='
+            $Text | Should -Match 'LATEST_LOG='
+            $Text | Should -Match ([regex]::Escape('20260828_000000000_audit.log'))
+        }
+        finally {
+            if ($null -eq $PreviousRoot) {
+                Remove-Item Env:OPENCLAW_LOCAL_ROOT -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:OPENCLAW_LOCAL_ROOT = $PreviousRoot
+            }
+        }
     }
 
     It 'valide les nouveaux parcours en DryRun sans runtime externe' {
