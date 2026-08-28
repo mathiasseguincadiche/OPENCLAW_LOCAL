@@ -57,14 +57,17 @@ function Invoke-Checked {
 $PlatformRoot = Get-PlatformRoot
 $StateDir = Join-Path $PlatformRoot 'state'
 $SystemWorkspace = Join-Path $PlatformRoot 'workspaces\system'
-$PatchPath = Join-Path $PlatformRoot 'runtime\generated\openclaw.local.patch.json'
+$GeneratedDir = Join-Path $PlatformRoot 'runtime\generated'
+$PatchPath = Join-Path $GeneratedDir 'openclaw.local.patch.json'
+$SchemaPath = Join-Path $GeneratedDir 'openclaw.schema.json'
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Configuration OpenClaw local-first'
     Write-Host "State      : $StateDir"
     Write-Host "Workspaces : $(Join-Path $PlatformRoot 'workspaces')"
     Write-Host "Patch      : $PatchPath"
-    Write-Host '[DRY-RUN] Déploiement de 8 agents, validation config patch, puis application atomique en mode réel.'
+    Write-Host "Schema     : $SchemaPath"
+    Write-Host '[DRY-RUN] Déploiement de 8 agents, capture du schéma vivant, validation config patch, puis application atomique en mode réel.'
     exit 0
 }
 
@@ -77,7 +80,7 @@ $OpenClaw = Get-OpenClawCommand $PlatformRoot
 $Python = Get-PythonCommand $PlatformRoot
 New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
 New-Item -ItemType Directory -Path $SystemWorkspace -Force | Out-Null
-New-Item -ItemType Directory -Path (Split-Path -Parent $PatchPath) -Force | Out-Null
+New-Item -ItemType Directory -Path $GeneratedDir -Force | Out-Null
 
 $ConfigPath = Join-Path $StateDir 'openclaw.json'
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
@@ -85,6 +88,20 @@ if (-not (Test-Path -LiteralPath $ConfigPath)) {
         'setup', '--baseline', '--workspace', $SystemWorkspace
     ) -Description 'Initialisation baseline OpenClaw'
 }
+
+$SchemaOutput = & $OpenClaw 'config' 'schema'
+if ($LASTEXITCODE -ne 0) {
+    throw "Lecture du schéma OpenClaw en échec (code $LASTEXITCODE)."
+}
+$SchemaText = ($SchemaOutput | Out-String).Trim()
+try {
+    $null = $SchemaText | ConvertFrom-Json
+}
+catch {
+    throw 'Le schéma OpenClaw retourné par la CLI n''est pas un JSON valide.'
+}
+Set-Content -LiteralPath $SchemaPath -Value $SchemaText -Encoding utf8
+Write-Host "OPENCLAW_SCHEMA=$SchemaPath"
 
 & $DeployScript
 if ($LASTEXITCODE -ne 0) {
