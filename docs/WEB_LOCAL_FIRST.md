@@ -110,7 +110,7 @@ Ce fichier contient au minimum :
 Le validateur autonome est :
 
 ```powershell
-python .\scripts\46_validate_web_evidence.py `
+python .\scripts\47_validate_web_evidence.py `
   --file .\evidence\<task-id>\web_evidence.json `
   --task-id <task-id>
 ```
@@ -118,7 +118,7 @@ python .\scripts\46_validate_web_evidence.py `
 Pour un projet complet :
 
 ```powershell
-python .\scripts\46_validate_web_evidence.py --project <racine-projet>
+python .\scripts\47_validate_web_evidence.py --project <racine-projet>
 ```
 
 ## Gates du Project Orchestrator
