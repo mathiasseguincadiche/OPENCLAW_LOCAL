@@ -1,10 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [switch]$Quick,
-    [switch]$IncludeDeep,
-    [switch]$IncludeSpecialist,
-    [switch]$IncludeMax
+    [switch]$Quick
 )
 
 Set-StrictMode -Version Latest
@@ -16,19 +13,10 @@ $BenchmarkArgs = @($Benchmark)
 if ($Quick) {
     $BenchmarkArgs += @('--context', '8192')
 }
-if ($IncludeDeep) {
-    $BenchmarkArgs += '--include-deep'
-}
-if ($IncludeSpecialist) {
-    $BenchmarkArgs += '--include-specialist'
-}
-if ($IncludeMax) {
-    $BenchmarkArgs += '--include-max'
-}
 
 if ($DryRun) {
     Write-Host "[DRY-RUN] python $($BenchmarkArgs -join ' ')"
-    Write-Host '[DRY-RUN] La suite et les classes de modèles sont lues depuis les contrats YAML.'
+    Write-Host '[DRY-RUN] Les trois modèles requis et la suite sont lus depuis les contrats YAML.'
     exit 0
 }
 
