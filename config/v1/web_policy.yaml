@@ -58,8 +58,8 @@ source_verification:
     - registry
 
 project_enforcement:
-  task_flag: web_verification_required
-  runtime_task_flag: runtime_verification_required
+  web_required_evidence_marker: web_evidence
+  runtime_required_evidence_marker: runtime_evidence
   require_before_task_pass: true
   revalidate_before_states: [VALIDATING, REVIEW, PACKAGING, COMPLETE]
 
