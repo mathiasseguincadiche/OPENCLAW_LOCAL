@@ -11,6 +11,7 @@ transversal_enforcement:
   required: true
   applies_to_all_agents: true
   applies_to_all_supported_local_models: true
+  applies_to_cloud_escalation_when_used: true
   applies_to_all_orchestrator_phases: true
   shared_prompt_contract: agents/_shared/PEDAGOGY.md
   beginner_accessible_by_default: true
