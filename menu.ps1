@@ -14,6 +14,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
+$env:OPENCLAW_LOCAL_REPO_ROOT = $RepoRoot
 
 $Scripts = @{
     'install-core' = Join-Path $RepoRoot 'scripts\windows\00_bootstrap.ps1'
