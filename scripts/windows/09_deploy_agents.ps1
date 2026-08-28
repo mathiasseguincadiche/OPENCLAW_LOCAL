@@ -31,6 +31,7 @@ function Get-PlatformRoot {
 $PlatformRoot = Get-PlatformRoot
 $WorkspacesRoot = Join-Path $PlatformRoot 'workspaces'
 $Contract = Get-Content -Raw -LiteralPath (Join-Path $SharedRoot 'CONTRACT.md')
+$Pedagogy = Get-Content -Raw -LiteralPath (Join-Path $SharedRoot 'PEDAGOGY.md')
 $Tools = Get-Content -Raw -LiteralPath (Join-Path $SharedRoot 'TOOLS.md')
 $Heartbeat = Get-Content -Raw -LiteralPath (Join-Path $SharedRoot 'HEARTBEAT.md')
 $UserTemplate = @'
@@ -57,7 +58,7 @@ foreach ($AgentId in $AgentIds) {
     }
 
     if ($DryRun) {
-        Write-Host "[DRY-RUN] Déployer $AgentId -> $Workspace"
+        Write-Host "[DRY-RUN] Déployer $AgentId -> $Workspace avec contrat pédagogique transversal"
         continue
     }
 
@@ -70,6 +71,14 @@ $Contract
 
 ---
 
+# Contrat pédagogique transversal obligatoire
+
+$Pedagogy
+
+---
+
+# Contrat spécifique du rôle
+
 $RoleAgents
 "@
     Set-Content -LiteralPath (Join-Path $Workspace 'AGENTS.md') -Value $MergedAgents -Encoding utf8
@@ -79,7 +88,7 @@ $RoleAgents
     Set-Content -LiteralPath (Join-Path $Workspace 'HEARTBEAT.md') -Value $Heartbeat -Encoding utf8
     Set-Content -LiteralPath (Join-Path $Workspace 'USER.md') -Value $UserTemplate -Encoding utf8
     Set-Content -LiteralPath $Marker -Value "managed_by=OPENCLAW_LOCAL`nagent=$AgentId" -Encoding utf8
-    Write-Host "OK  $AgentId déployé."
+    Write-Host "OK  $AgentId déployé avec pédagogie transversale."
 }
 
 exit 0

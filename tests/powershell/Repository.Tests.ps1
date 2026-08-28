@@ -112,6 +112,49 @@ Describe 'Contrats PowerShell 7' {
         }
     }
 
+    It 'injecte le contrat pédagogique transversal dans les huit workspaces' {
+        $PreviousRoot = $env:OPENCLAW_LOCAL_ROOT
+        $PlatformRoot = Join-Path $TestDrive 'pedagogy-platform'
+        try {
+            $env:OPENCLAW_LOCAL_ROOT = $PlatformRoot
+            $DeployScript = Join-Path $RepoRoot 'scripts\windows\09_deploy_agents.ps1'
+            $Output = & pwsh -NoLogo -NoProfile -File $DeployScript 2>&1
+            $LASTEXITCODE | Should -Be 0
+            ($Output -join "`n") | Should -Match '(?i)pédagogie transversale'
+
+            $AgentIds = @(
+                'chef-operations',
+                'expert-recherche',
+                'architecte-solutions',
+                'ingenieur-devops',
+                'ingenieur-securite',
+                'ingenieur-release-forges',
+                'redacteur-technique',
+                'auditeur-qualite'
+            )
+            foreach ($AgentId in $AgentIds) {
+                $PromptPath = Join-Path $PlatformRoot "workspaces\$AgentId\AGENTS.md"
+                Test-Path -LiteralPath $PromptPath | Should -BeTrue -Because $AgentId
+                $Prompt = Get-Content -Raw -LiteralPath $PromptPath
+                $Prompt | Should -Match 'Contrat pédagogique transversal obligatoire'
+                $Prompt | Should -Match 'accessible à un débutant'
+                $Prompt | Should -Match 'fausse simplification'
+                $Prompt | Should -Match 'Comprendre'
+                $Prompt | Should -Match 'Utiliser'
+                $Prompt | Should -Match 'Approfondir'
+                $Prompt | Should -Match 'Diagnostiquer'
+            }
+        }
+        finally {
+            if ($null -eq $PreviousRoot) {
+                Remove-Item Env:OPENCLAW_LOCAL_ROOT -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:OPENCLAW_LOCAL_ROOT = $PreviousRoot
+            }
+        }
+    }
+
     It 'conserve un DryRun de qualification explicitement sans cloud' {
         $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $RepoRoot 'menu.ps1') `
             -Action qualification -DryRun 2>&1
