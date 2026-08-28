@@ -16,7 +16,7 @@ Keep a Changelog et le versionnage suit SemVer.
 - historique `remediation_history.json` sans remise à zéro des tentatives ;
 - arrêt fail-closed lorsque la limite de tentatives impose une intervention humaine ;
 - packaging final ZIP avec SHA-256 et approbation humaine obligatoire ;
-- Intake renforcé avec archive canonique hors projet, SHA-256, MIME, politique symlink, rapport d'ingestion et lecture seule/ACL Windows ;
+- Intake renforcé avec archive canonique hors projet, SHA-256, MIME, rapport d'ingestion et lecture seule/ACL Windows ;
 - politique pédagogique `efficient` / `balanced` / `intensive` et modes guided/assisted/autonomous/evaluation ;
 - artefacts `SKILLS_MATRIX.csv`, `LEARNING_JOURNAL.md`, `TEACH_BACK.md` et `RETENTION_PLAN.yaml` ;
 - documentation progressive Comprendre / Utiliser / Approfondir / Diagnostiquer ;
@@ -32,11 +32,14 @@ Keep a Changelog et le versionnage suit SemVer.
 - resynchronisation ciblée des workspaces agents après chaque tentative afin que les consommateurs voient automatiquement les sorties amont ;
 - CLI `42_project_ingest.py` et `43_project_exchange.py` pour reconstruire/valider l'ingestion et auditer les échanges ;
 - validateur anti-régression `44_validate_document_flow.py`, exécuté par CI et Release ;
-- flotte locale performance août 2026 avec `devstral-small-2:24b` en LOCAL_SPECIALIST, `gemma4:26b` en LOCAL_DEEP et `qwen3.8:27b` en LOCAL_MAX ;
-- routage automatique vers le meilleur tier local qualifié via `OPENCLAW_LOCAL_QUALIFIED_MODELS`, avec fallback fail-safe vers les modèles fast requis ;
+- flotte locale performance-only août 2026 contenant exactement `qwen3.8:27b`, `gemma4:26b` et `devstral-small-2:24b` ;
 - indépendance renforcée de l'Auditeur par séparation de famille Gemma/Qwen lorsqu'elle est praticable ;
-- benchmark séparé des classes LOCAL_SPECIALIST, LOCAL_DEEP et LOCAL_MAX et verdict individuel des candidats optionnels ;
-- validateur anti-régression `45_validate_model_fleet.py`, exécuté par CI et Release.
+- validateur anti-régression `45_validate_model_fleet.py`, exécuté par CI et Release ;
+- helper `safe_fs` pour appliquer un confinement fail-closed commun aux entrées, snapshots, sorties, échanges et packaging ;
+- limites de sécurité des archives Office : taille compressée/décompressée, nombre et taille des membres, ratio de compression et refus des membres chiffrés ;
+- réservations FinOps append-only et atomiques sous verrou de processus avant chaque exécution cloud réelle ;
+- tests hostiles de symlink/junction/reparse point sur Linux et Windows ;
+- pinning des GitHub Actions critiques par SHA de commit immuable.
 
 ### Changed
 
@@ -44,31 +47,37 @@ Keep a Changelog et le versionnage suit SemVer.
 - les snapshots de revue peuvent inclure les sorties centrales ;
 - le portail projet documente le parcours flou -> livrable -> publication contrôlée ;
 - un `FAIL` de validation/review remet réellement les tâches concernées en état exécutable ;
-- l'Ingénieur sécurité redevient explicitement read-only pour les modifications de sources ;
+- l'Ingénieur sécurité reste explicitement read-only pour les modifications de sources ;
 - l'Architecte produit ADR et schémas via un writer spécialisé plutôt que via des droits génériques ;
 - la CI et le workflow Release exécutent les validateurs de parité V7 ;
-- les huit agents disposent désormais des outils locaux `pdf` et `view_image` tout en conservant leurs restrictions d'écriture ;
+- les huit agents disposent des outils locaux `pdf` et `view_image` tout en conservant leurs restrictions d'écriture ;
 - le patch OpenClaw configure explicitement `imageModel`, `pdfModel`, `pdfMaxBytesMb` et `pdfMaxPages` sur les modèles locaux ;
 - l'analyse projet vérifie l'index d'ingestion et refuse une couverture documentaire incomplète ;
 - les phases de validation, revue, packaging et completion refusent de progresser lorsque l'Artifact Exchange attendu est absent ou altéré ;
-- les prompts contractuels des huit rôles distinguent désormais originaux, représentations dérivées et artefacts échangés en lecture seule ;
-- `qwen3.5:27b` n'est plus le candidat deep actif : `qwen3.8:27b` devient le candidat LOCAL_MAX généraliste ;
-- SERA reste conservé comme candidat historique mais sort du routage actif tant que son backend GGUF dédié n'est pas qualifié ;
-- le DevOps privilégie Devstral Small 2 après qualification, l'Architecte/Rédacteur/Auditeur Gemma 4 26B, et le Chef/Recherche/Sécurité Qwen3.8 27B ;
-- la qualification des candidats optionnels produit désormais un verdict par modèle sans casser le gate global des modèles fast requis.
+- les prompts contractuels des huit rôles distinguent originaux, représentations dérivées et artefacts échangés en lecture seule ;
+- `qwen3.8:27b` est le modèle LOCAL_MAX généraliste, `gemma4:26b` le LOCAL_DEEP et `devstral-small-2:24b` le LOCAL_SPECIALIST DevOps ;
+- les trois modèles supportés sont tous `required: true` et participent tous au gate global de qualification ;
+- les anciens switches `IncludeDeep`, `IncludeSpecialist` et `IncludeMax` ont été supprimés du parcours nominal : aucune classe locale supportée n'est optionnelle ;
+- le benchmark nominal sélectionne directement `qualification_policy.automated_gates.required_models` ;
+- le README dispose d'un parcours de démarrage en cinq étapes avec résultats attendus ;
+- le ledger FinOps prend les réservations actives en compte avant d'autoriser une nouvelle dépense.
 
 ### Security
 
 - les documents entrants sont explicitement non fiables et ne peuvent pas redéfinir la politique des agents ;
-- les symlinks sont refusés dans l'Intake et ne sont jamais suivis ;
+- les symlinks, junctions et autres reparse points sont refusés sur les frontières filesystem gérées et ne sont jamais déréférencés pour copier un fichier extérieur au projet ;
 - les secrets potentiels bloquent l'ingestion avant matérialisation du projet ;
 - l'Intake et son archive canonique deviennent immuables après création ;
 - les représentations documentaires locales ne remplacent jamais les originaux comme source de vérité ;
-- les bundles d'échange sont hashés, versionnés et ne peuvent pas être modifiés silencieusement par les consommateurs ;
+- les archives Office malformées, path-traversal, chiffrées ou présentant des caractéristiques de décompression dangereuses sont refusées avant lecture XML ;
+- les PDF dépassant la limite locale déclarée sont refusés avant d'être marqués `READY_TOOL` ;
+- les bundles d'échange sont hashés, versionnés et refusent les fichiers liés/reparse ;
+- le packaging refuse les liens/reparse points dans les artefacts gérés ;
 - l'ingestion documentaire n'active aucun service cloud ;
+- les réservations FinOps empêchent deux agents concurrents de consommer simultanément le même budget disponible ;
 - la télémétrie refuse les contenus privés et les métriques négatives/fabriquées ;
 - les publications distantes restent soumises à approbation humaine et preuves observées ;
-- aucun modèle lourd optionnel ne devient automatiquement nominal sans qualification locale explicite ;
+- aucune promotion automatique de modèle/backend n'est autorisée ;
 - l'activation des tiers performance ne réactive jamais le cloud et ne contourne pas les gates FinOps/humains.
 
 ## [0.2.0] - 2026-08-27

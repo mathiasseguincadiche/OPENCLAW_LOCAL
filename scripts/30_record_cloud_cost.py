@@ -5,8 +5,8 @@ from pathlib import Path
 
 from clawlocal.finops import (
     append_cloud_cost,
-    cloud_budget_allowed,
     default_ledger_path,
+    settle_cloud_reservation,
 )
 
 
@@ -19,25 +19,25 @@ def main() -> int:
     parser.add_argument("--reason", required=True)
     parser.add_argument("--cost-eur", required=True, type=float)
     parser.add_argument("--project-id")
+    parser.add_argument("--reservation-id")
     parser.add_argument("--ledger", type=Path, default=default_ledger_path())
     args = parser.parse_args()
 
-    allowed, budget_reason = cloud_budget_allowed(
-        args.ledger,
-        proposed_cost_eur=args.cost_eur,
-        project_id=args.project_id,
-    )
-    if not allowed:
-        raise RuntimeError(budget_reason)
-
-    path = append_cloud_cost(
-        args.ledger,
-        role=args.role,
-        model=args.model,
-        reason=args.reason,
-        cost_eur=args.cost_eur,
-        project_id=args.project_id,
-    )
+    if args.reservation_id:
+        path = settle_cloud_reservation(
+            args.reservation_id,
+            ledger_path=args.ledger,
+            cost_eur=args.cost_eur,
+        )
+    else:
+        path = append_cloud_cost(
+            args.ledger,
+            role=args.role,
+            model=args.model,
+            reason=args.reason,
+            cost_eur=args.cost_eur,
+            project_id=args.project_id,
+        )
     print(f"LEDGER={path}")
     return 0
 

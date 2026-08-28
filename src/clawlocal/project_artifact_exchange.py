@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from clawlocal.config import load_contract
+from clawlocal.safe_fs import assert_no_link_like, secure_path_within
 
 _ALLOWED_OUTPUT_ROOTS = {"work", "deliverables", "evidence", "diagrams"}
 
@@ -99,13 +100,12 @@ def _safe_output(project: Path, relative: str) -> Path:
         raise ValueError(f"sortie échangée invalide: {relative}")
     if value.parts[0] not in _ALLOWED_OUTPUT_ROOTS:
         raise ValueError(f"racine de sortie non autorisée: {relative}")
-    root = project.resolve()
-    path = (project / value).resolve()
-    if root not in path.parents:
-        raise ValueError(f"sortie hors projet: {relative}")
-    if not path.is_file():
-        raise FileNotFoundError(path)
-    return path
+    return secure_path_within(
+        project / value,
+        project,
+        require_file=True,
+        label="sortie échangée",
+    )
 
 
 def _bundle_path(project: Path, producer: str, consumer: str | None, attempt: int) -> Path:
@@ -159,6 +159,7 @@ def _write_bundle(
         "consumer_must_not_modify_in_place": True,
     }
     _write_json(destination / "manifest.json", manifest)
+    assert_no_link_like(destination, label="bundle d'échange")
     return destination
 
 
@@ -268,6 +269,12 @@ def affected_agents_after_publish(
 
 
 def validate_exchange_bundle(project: Path, bundle: Path) -> list[str]:
+    try:
+        secure_path_within(bundle, project, require_dir=True, label="bundle d'échange")
+        assert_no_link_like(bundle, label="bundle d'échange")
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
+        return [str(exc)]
+
     manifest_path = bundle / "manifest.json"
     if not manifest_path.is_file():
         return [f"manifest absent: {bundle.relative_to(project).as_posix()}"]
@@ -284,13 +291,20 @@ def validate_exchange_bundle(project: Path, bundle: Path) -> list[str]:
         relative = str(raw.get("path", ""))
         expected = str(raw.get("sha256", ""))
         target = bundle / "artifacts" / relative
-        if not target.is_file():
-            failures.append(f"artefact absent: {relative}")
+        try:
+            safe_target = secure_path_within(
+                target,
+                bundle / "artifacts",
+                require_file=True,
+                label="artefact échangé",
+            )
+        except (FileNotFoundError, ValueError):
+            failures.append(f"artefact absent ou non sûr: {relative}")
             continue
-        observed = _sha256(target)
+        observed = _sha256(safe_target)
         if observed != expected:
             failures.append(f"artefact modifié: {relative}")
-        size = target.stat().st_size
+        size = safe_target.stat().st_size
         aggregate.update(f"{relative}\0{observed}\0{size}\n".encode())
     expected_aggregate = str(payload.get("aggregate_sha256", ""))
     if aggregate.hexdigest() != expected_aggregate:
@@ -302,6 +316,10 @@ def validate_exchange_for_task(project: Path, task_id: str) -> list[str]:
     root = project / "context" / "exchange" / task_id
     if not root.exists():
         return []
+    try:
+        assert_no_link_like(root, label="artifact exchange")
+    except ValueError as exc:
+        return [str(exc)]
     failures: list[str] = []
     for manifest in sorted(root.rglob("manifest.json")):
         failures.extend(validate_exchange_bundle(project, manifest.parent))
@@ -316,6 +334,14 @@ def validate_exchange_completeness(project: Path) -> list[str]:
     dependencies = _plan_dependencies(project)
     transitive = bool(_policy().get("propagation", {}).get("transitive_dependents", True))
     failures: list[str] = []
+
+    exchange_root = project / "context" / "exchange"
+    if exchange_root.exists():
+        try:
+            assert_no_link_like(exchange_root, label="artifact exchange")
+        except ValueError as exc:
+            failures.append(str(exc))
+            return failures
 
     for raw in tasks:
         if not isinstance(raw, dict):

@@ -2,151 +2,202 @@
 
 ## But
 
-Cette procédure transforme les modèles/backends déclarés `candidate` en décisions fondées sur des preuves. Elle cible la workstation Windows 11 de référence avec Intel Arc B580 12 Go, Ryzen 7 7700 et 48 Go de RAM, sans supposer à l'avance qu'un modèle, un contexte ou un backend est performant.
+La qualification transforme la flotte et les backends déclarés dans Git en décisions fondées sur des **preuves réelles** produites sur la workstation cible. Elle ne sert pas à découvrir de nouveaux modèles : la flotte supportée est déjà fermée à exactement trois modèles.
+
+## Flotte obligatoire
+
+| Alias | Runtime | Classe |
+|---|---|---|
+| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX |
+| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP |
+| `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST |
+
+Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer le gate global. Il n'existe aucun modèle local optionnel, aucun quatrième candidat et aucun switch de qualification permettant d'en ajouter un.
 
 ## Invariants
 
-- aucun appel cloud pendant la qualification matérielle ;
+- aucun appel LLM cloud pendant la qualification matérielle ;
 - aucun téléchargement implicite pendant le benchmark ;
+- exactement trois modèles évalués ;
+- aucun seuil modifié pour faire passer artificiellement un modèle ;
 - aucune promotion automatique ;
-- résultats bruts conservés hors Git ;
-- modèles requis évalués séparément ;
-- LOCAL_SPECIALIST, LOCAL_DEEP et LOCAL_MAX restent optionnels tant qu'ils ne sont pas installés/validés ;
-- toute dérive OpenClaw, backend ou pilote GPU invalide la réutilisation automatique d'une ancienne preuve.
+- preuves brutes conservées hors Git ;
+- toute dérive de modèle, backend, OpenClaw, Ollama ou pilote GPU invalide la réutilisation automatique d'une preuve précédente.
 
-## Préparation reproductible
+## 1. Installation propre
 
 ```powershell
 .\menu.ps1 -Action install-full -DryRun
 .\menu.ps1 -Action install-full
+```
 
+Le parcours complet installe le runtime, configure le stockage local, télécharge les trois modèles, configure OpenClaw et le Gateway puis vérifie le parcours nominal.
+
+Après la première installation, fermer puis rouvrir PowerShell.
+
+## 2. Vérification du runtime
+
+```powershell
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
 ```
 
-Le téléchargement des modèles requis a lieu avant le protocole afin d'éviter une mutation réseau inattendue pendant les mesures. Les candidats optionnels peuvent être préchargés séparément avec :
+Avant de poursuivre, vérifier notamment :
 
-```powershell
-.\scripts\windows\03_pull_models.ps1 -IncludeOptionalOllama
-```
+- runtime conforme au lock ;
+- Ollama sur loopback ;
+- trois modèles présents ;
+- huit agents configurés ;
+- aucun cloud requis.
 
-## Gate OpenClaw E2E réel
+## 3. Gate OpenClaw E2E
 
 ```powershell
 .\menu.ps1 -Action e2e -DryRun
 .\menu.ps1 -Action e2e
 ```
 
-Cette étape vérifie :
+Le gate E2E doit prouver au minimum :
 
 1. les huit agents via le Gateway ;
-2. le provider local sur le parcours nominal ;
+2. `provider=ollama` sur le parcours nominal ;
 3. un vrai appel d'outil ;
-4. une erreur d'outil contrôlée puis réparation ;
-5. trois exécutions stables ;
+4. une erreur d'outil contrôlée suivie d'une réparation ;
+5. trois exécutions locales stables ;
 6. aucune dépendance cloud nominale.
 
-La preuve E2E reste sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
+Les preuves sont écrites sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
 
-## Qualification automatique des modèles requis
+## 4. Qualification automatique des trois modèles
+
+Passe complète :
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
-Le parcours V0.2 enchaîne :
+Ou directement :
 
-1. audit Windows/runtime ;
-2. lecture des modèles `required` depuis `model_catalog.yaml` ;
-3. smoke test de ces modèles ;
-4. collecte d'inventaire ;
-5. suite déclarée par `qualification_policy.yaml` — actuellement `devops-v2` ;
-6. contextes 8K et 16K ;
+```powershell
+.\scripts\windows\07_run_qualification.ps1
+```
+
+Passe rapide 8K uniquement :
+
+```powershell
+.\scripts\windows\07_run_qualification.ps1 -Quick
+```
+
+Le runner accepte uniquement `-DryRun` et `-Quick`. Les anciens switches de sélection de classes ou de candidats ne font plus partie du contrat.
+
+Le parcours enchaîne :
+
+1. audit host/runtime ;
+2. lecture des trois modèles `required` depuis `model_catalog.yaml` ;
+3. smoke test de chacun ;
+4. inventaire matériel/runtime ;
+5. benchmark selon `qualification_policy.yaml` ;
+6. contextes 8K et 16K en passe complète ;
 7. évaluation des seuils versionnés.
 
-Les preuves sont écrites dans `benchmarks/results/`.
+## 5. Mesures à collecter
 
-## Qualification de la flotte performance août 2026
-
-Les trois classes optionnelles peuvent être ajoutées séparément ou ensemble :
-
-```powershell
-.\scripts\windows\07_run_qualification.ps1 -IncludeSpecialist
-.\scripts\windows\07_run_qualification.ps1 -IncludeDeep
-.\scripts\windows\07_run_qualification.ps1 -IncludeMax
-
-# Passe complète des candidats Ollama
-.\scripts\windows\07_run_qualification.ps1 `
-  -IncludeSpecialist `
-  -IncludeDeep `
-  -IncludeMax
-```
-
-Les alias sont sélectionnés depuis les contrats, pas hardcodés dans le runner :
-
-```text
-LOCAL_SPECIALIST -> devstral-devops -> devstral-small-2:24b
-LOCAL_DEEP       -> gemma-deep      -> gemma4:26b
-LOCAL_MAX        -> qwen-max        -> qwen3.8:27b
-```
-
-Cette option n'implique aucune promotion. Elle sert uniquement à mesurer si le gain qualitatif justifie l'offload, la RAM et la latence supplémentaires.
-
-## SERA
-
-SERA est conservé comme candidat historique mais reste hors routage actif. Son provider `custom_gguf` ne doit pas être simulé par le runner Ollama. Une réactivation future exigerait import du backend correspondant, benchmark séparé et revue explicite.
-
-## Activation après qualification
-
-Après validation réelle d'un candidat sur la workstation, l'état runtime local peut exposer les alias qualifiés :
-
-```powershell
-$env:OPENCLAW_LOCAL_QUALIFIED_MODELS = 'qwen-max,gemma-deep,devstral-devops'
-```
-
-Le routeur peut alors sélectionner automatiquement le meilleur tier préféré par rôle. Cette variable ne constitue pas elle-même une preuve : elle doit refléter une qualification déjà effectuée et revue.
-
-## Comparaison des backends Intel Arc
-
-`runtime_backends.yaml` déclare :
-
-- `ollama-vulkan` ;
-- `llama-cpp-sycl` ;
-- `llama-cpp-vulkan`.
-
-La promotion d'un backend Intel Arc exige une comparaison B580 réelle, idéalement avec le même modèle/quantification, sur :
+Pour chaque modèle/backend pertinent :
 
 - TTFT ;
 - tokens/s ;
+- durée murale ;
 - VRAM ;
 - RAM ;
 - stabilité ;
-- tool-calling.
+- erreurs ;
+- contexte 8K/16K ;
+- tool-calling ;
+- réparation après retour d'outil ;
+- comportement multimodal PDF/image lorsqu'il s'applique.
 
-Le backend nominal V0.2 n'est pas automatiquement le vainqueur final.
+Les mesures absentes restent absentes : elles ne sont jamais inventées.
 
-## Interprétation
+## 6. Comparaison des backends Intel Arc
 
-`NOT_READY` signifie qu'au moins un garde-fou automatique échoue. Il faut analyser la preuve avant de modifier un seuil, un contexte ou un modèle.
+Le contrat déclare :
 
-`READY_FOR_MANUAL_QUALIFICATION` signifie uniquement que les garde-fous automatiques sont passés. Le modèle reste `candidate` tant que l'E2E OpenClaw, la stabilité, les scénarios projet/Web et la revue humaine ne sont pas terminés.
+- `ollama-vulkan` — chemin nominal pré-qualification ;
+- `llama-cpp-sycl` — candidat ;
+- `llama-cpp-vulkan` — candidat.
 
-## Pourquoi la CI ne remplace pas la B580
+Comparer autant que possible le même modèle et la même quantification. Le choix doit reposer sur le compromis réel entre :
 
-GitHub Actions valide le code, les contrats, Python 3.12/3.13, PowerShell, la sécurité et le rendu de configuration. Il ne possède pas l'Intel Arc B580 de référence, son pilote, sa VRAM ni les runtimes locaux réellement chargés.
+- TTFT ;
+- débit ;
+- VRAM/RAM ;
+- stabilité ;
+- contexte soutenable ;
+- compatibilité OpenClaw/tool-calling ;
+- simplicité d'exploitation.
 
-La CI peut donc déclarer la **V0.2 logicielle conforme**, mais jamais inventer une qualification matérielle.
+Aucun backend n'est auto-promu.
 
-## Promotion
+## 7. Projet représentatif obligatoire avant V1
 
-La promotion d'un modèle/backend doit faire l'objet d'une Pull Request distincte qui :
+La qualification technique doit être complétée par au moins un projet réel couvrant :
 
-1. joint une synthèse redacted des preuves ;
-2. modifie explicitement le statut du modèle/backend ;
-3. documente les versions exactes runtime/pilote ;
-4. explique les limites observées ;
-5. conserve une route locale de repli ;
-6. ne réactive pas le cloud par défaut.
+```text
+INTAKE_READY
+-> ANALYZE
+-> CLARIFY si nécessaire
+-> PLAN
+-> ASSIGN
+-> EXECUTE
+-> VALIDATE
+-> REVIEW
+-> PACKAGE
+-> approbation humaine
+-> COMPLETE
+```
 
-La version `1.0.0` ne doit être envisagée qu'après qualification réelle du parcours local nominal sur la workstation cible.
+Le scénario doit idéalement contenir plusieurs formats (PDF/images/Office/code) et une dépendance entre tâches permettant de vérifier l'Artifact Exchange et la resynchronisation.
+
+## Verdicts
+
+### `NOT_READY`
+
+Au moins un garde-fou automatique échoue. Conserver la preuve, diagnostiquer puis corriger la cause. Ne pas abaisser un seuil sans justification et revue.
+
+### `READY_FOR_MANUAL_QUALIFICATION`
+
+Les gates automatiques sont passés. Ce verdict **ne signifie pas V1 qualifiée**. Il reste à valider les preuves E2E, les performances, la stabilité, les backends et le projet représentatif.
+
+## Preuves minimales pour la décision V1
+
+- commit Git exact ;
+- versions Windows/PowerShell/Python/OpenClaw/Ollama ;
+- pilote GPU ;
+- inventaire matériel ;
+- résultats des trois modèles ;
+- E2E OpenClaw ;
+- comparaison backend ;
+- test multimodal ;
+- projet complet ;
+- limites observées ;
+- revue humaine.
+
+## Pourquoi GitHub Actions ne suffit pas
+
+La CI valide le code, les contrats, la compatibilité Python/PowerShell, les tests de sécurité et les invariants documentaires. Elle ne possède ni la workstation cible, ni son pilote, ni sa VRAM, ni les modèles réellement chargés.
+
+La CI peut donc prouver la **conformité logicielle**, jamais inventer une qualification matérielle.
+
+## Critère V1.0.0
+
+`1.0.0` ne doit être envisagée qu'après :
+
+1. installation propre ;
+2. `audit` et `verify` réussis ;
+3. E2E réel réussi ;
+4. qualification des trois modèles ;
+5. comparaison des backends prévue ;
+6. au moins un projet complet ;
+7. limites documentées ;
+8. validation humaine finale.

@@ -16,6 +16,7 @@ from clawlocal.project_governance import initialize_governance
 from clawlocal.project_integrity import snapshot_integrity
 from clawlocal.project_learning import initialize_learning
 from clawlocal.project_publication import initialize_publication
+from clawlocal.safe_fs import assert_no_link_like, copytree_no_links, is_link_like
 
 PROJECT_DIRS = (
     "intake",
@@ -75,30 +76,15 @@ def _sha256(path: Path) -> str:
 
 
 def _iter_files(item: Path) -> Iterable[Path]:
-    if item.is_file() and not item.is_symlink():
+    if item.is_file() and not is_link_like(item):
         yield item
         return
     if item.is_dir():
         yield from (
             path
             for path in item.rglob("*")
-            if path.is_file() and not path.is_symlink()
+            if path.is_file() and not is_link_like(path)
         )
-
-
-def _iter_symlinks(item: Path) -> Iterable[Path]:
-    if item.is_symlink():
-        yield item
-        return
-    if item.is_dir():
-        yield from (path for path in item.rglob("*") if path.is_symlink())
-
-
-def _assert_no_symlinks(item: Path) -> None:
-    links = list(_iter_symlinks(item))
-    if links:
-        names = ", ".join(str(path) for path in links[:5])
-        raise ValueError(f"lien symbolique interdit dans l'intake: {names}")
 
 
 def _looks_text(path: Path) -> bool:
@@ -130,22 +116,22 @@ def _assert_no_obvious_secret(item: Path, *, label: str) -> None:
 
 def _validated_source(item: Path, *, intake: bool) -> Path:
     raw = item.expanduser()
-    if raw.is_symlink():
-        raise ValueError(f"source racine symbolique interdite: {item}")
+    if is_link_like(raw):
+        raise ValueError(f"source racine liée/reparse point interdite: {item}")
     source = raw.resolve(strict=True)
-    if intake:
-        _assert_no_symlinks(source)
-        _assert_no_obvious_secret(source, label="l'intake")
-    else:
-        _assert_no_obvious_secret(source, label="les sources")
+    label = "intake" if intake else "sources"
+    assert_no_link_like(source, label=label)
+    _assert_no_obvious_secret(source, label="l'intake" if intake else "les sources")
     return source
 
 
 def _copy_one(source: Path, destination: Path) -> None:
     if destination.exists():
         raise FileExistsError(destination)
+    if is_link_like(source):
+        raise ValueError(f"source liée/reparse point interdite: {source}")
     if source.is_dir():
-        shutil.copytree(source, destination, symlinks=True)
+        copytree_no_links(source, destination, label=f"source {source.name}")
     elif source.is_file():
         shutil.copy2(source, destination)
     else:
@@ -169,8 +155,9 @@ def _inventory(root: Path) -> tuple[list[str], list[str], list[str]]:
         return checksums, mime_types, symlinks
     for path in sorted(root.rglob("*")):
         relative = path.relative_to(root).as_posix()
-        if path.is_symlink():
-            symlinks.append(f"{relative} -> {os.readlink(path)}")
+        if is_link_like(path):
+            target = os.readlink(path) if path.is_symlink() else "<reparse-point>"
+            symlinks.append(f"{relative} -> {target}")
             continue
         if not path.is_file():
             continue
@@ -221,7 +208,7 @@ def _write_inventory(
         f"# Rapport {source_kind}\n\n"
         f"- Projet : `{project_id}`\n"
         f"- Fichiers : **{len(checksums)}**\n"
-        f"- Liens symboliques : **{len(symlinks)}**\n"
+        f"- Liens/reparse points : **{len(symlinks)}**\n"
         "- Secrets potentiels : **0** (sinon la création aurait été refusée)\n"
         "- Intégrité : **SHA-256 + digest agrégé enregistrés**\n"
         "- MIME : **inventaire enregistré**\n",
@@ -231,7 +218,7 @@ def _write_inventory(
 
 def _set_posix_read_only(root: Path) -> None:
     for path in sorted(root.rglob("*"), reverse=True):
-        if path.is_symlink():
+        if is_link_like(path):
             continue
         if path.is_file():
             path.chmod(0o444)
@@ -279,7 +266,7 @@ def _restore_posix_writable(root: Path) -> None:
         return
     root.chmod(0o755)
     for path in root.rglob("*"):
-        if path.is_symlink():
+        if is_link_like(path):
             continue
         if path.is_file():
             path.chmod(0o644)
@@ -337,7 +324,7 @@ def _archive_intake(
             copied.append(source.name)
         checksums, mime_types, symlinks = _inventory(original)
         if symlinks:
-            raise ValueError("intake canonique contient un lien symbolique inattendu")
+            raise ValueError("intake canonique contient un lien/reparse point inattendu")
         _write_inventory(
             archive,
             project_id=project_id,
@@ -403,6 +390,8 @@ def create_project(
             symlinks=symlinks,
         )
         source_checksums, source_mime, source_symlinks = _inventory(destination / "sources")
+        if source_symlinks:
+            raise ValueError("sources matérialisées contiennent un lien/reparse point")
         _write_inventory(
             destination / "evidence" / "sources",
             project_id=normalized_id,

@@ -31,21 +31,51 @@ EXPECTED_PRIMARY = {
 FORBIDDEN_ACTIVE_RUNTIME_IDS = (
     "qwen3.5:9b",
     "gemma4:12b",
+    "qwen3.5:27b",
     "sera-14b",
 )
 
-ACTIVE_TEXT_FILES = (
+ACTIVE_MODEL_TEXT_FILES = (
     "README.md",
     "STATUS.md",
+    "docs/ARCHITECTURE.md",
+    "docs/BENCHMARK.md",
     "docs/MODELES_LOCAUX.md",
+    "docs/OPENCLAW_INTEGRATION.md",
+    "docs/OPERATIONS.md",
+    "docs/QUALIFICATION.md",
     "docs/ROUTAGE_HYBRIDE.md",
-    "docs/TELEMETRY.md",
+    "docs/RUNTIME_BACKENDS.md",
+    "docs/TROUBLESHOOTING.md",
     "config/openclaw.local.example.json5",
     "config/v1/model_catalog.yaml",
     "config/v1/model_routing.yaml",
     "config/v1/qualification_policy.yaml",
     "src/clawlocal/openclaw_config.py",
 )
+
+DOCUMENTATION_FILES = (
+    "README.md",
+    "STATUS.md",
+    "docs/ARCHITECTURE.md",
+    "docs/BENCHMARK.md",
+    "docs/INSTALLATION_WINDOWS_11.md",
+    "docs/MODELES_LOCAUX.md",
+    "docs/OPENCLAW_INTEGRATION.md",
+    "docs/OPERATIONS.md",
+    "docs/QUALIFICATION.md",
+    "docs/ROUTAGE_HYBRIDE.md",
+    "docs/RUNTIME_BACKENDS.md",
+    "docs/TROUBLESHOOTING.md",
+)
+
+FORBIDDEN_DOCUMENTATION_COMMANDS = (
+    "-IncludeDeep",
+    "-IncludeSpecialist",
+    "-IncludeMax",
+)
+
+ALLOWED_LOCAL_FAST_NEGATION = "aucun modèle LOCAL_FAST"
 
 
 def load_yaml(name: str) -> dict[str, Any]:
@@ -54,6 +84,14 @@ def load_yaml(name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{name}: racine YAML invalide")
     return value
+
+
+def read_required(path: str, failures: list[str]) -> str:
+    target = ROOT / path
+    if not target.is_file():
+        failures.append(f"fichier actif attendu absent: {path}")
+        return ""
+    return target.read_text(encoding="utf-8")
 
 
 def main() -> int:
@@ -113,7 +151,7 @@ def main() -> int:
 
     auditor = agents.get("auditeur-qualite", {})
     if auditor.get("independent_alternative") != "qwen-max":
-        failures.append("Auditeur: Qwen3.8 27B doit être l'alternative indépendante")
+        failures.append("Auditeur: Qwen 3.8 27B doit être l'alternative indépendante")
     if (
         auditor.get("independence_rule")
         != "reviewer_family_must_differ_from_producer_when_practical"
@@ -133,17 +171,7 @@ def main() -> int:
     if qualification.get("promotion", {}).get("automatic_promotion") is not False:
         failures.append("la qualification ne doit jamais auto-promouvoir un runtime/backend")
 
-    decisions = {
-        "chef-operations": "qwen-max",
-        "expert-recherche": "qwen-max",
-        "architecte-solutions": "gemma-deep",
-        "ingenieur-devops": "devstral-devops",
-        "ingenieur-securite": "qwen-max",
-        "ingenieur-release-forges": "qwen-max",
-        "redacteur-technique": "gemma-deep",
-        "auditeur-qualite": "gemma-deep",
-    }
-    for agent, alias in decisions.items():
+    for agent, alias in EXPECTED_PRIMARY.items():
         decision = select_route(agent, qualified_models=set())
         if decision.model_alias != alias:
             failures.append(f"{agent}: route nominale {alias} attendue")
@@ -160,41 +188,78 @@ def main() -> int:
         if model_ref(alias) != f"ollama/{runtime_id}":
             failures.append(f"{alias}: résolution runtime incohérente")
 
-    openclaw_source = (ROOT / "src/clawlocal/openclaw_config.py").read_text(
-        encoding="utf-8"
-    )
+    openclaw_source = read_required("src/clawlocal/openclaw_config.py", failures)
     for marker in ('["qwen-max"]', '["gemma-deep"]'):
         if marker not in openclaw_source:
             failures.append(f"OpenClaw: modèle performance par défaut non câblé: {marker}")
 
-    for relative in ACTIVE_TEXT_FILES:
-        path = ROOT / relative
-        if not path.is_file():
-            failures.append(f"fichier actif attendu absent: {relative}")
-            continue
-        text = path.read_text(encoding="utf-8")
+    for relative in ACTIVE_MODEL_TEXT_FILES:
+        text = read_required(relative, failures)
         for runtime_id in FORBIDDEN_ACTIVE_RUNTIME_IDS:
             if runtime_id in text:
                 failures.append(f"{relative}: ancien modèle local encore actif: {runtime_id}")
 
-    for relative in ("README.md", "STATUS.md", "docs/MODELES_LOCAUX.md"):
-        text = (ROOT / relative).read_text(encoding="utf-8")
+    for relative in DOCUMENTATION_FILES:
+        text = read_required(relative, failures)
+        for marker in FORBIDDEN_DOCUMENTATION_COMMANDS:
+            if marker in text:
+                failures.append(f"{relative}: commande documentaire legacy interdite: {marker}")
+        local_fast_count = text.count("LOCAL_FAST")
+        allowed_negations = text.count(ALLOWED_LOCAL_FAST_NEGATION)
+        if local_fast_count != allowed_negations:
+            failures.append(f"{relative}: taxonomie LOCAL_FAST legacy encore active")
+
+    for relative in (
+        "README.md",
+        "STATUS.md",
+        "docs/ARCHITECTURE.md",
+        "docs/MODELES_LOCAUX.md",
+        "docs/QUALIFICATION.md",
+    ):
+        text = read_required(relative, failures)
         for runtime_id in EXPECTED_MODELS.values():
             if runtime_id not in text:
                 failures.append(f"{relative}: modèle performance absent: {runtime_id}")
 
+    qualification_runner = read_required(
+        "scripts/windows/07_run_qualification.ps1", failures
+    )
+    for marker in ("IncludeDeep", "IncludeSpecialist", "IncludeMax"):
+        if marker in qualification_runner:
+            failures.append(f"runner qualification: switch legacy interdit: {marker}")
+
+    configure_local = read_required("scripts/windows/02_configure_local.ps1", failures)
+    pull_models = read_required("scripts/windows/03_pull_models.ps1", failures)
+    install_doc = read_required("docs/INSTALLATION_WINDOWS_11.md", failures)
+    for relative, text in (
+        ("scripts/windows/02_configure_local.ps1", configure_local),
+        ("scripts/windows/03_pull_models.ps1", pull_models),
+        ("docs/INSTALLATION_WINDOWS_11.md", install_doc),
+    ):
+        if "OLLAMA_MODELS" not in text:
+            failures.append(f"{relative}: OLLAMA_MODELS doit être documenté/câblé")
+        if "models\\ollama" not in text:
+            failures.append(f"{relative}: racine models\\ollama attendue")
+
+    operations = read_required("docs/OPERATIONS.md", failures)
+    for marker in ("projects", "state", "proofs", "Restauration"):
+        if marker not in operations:
+            failures.append(f"docs/OPERATIONS.md: sauvegarde/restauration incomplète: {marker}")
+
     if failures:
-        print("Performance-only Model Fleet: NON CONFORME")
+        print("Performance-only Model Fleet + Documentation: NON CONFORME")
         for failure in failures:
             print(f"- {failure}")
         return 1
 
-    print("Performance-only Model Fleet: CONFORME")
+    print("Performance-only Model Fleet + Documentation: CONFORME")
     print("- Qwen 3.8 27B: orchestration/recherche/sécurité/release")
     print("- Gemma 4 26B: architecture/rédaction/audit")
     print("- Devstral Small 2 24B: DevOps/software engineering")
-    print("- aucun Qwen 3.5 9B, Gemma 4 12B ou SERA 14B dans la flotte active")
-    print("- les trois modèles sont obligatoires pour la qualification matérielle")
+    print("- aucun runtime legacy dans les surfaces actives")
+    print("- aucune commande de qualification legacy dans la documentation active")
+    print("- OLLAMA_MODELS est câblé vers la racine gérée")
+    print("- sauvegarde/restauration opérationnelles documentées")
     return 0
 
 

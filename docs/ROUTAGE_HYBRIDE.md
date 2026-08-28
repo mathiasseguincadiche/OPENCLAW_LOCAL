@@ -2,9 +2,9 @@
 
 ## Intention
 
-Le local traite le parcours nominal. Le cloud n'est pas un fallback technique : c'est une **escalade explicite** soumise à politique, preuve et budget.
+Le local traite le parcours nominal. OpenRouter n'est pas un fallback technique automatique : c'est une **escalade explicite** soumise à motif, préconditions, budget, et parfois validation humaine.
 
-La flotte locale est performance-only : toutes les routes locales doivent rester dans cet ensemble fermé :
+## Flotte locale fermée
 
 ```text
 qwen-max          -> qwen3.8:27b
@@ -17,47 +17,41 @@ Aucun quatrième modèle local n'est supporté.
 ## Routage nominal
 
 ```text
-Chef opérations       -> Qwen 3.8 27B
-Expert recherche      -> Qwen 3.8 27B + Web
-Architecte solutions  -> Gemma 4 26B
-Ingénieur DevOps      -> Devstral Small 2 24B
-Ingénieur sécurité    -> Qwen 3.8 27B
-Release/Forges        -> Qwen 3.8 27B
-Rédacteur technique   -> Gemma 4 26B
-Auditeur qualité      -> Gemma 4 26B
+Chef opérations       -> qwen-max
+Expert recherche      -> qwen-max + Web
+Architecte solutions  -> gemma-deep
+Ingénieur DevOps      -> devstral-devops
+Ingénieur sécurité    -> qwen-max
+Release/Forges        -> qwen-max
+Rédacteur technique   -> gemma-deep
+Auditeur qualité      -> gemma-deep
 ```
 
-Les champs de tier `local_specialist`, `local_deep` et `local_max` restent présents pour exprimer la spécialité d'un rôle et pour les diagnostics, mais ils ne donnent jamais accès à un modèle hors de la flotte supportée.
-
-La recherche d'informations récentes suit un chemin parallèle **LOCAL + WEB** et ne justifie pas à elle seule un appel LLM cloud.
+Si le producteur est de famille Gemma, l'Auditeur peut utiliser `qwen-max` comme alternative indépendante lorsque cela est praticable.
 
 ## Fallback local
 
-Le fallback local reste lui aussi performance-only :
+Les fallbacks restent dans la même flotte fermée :
 
-- rôles Qwen -> Gemma 4 26B lorsque pertinent ;
-- rôles Gemma -> Qwen 3.8 27B ;
-- DevOps -> Qwen 3.8 27B si Devstral est indisponible ;
+- rôles Qwen -> Gemma lorsque pertinent ;
+- rôles Gemma -> Qwen ;
+- DevOps -> Qwen si Devstral est indisponible ;
 - aucune indisponibilité locale ne déclenche automatiquement OpenRouter.
 
-## Indépendance de l'Auditeur
+Les champs `local_specialist`, `local_deep`, `local_max` et `independent_alternative` expriment la spécialité et les routes autorisées ; ils ne donnent jamais accès à un alias hors catalogue.
 
-L'Auditeur utilise Gemma 4 26B nominalement. Si le producteur est de famille Gemma, le routeur sélectionne **Qwen 3.8 27B** comme revue indépendante lorsque cela est praticable.
+## Web local-first
 
-Le paramètre `producer_model_alias` permet au routeur de vérifier explicitement cette séparation de famille.
-
-## Tiers explicites de diagnostic
-
-`scripts/27_route_openclaw.py` expose :
+Une information récente suit d'abord :
 
 ```text
---specialist-available
---deep-local-available
---max-local-available
---producer-model-alias
+expert-recherche local
+  -> web_search / web_fetch / browser si nécessaire
+  -> sources récentes
+  -> synthèse locale
 ```
 
-Ces options servent aux tests et diagnostics opérateur. Elles ne permettent pas de contourner le catalogue : toute route locale doit résoudre l'un des trois alias supportés.
+La simple fraîcheur d'une donnée n'est pas un motif d'appel LLM cloud.
 
 ## Motifs cloud versionnés
 
@@ -65,25 +59,24 @@ Les motifs actifs sont définis dans `config/v1/escalation_policy.yaml`.
 
 ### `deep_web_research`
 
-- rôles : `expert-recherche`, `chef-operations` ;
+- pour les rôles autorisés ;
 - exige une tentative Web locale démontrée ;
-- route préférée : recherche cloud.
+- destiné à une recherche approfondie justifiée.
 
 ### `source_conflict`
 
-- rôles : `expert-recherche`, `chef-operations` ;
-- exige un conflit réel entre sources Web ;
-- route préférée : recherche cloud.
+- exige un conflit réel entre sources ;
+- ne doit pas contourner une recherche locale incomplète.
 
 ### `context_overflow`
 
-- réservé aux rôles techniques autorisés ;
-- utilisé lorsque le contexte requis dépasse la capacité locale **qualifiée**, pas simplement la capacité annoncée par le modèle.
+- uniquement si le contexte requis dépasse la capacité locale **qualifiée** ;
+- une fenêtre théorique annoncée par un modèle n'est pas une preuve.
 
 ### `repeated_local_failure`
 
-- nécessite une preuve d'échec local ;
-- nécessite au moins le nombre de tentatives locales prévu par le contrat.
+- exige des échecs locaux réels ;
+- exige le nombre minimal de tentatives défini par contrat.
 
 ### `high_impact_decision`
 
@@ -92,36 +85,37 @@ Les motifs actifs sont définis dans `config/v1/escalation_policy.yaml`.
 ### `independent_final_review`
 
 - exige une approbation humaine ;
-- permet une seconde opinion frontier sur un livrable important.
+- permet une seconde opinion cloud exceptionnelle sur un livrable important.
 
-## Interdictions explicites
+## Interdictions
 
-Le routeur ne doit jamais accepter :
+Le routeur refuse notamment :
 
 - `web_freshness_only` ;
-- un modèle local seulement plus lent comme motif de cloud ;
 - la commodité ;
-- un fallback silencieux ;
-- l'absence de benchmark local comme prétexte automatique au cloud ;
-- l'envoi d'un secret ;
+- la seule lenteur du local ;
+- un fallback cloud silencieux ;
+- l'absence de benchmark comme prétexte automatique ;
+- un secret ;
 - l'envoi automatique d'un document privé ;
-- un modèle local absent de la flotte performance-only.
+- un modèle local hors de la flotte supportée.
 
 ## Conditions générales du cloud
 
-Toute route cloud exige au minimum :
+Une route cloud exige :
 
 ```text
 cloud_enabled
-+ explicit_reason
-+ budget_ok
-+ préconditions du motif
-+ approbation humaine si le motif l'exige
++ motif explicite et versionné
++ rôle autorisé
++ préconditions démontrées
++ budget disponible
++ approbation humaine si requise
 ```
 
-Le script `scripts/27_route_openclaw.py` applique ces règles avant de construire la commande OpenClaw.
+Une **planification** peut vérifier le coût projeté sans modifier le ledger. Une **exécution réelle** acquiert ensuite le verrou FinOps, relit le ledger et réserve atomiquement le budget immédiatement avant de lancer OpenClaw.
 
-## Exemple : DevOps local
+## Exemple local
 
 ```powershell
 python .\scripts\27_route_openclaw.py `
@@ -129,12 +123,13 @@ python .\scripts\27_route_openclaw.py `
   --message 'Analyse ce dépôt et propose la correction.'
 ```
 
-La route nominale est `devstral-devops` / `devstral-small-2:24b`. Si un fallback local est nécessaire, il reste dans les trois modèles supportés.
+La route nominale est `devstral-devops` / `devstral-small-2:24b`.
 
-## Exemple : recherche approfondie cloud explicite
+## Exemple cloud explicite
 
 ```powershell
 $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'true'
+$env:OPENROUTER_API_KEY = '<secret-local>'
 
 python .\scripts\27_route_openclaw.py `
   --agent expert-recherche `
@@ -142,13 +137,22 @@ python .\scripts\27_route_openclaw.py `
   --cloud `
   --reason deep_web_research `
   --local-web-attempted `
-  --project-id p5-devops
+  --project-id p5-devops `
+  --execute
 ```
 
-Sans `--local-web-attempted`, la route est refusée.
+Lors de `--execute`, une réservation FinOps est créée avant l'appel. L'identifiant de réservation doit ensuite être utilisé pour le règlement du coût réel lorsqu'il est connu.
 
-## Budget et traçabilité
+## FinOps
 
-Le contrôle FinOps est défini dans `budget_policy.yaml`. Le routeur vérifie une dépense projetée avant l'appel. Les coûts observés peuvent ensuite être enregistrés dans le ledger local avec `scripts/30_record_cloud_cost.py`.
+Le ledger local est append-only et tient compte :
+
+- des coûts déjà réglés ;
+- des réservations actives ;
+- des limites quotidiennes ;
+- des limites mensuelles ;
+- des limites par projet.
+
+Deux agents concurrents ne peuvent donc pas consommer le même budget disponible à partir d'un état périmé.
 
 Voir `docs/FINOPS.md`.

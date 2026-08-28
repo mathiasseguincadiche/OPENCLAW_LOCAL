@@ -1,21 +1,54 @@
 # Installation Windows 11
 
-## Préconditions minimales
+## Préconditions
 
 - Windows 11 Pro x64 ;
 - PowerShell 7+ ;
-- WinGet disponible pour installer les runtimes manquants ;
+- WinGet ;
+- Git ;
+- connexion Internet pour le bootstrap et les trois modèles ;
 - pilote Intel Arc à jour avant la qualification matérielle.
 
-Python, Node.js, OpenClaw et Ollama n'ont plus besoin d'être préinstallés manuellement : le bootstrap les contrôle à partir de `config/v1/runtime_versions.json`.
+Python, Node.js, OpenClaw et Ollama sont contrôlés par le bootstrap à partir de `config/v1/runtime_versions.json`.
 
-## 1. Prévisualiser l'installation
+## Emplacement par défaut
+
+Si `E:` existe, la plateforme utilise :
+
+```text
+E:\AI\OpenClawLocal
+```
+
+Sinon :
+
+```text
+%LOCALAPPDATA%\OpenClawLocal
+```
+
+`OPENCLAW_LOCAL_ROOT` permet de choisir une autre racine avant l'installation.
+
+L'arborescence opérationnelle est :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\
+├── runtime\
+├── models\
+│   └── ollama\
+├── projects\
+├── workspaces\
+├── state\
+└── proofs\
+```
+
+`OLLAMA_MODELS` est configuré sur `<OPENCLAW_LOCAL_ROOT>\models\ollama` **avant le téléchargement des modèles** afin d'éviter un stockage implicite dans le profil utilisateur du disque système.
+
+## 1. Prévisualiser
 
 ```powershell
 .\menu.ps1 -Action install-full -DryRun
 ```
 
-Le dry-run n'installe rien, ne télécharge rien et ne modifie aucune variable persistante.
+Le dry-run ne télécharge rien, n'installe rien et ne modifie aucune variable persistante.
 
 ## 2. Installation complète
 
@@ -26,27 +59,74 @@ Le dry-run n'installe rien, ne télécharge rien et ne modifie aucune variable p
 Le parcours effectue dans l'ordre :
 
 1. validation Windows 11 x64 / PowerShell ;
-2. Python préféré verrouillé ;
-3. Node.js isolé et vérifié par SHA-256 ;
-4. tarball OpenClaw exact vérifié par intégrité SHA-512/SRI ;
+2. Python verrouillé ;
+3. Node.js isolé et vérifié ;
+4. OpenClaw exact et vérifié ;
 5. Ollama Windows ;
-6. environnement Python isolé `clawlocal` ;
-7. variables utilisateur locales et PATH ;
-8. démarrage/vérification Ollama ;
-9. téléchargement explicite des modèles requis ;
-10. baseline OpenClaw ;
-11. déploiement des huit workspaces ;
-12. génération + dry-run + application du patch OpenClaw ;
-13. installation/démarrage du Gateway local ;
-14. vérification finale du parcours local.
+6. environnement Python `clawlocal` ;
+7. variables utilisateur et PATH ;
+8. configuration du stockage Ollama ;
+9. démarrage/vérification Ollama ;
+10. téléchargement des trois modèles requis ;
+11. baseline OpenClaw ;
+12. déploiement des huit workspaces ;
+13. génération, dry-run et application du patch OpenClaw ;
+14. installation/démarrage du Gateway local ;
+15. vérification finale du parcours local.
 
-Le runtime géré est placé par défaut sous :
+Après la première installation, fermer puis rouvrir PowerShell.
 
-```text
-E:\AI\OpenClawLocal
+## 3. Vérifier les emplacements
+
+```powershell
+$env:OPENCLAW_LOCAL_ROOT
+$env:OLLAMA_MODELS
+$env:OPENCLAW_STATE_DIR
 ```
 
-si `E:` existe, sinon sous `%LOCALAPPDATA%\OpenClawLocal`. `OPENCLAW_LOCAL_ROOT` peut imposer un autre emplacement avant l'installation.
+Avec `E:` disponible, les valeurs attendues sont :
+
+```text
+OPENCLAW_LOCAL_ROOT = E:\AI\OpenClawLocal
+OLLAMA_MODELS       = E:\AI\OpenClawLocal\models\ollama
+OPENCLAW_STATE_DIR  = E:\AI\OpenClawLocal\state
+```
+
+## 4. Vérifier l'installation
+
+```powershell
+.\menu.ps1 -Action audit
+.\menu.ps1 -Action verify
+.\menu.ps1 -Action e2e
+```
+
+Résultat attendu :
+
+- runtime conforme ;
+- Ollama loopback ;
+- exactement trois modèles supportés ;
+- huit agents ;
+- Gateway joignable ;
+- inférence locale ;
+- tool-calling et réparation E2E ;
+- aucune dépendance cloud nominale.
+
+## 5. Qualifier la workstation
+
+```powershell
+.\menu.ps1 -Action qualification -DryRun
+.\menu.ps1 -Action qualification
+```
+
+Les trois modèles sont obligatoires :
+
+```text
+qwen3.8:27b
+gemma4:26b
+devstral-small-2:24b
+```
+
+Un succès automatique mène au maximum à `READY_FOR_MANUAL_QUALIFICATION`.
 
 ## Installation du runtime seulement
 
@@ -55,46 +135,62 @@ si `E:` existe, sinon sous `%LOCALAPPDATA%\OpenClawLocal`. `OPENCLAW_LOCAL_ROOT`
 .\menu.ps1 -Action install-core
 ```
 
-Cette action installe/répare le runtime verrouillé sans télécharger les modèles ni modifier la flotte OpenClaw.
+Cette action installe/répare le runtime verrouillé sans télécharger la flotte. Avant un téléchargement manuel ultérieur, exécuter :
+
+```powershell
+.\menu.ps1 -Action configure-local
+.\menu.ps1 -Action models
+```
+
+Cela garantit que `OLLAMA_MODELS` est appliqué avant les `ollama pull`.
 
 ## Dérive volontaire d'Ollama
-
-Par défaut, une version Ollama différente du lock provoque un arrêt afin de préserver la reproductibilité. Pour conserver explicitement une version déjà installée :
 
 ```powershell
 .\menu.ps1 -Action install-core -AllowRuntimeDrift
 ```
 
-Cela ne qualifie pas la version différente. Une nouvelle exécution benchmark + E2E + qualification reste obligatoire.
-
-## Vérifications après installation
-
-Ouvrir un nouveau PowerShell puis :
-
-```powershell
-.\menu.ps1 -Action audit
-.\menu.ps1 -Action verify
-.\menu.ps1 -Action e2e
-```
-
-La qualification matérielle complète vient ensuite :
-
-```powershell
-.\menu.ps1 -Action qualification
-```
+Cette option conserve explicitement une version déjà installée différente du lock. Elle impose une nouvelle qualification et ne transforme pas cette version en runtime validé.
 
 ## Ollama
 
-Le backend local écoute sur `http://127.0.0.1:11434`. Ne pas ajouter `/v1` : OpenClaw utilise l'API Ollama native pour conserver le tool-calling. Ne pas exposer Ollama sur le LAN sans besoin explicite et revue de sécurité.
+L'API locale est :
+
+```text
+http://127.0.0.1:11434
+```
+
+Ne pas ajouter `/v1` au endpoint utilisé par le projet. Ne pas exposer Ollama sur le LAN sans besoin explicite et revue de sécurité.
+
+Si l'emplacement `OLLAMA_MODELS` change, `configure-local` redémarre le serveur Ollama afin que le nouveau processus hérite de la valeur configurée avant tout téléchargement.
 
 ## OpenClaw
 
-La flotte est générée depuis les contrats Git du dépôt et appliquée avec `openclaw config patch --dry-run` avant toute écriture réelle. Les huit agents utilisent uniquement des fallbacks locaux persistants.
+La flotte est générée depuis les contrats Git et appliquée avec un dry-run avant écriture réelle. Les fallbacks persistants restent uniquement dans les trois modèles locaux supportés.
 
-Le cloud n'est jamais activé par l'installation. `OPENCLAW_LOCAL_CLOUD_ENABLED=false` est la valeur initiale et aucune clé OpenRouter n'est créée ni enregistrée dans Git.
+Le cloud reste désactivé après installation :
+
+```text
+OPENCLAW_LOCAL_CLOUD_ENABLED=false
+```
+
+Aucune clé OpenRouter n'est créée ni stockée dans Git.
+
+## Données à protéger
+
+Priorité de sauvegarde :
+
+```text
+projects\
+state\
+proofs\        (si les preuves doivent être conservées)
+```
+
+`runtime\` et `workspaces\` sont reconstruisibles. Les modèles peuvent être retéléchargés.
 
 Voir aussi :
 
-- `docs/OPENCLAW_INTEGRATION.md` ;
+- `docs/OPERATIONS.md` ;
 - `docs/TROUBLESHOOTING.md` ;
+- `docs/OPENCLAW_INTEGRATION.md` ;
 - `docs/QUALIFICATION.md`.

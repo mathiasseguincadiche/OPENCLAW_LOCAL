@@ -4,11 +4,11 @@ Ce document fixe les réglages GitHub attendus pour `mathiasseguincadiche/OPENCL
 
 ## Métadonnées du dépôt
 
-Description recommandée :
+Description cible :
 
 > Plateforme IA multi-agents local-first pour Windows 11 : OpenClaw + Ollama, routage hybride, qualification matérielle et escalade cloud contrôlée.
 
-Topics recommandés :
+Topics cibles :
 
 - `openclaw`
 - `ollama`
@@ -21,14 +21,16 @@ Topics recommandés :
 - `llm`
 - `openrouter`
 
+Ces métadonnées sont actuellement présentes sur le dépôt.
+
 ## Protection de `main`
 
 Le dépôt est maintenu par un propriétaire unique. La protection doit imposer le passage par Pull Request et les contrôles automatiques sans exiger l'approbation d'un second mainteneur qui n'existe pas.
 
-Cible recommandée pour un ruleset GitHub appliqué à `main` :
+Cible pour le ruleset GitHub appliqué à `main` :
 
 - empêcher la suppression de la branche ;
-- empêcher les force-push ;
+- empêcher les force-push / non-fast-forward ;
 - imposer une Pull Request avant fusion ;
 - ne pas imposer d'approbation humaine tant que le dépôt reste mono-mainteneur ;
 - imposer la résolution des conversations avant fusion ;
@@ -49,6 +51,30 @@ CodeQL / Python
 
 Les règles qui exigent un deuxième approbateur ne doivent être activées qu'après ajout d'un mainteneur distinct.
 
+### État observé le 28 août 2026
+
+Le ruleset `main-protection` est actif sur la branche par défaut et applique déjà :
+
+- suppression interdite ;
+- non-fast-forward interdit ;
+- histoire linéaire ;
+- Pull Request obligatoire ;
+- zéro approbation imposée pour le dépôt mono-mainteneur ;
+- résolution des conversations ;
+- status checks en mode strict, donc branche à jour ;
+- aucun acteur de bypass permanent.
+
+Checks actuellement imposés par GitHub :
+
+```text
+quality
+windows-contract
+Dependency Review
+CodeQL / Python
+```
+
+Il reste une **dérive administrative connue** : `python-3.12` et `python-3.13` passent dans la CI mais ne sont pas encore des checks obligatoires du ruleset. L'issue GitHub `#8` reste ouverte jusqu'à l'ajout de ces deux checks. La cible versionnée ci-dessus ne doit pas être abaissée pour masquer cet écart.
+
 ## Pull Requests
 
 Chaque changement significatif doit suivre :
@@ -59,12 +85,20 @@ branche dédiée
     -> quality : validateurs + Ruff + mypy + coverage
     -> Python 3.12 / 3.13
     -> PowerShell 7 / PSScriptAnalyzer / Pester
+    -> tests de confinement Windows/Linux lorsque concernés
     -> Dependency Review
     -> CodeQL Python
     -> squash merge vers main
 ```
 
 Les résultats matériels B580 et les preuves E2E avec modèles locaux ne sont jamais simulés dans GitHub Actions. Ils sont produits sur la workstation réelle puis synthétisés dans une Pull Request séparée.
+
+## Sécurité de la supply-chain CI
+
+- les GitHub Actions critiques sont référencées par **SHA de commit immuable** ;
+- le commentaire de version (`# vX`) reste documentaire, le SHA est la référence réellement exécutée ;
+- Dependabot continue à proposer les mises à jour de GitHub Actions ;
+- toute mise à jour d'action doit être revue comme un changement de dépendance de build/CI.
 
 ## Sécurité
 
@@ -113,7 +147,8 @@ Les permissions d'écriture et d'attestation sont limitées au job `publish`, ap
 1. laisser la Pull Request exécuter le nouveau check au moins une fois ;
 2. vérifier son nom exact dans GitHub Actions ;
 3. mettre à jour le ruleset `main` ;
-4. vérifier que le merge est réellement bloqué lorsqu'un check requis échoue.
+4. vérifier que le merge est réellement bloqué lorsqu'un check requis échoue ;
+5. documenter temporairement toute dérive entre la cible et l'état observé au lieu de l'ignorer.
 
 ## Version 1.0.0
 

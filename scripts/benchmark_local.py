@@ -188,49 +188,22 @@ def parse_args() -> argparse.Namespace:
         description="Benchmark local reproductible via API native Ollama."
     )
     parser.add_argument("--endpoint", default="http://127.0.0.1:11434")
-    parser.add_argument("--model", action="append", dest="models")
+    parser.add_argument(
+        "--model",
+        action="append",
+        dest="models",
+        help="Override de diagnostic; sans option, les trois modèles required sont benchmarkés.",
+    )
     parser.add_argument("--context", action="append", type=int, dest="contexts")
-    parser.add_argument("--include-specialist", action="store_true")
-    parser.add_argument("--include-deep", action="store_true")
-    parser.add_argument("--include-max", action="store_true")
     parser.add_argument("--timeout", type=float, default=300.0)
     return parser.parse_args()
-
-
-def _aliases_for_class(
-    model_class: str,
-    policy: dict[str, Any],
-    catalog: dict[str, Any],
-) -> list[str]:
-    selected: list[str] = []
-    specialists = policy.get("specialists", {})
-    for alias, qualification in specialists.items():
-        if not isinstance(qualification, dict):
-            continue
-        if qualification.get("evaluate_after_required_models") is not True:
-            continue
-        model = catalog.get("models", {}).get(alias)
-        if not isinstance(model, dict):
-            continue
-        if model.get("provider") != "ollama":
-            continue
-        if model.get("class") == model_class:
-            selected.append(str(alias))
-    return selected
 
 
 def _selected_aliases(
     args: argparse.Namespace,
     policy: dict[str, Any],
-    catalog: dict[str, Any],
 ) -> list[str]:
     aliases = list(args.models or policy["automated_gates"]["required_models"])
-    if args.include_specialist:
-        aliases.extend(_aliases_for_class("local_specialist", policy, catalog))
-    if args.include_deep:
-        aliases.extend(_aliases_for_class("local_deep", policy, catalog))
-    if args.include_max:
-        aliases.extend(_aliases_for_class("local_max", policy, catalog))
     return list(dict.fromkeys(str(alias) for alias in aliases))
 
 
@@ -245,7 +218,7 @@ def main() -> int:
         print(f"KO  suite incohérente: attendu {suite_id}, reçu {suite.get('id')}")
         return 2
 
-    aliases = _selected_aliases(args, policy, catalog)
+    aliases = _selected_aliases(args, policy)
     contexts = args.contexts or [int(value) for value in policy["required_contexts"]]
 
     try:

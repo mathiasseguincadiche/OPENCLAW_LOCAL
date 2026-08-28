@@ -1,10 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [switch]$Quick,
-    [switch]$IncludeDeep,
-    [switch]$IncludeSpecialist,
-    [switch]$IncludeMax
+    [switch]$Quick
 )
 
 Set-StrictMode -Version Latest
@@ -26,16 +23,11 @@ function Assert-ExitCode([string]$Step) {
 if ($DryRun) {
     Write-Host '[DRY-RUN] Qualification locale stricte, sans appel cloud :'
     Write-Host '  1. audit host'
-    Write-Host '  2. smoke tests des modèles required du catalogue'
+    Write-Host '  2. smoke tests des trois modèles required du catalogue'
     Write-Host '  3. inventaire matériel/runtime'
-    Write-Host '  4. suite définie dans qualification_policy.yaml'
+    Write-Host '  4. benchmark des trois modèles selon qualification_policy.yaml'
     Write-Host '  5. évaluation des seuils; aucune promotion automatique'
     if ($Quick) { Write-Host '  mode QUICK: contexte 8192 uniquement' }
-    if ($IncludeSpecialist) {
-        Write-Host '  inclure LOCAL_SPECIALIST Ollama déclaré et installé'
-    }
-    if ($IncludeDeep) { Write-Host '  inclure LOCAL_DEEP Ollama déclaré et installé' }
-    if ($IncludeMax) { Write-Host '  inclure LOCAL_MAX Ollama déclaré et installé' }
     exit 0
 }
 
@@ -47,8 +39,8 @@ $Models = @(
 )
 Assert-ExitCode 'Lecture du catalogue modèles'
 $Models = @($Models | Where-Object { $_ -and $_.Trim() })
-if ($Models.Count -eq 0) {
-    throw 'Aucun modèle required Ollama dans model_catalog.yaml.'
+if ($Models.Count -ne 3) {
+    throw "La flotte supportée doit contenir exactement trois modèles required Ollama; détectés: $($Models.Count)."
 }
 
 foreach ($Model in $Models) {
@@ -59,17 +51,11 @@ foreach ($Model in $Models) {
 & $Inventory
 Assert-ExitCode 'Inventaire'
 
-$BenchmarkParameters = @{
-    Quick = $Quick
-    IncludeDeep = $IncludeDeep
-    IncludeSpecialist = $IncludeSpecialist
-    IncludeMax = $IncludeMax
-}
-& $Benchmark @BenchmarkParameters
+& $Benchmark -Quick:$Quick
 Assert-ExitCode 'Benchmark local'
 
 & python $Evaluate
 Assert-ExitCode 'Évaluation automatique'
 
-Write-Host 'VERDICT: GATE AUTOMATIQUE PASSÉ; QUALIFICATION MANUELLE ENCORE REQUISE.'
+Write-Host 'VERDICT: GATE AUTOMATIQUE PASSÉ POUR LES TROIS MODÈLES; QUALIFICATION MANUELLE ENCORE REQUISE.'
 exit 0

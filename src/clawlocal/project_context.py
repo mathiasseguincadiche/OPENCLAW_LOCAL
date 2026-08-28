@@ -4,6 +4,12 @@ import shutil
 from pathlib import Path
 
 from clawlocal.project_intake import validate_project_id
+from clawlocal.safe_fs import (
+    assert_no_link_like,
+    copytree_no_links,
+    iter_regular_files_no_links,
+    secure_path_within,
+)
 
 AGENT_IDS = (
     "chef-operations",
@@ -33,15 +39,15 @@ def sync_project_context(
         raise ValueError(f"agent inconnu: {agent_id}")
 
     project = platform_root / "projects" / normalized
-    if not (project / "project.json").exists():
-        raise FileNotFoundError(project / "project.json")
+    manifest = project / "project.json"
+    secure_path_within(manifest, project, require_file=True, label="manifest projet")
 
     target = platform_root / "workspaces" / agent_id / "projects" / normalized
     if target.exists():
-        if not (target / _SNAPSHOT_MARKER).exists():
-            raise FileExistsError(
-                f"snapshot non géré, refus d'écraser: {target}"
-            )
+        marker = target / _SNAPSHOT_MARKER
+        if not marker.exists():
+            raise FileExistsError(f"snapshot non géré, refus d'écraser: {target}")
+        secure_path_within(marker, target, require_file=True, label="snapshot géré")
         shutil.rmtree(target)
 
     target.mkdir(parents=True, exist_ok=False)
@@ -49,20 +55,21 @@ def sync_project_context(
         "managed-by=OPENCLAW_LOCAL\n",
         encoding="utf-8",
     )
-    shutil.copy2(project / "project.json", target / "project.json")
+    shutil.copy2(manifest, target / "project.json")
     for name in _CONTEXT_DIRS:
         source = project / name
         if source.exists():
-            shutil.copytree(source, target / name)
+            copytree_no_links(source, target / name, label=f"contexte {name}")
 
     for name in _OUTPUT_DIRS:
         source = project / name
         destination = target / name
         if include_outputs and source.exists():
-            shutil.copytree(source, destination)
+            copytree_no_links(source, destination, label=f"sorties centrales {name}")
         else:
             destination.mkdir()
 
+    assert_no_link_like(target, label="snapshot agent")
     return target
 
 
@@ -112,23 +119,19 @@ def collect_agent_outputs(
         / "projects"
         / normalized
     )
-    if not (workspace_project / _SNAPSHOT_MARKER).is_file():
-        raise FileNotFoundError(
-            f"snapshot agent absent ou non géré: {workspace_project}"
-        )
+    marker = workspace_project / _SNAPSHOT_MARKER
+    secure_path_within(marker, workspace_project, require_file=True, label="snapshot agent")
 
     project = platform_root / "projects" / normalized
-    if not (project / "project.json").is_file():
-        raise FileNotFoundError(project / "project.json")
+    secure_path_within(project / "project.json", project, require_file=True, label="projet")
 
     collected: list[str] = []
     for kind in _OUTPUT_DIRS:
         source = workspace_project / kind / normalized_task
         if not source.exists():
             continue
-        if source.is_file():
-            raise ValueError(f"sortie tâche invalide, dossier attendu: {source}")
-        files = [path for path in source.rglob("*") if path.is_file()]
+        secure_path_within(source, workspace_project, require_dir=True, label="sortie tâche")
+        files = list(iter_regular_files_no_links(source, label=f"sortie agent {kind}"))
         if not files:
             continue
 
@@ -136,10 +139,16 @@ def collect_agent_outputs(
             project / kind / "tasks" / normalized_task / agent_id
         )
         for path in files:
-            relative = path.relative_to(source)
+            safe_source = secure_path_within(
+                path,
+                source,
+                require_file=True,
+                label="fichier de sortie agent",
+            )
+            relative = safe_source.relative_to(source.resolve(strict=True))
             destination = run_dir / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, destination)
+            shutil.copy2(safe_source, destination)
             collected.append(destination.relative_to(project).as_posix())
 
     return sorted(collected)

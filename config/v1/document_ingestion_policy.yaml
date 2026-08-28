@@ -83,6 +83,13 @@ extraction:
   record_truncation: true
   never_execute_input: true
   never_extract_archives_in_place: true
+  office_archive_safety:
+    max_archive_bytes_mb: 100
+    max_members: 10000
+    max_total_uncompressed_mb: 512
+    max_single_member_mb: 64
+    max_compression_ratio: 200
+    reject_encrypted_members: true
 
 coverage_statuses: [READ, PARTIAL, UNREADABLE]
 coverage_methods: [local_text_extract, local_zip_xml_extract, pdf, view_image, raw_file]
@@ -92,3 +99,4 @@ security:
   no_prompt_or_document_content_in_telemetry: true
   preserve_original_sha256: true
   workspace_only_paths: true
+  reject_symlinks_junctions_reparse_points: true

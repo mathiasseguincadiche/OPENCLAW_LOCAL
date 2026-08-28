@@ -57,6 +57,8 @@ def main() -> int:
     pdf_vision_fallback = pdf.get("supports_scanned_pages_via_vision_fallback")
     if pdf.get("tool") != "pdf" or pdf_vision_fallback is not True:
         failures.append("PDF: outil local/fallback vision incomplet")
+    if int(pdf.get("max_bytes_mb", 0)) < 1:
+        failures.append("PDF: max_bytes_mb invalide")
     if int(pdf.get("max_pages_per_tool_call", 0)) < 1:
         failures.append("PDF: max_pages_per_tool_call invalide")
     if pdf.get("chunk_large_documents") is not True:
@@ -66,8 +68,28 @@ def main() -> int:
     for kind in ("office_text", "office_slides", "office_sheet"):
         if formats.get(kind, {}).get("method") != "local_zip_xml_extract":
             failures.append(f"{kind}: extraction locale déterministe requise")
-    if ingestion.get("security", {}).get("cloud_for_document_ingestion") is not False:
+
+    office_safety = ingestion.get("extraction", {}).get("office_archive_safety", {})
+    for key in (
+        "max_archive_bytes_mb",
+        "max_members",
+        "max_total_uncompressed_mb",
+        "max_single_member_mb",
+        "max_compression_ratio",
+    ):
+        try:
+            if float(office_safety.get(key, 0)) <= 0:
+                failures.append(f"Office archive safety invalide: {key}")
+        except (TypeError, ValueError):
+            failures.append(f"Office archive safety non numérique: {key}")
+    if office_safety.get("reject_encrypted_members") is not True:
+        failures.append("Office archive safety: membres chiffrés doivent être refusés")
+
+    security = ingestion.get("security", {})
+    if security.get("cloud_for_document_ingestion") is not False:
         failures.append("Document Ingestion ne doit pas nécessiter le cloud")
+    if security.get("reject_symlinks_junctions_reparse_points") is not True:
+        failures.append("Document Ingestion doit refuser symlinks/junctions/reparse points")
 
     if exchange.get("enabled") is not True:
         failures.append("Artifact Exchange doit rester activé")
@@ -122,6 +144,7 @@ def main() -> int:
             failures.append(f"{alias}: entrée image requise pour le parcours documentaire")
 
     required_files = (
+        "src/clawlocal/safe_fs.py",
         "src/clawlocal/project_ingestion.py",
         "src/clawlocal/project_artifact_exchange.py",
         "scripts/42_project_ingest.py",
@@ -132,12 +155,22 @@ def main() -> int:
         if not (ROOT / relative).is_file():
             failures.append(f"fichier document flow absent: {relative}")
 
-    openclaw_source = (ROOT / "src/clawlocal/openclaw_config.py").read_text(encoding="utf-8")
-    for marker in ("imageModel", "pdfModel", "pdfMaxPages", "document_ingestion_policy.yaml"):
+    openclaw_source = (ROOT / "src/clawlocal/openclaw_config.py").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "imageModel",
+        "pdfModel",
+        "pdfMaxBytesMb",
+        "pdfMaxPages",
+        "document_ingestion_policy.yaml",
+    ):
         if marker not in openclaw_source:
             failures.append(f"OpenClaw document config non câblée: {marker}")
 
-    migration_source = (ROOT / "src/clawlocal/project_migrations.py").read_text(encoding="utf-8")
+    migration_source = (ROOT / "src/clawlocal/project_migrations.py").read_text(
+        encoding="utf-8"
+    )
     for marker in ("ingest_project_documents", "validate_ingestion_index"):
         if marker not in migration_source:
             failures.append(f"projets existants non bootstrapés pour ingestion: {marker}")
@@ -157,12 +190,17 @@ def main() -> int:
         if marker not in orchestrator_source:
             failures.append(f"orchestrateur document flow non câblé: {marker}")
 
-    ingestion_source = (ROOT / "src/clawlocal/project_ingestion.py").read_text(encoding="utf-8")
+    ingestion_source = (ROOT / "src/clawlocal/project_ingestion.py").read_text(
+        encoding="utf-8"
+    )
     for marker in (
         "validate_source_coverage",
         "validate_ingestion_index",
         "local_zip_xml_extract",
         "READY_TOOL",
+        "_validate_office_archive",
+        "max_compression_ratio",
+        "assert_no_link_like",
     ):
         if marker not in ingestion_source:
             failures.append(f"ingestion exécutable incomplète: {marker}")
@@ -175,9 +213,22 @@ def main() -> int:
         "validate_exchange_completeness",
         "aggregate_sha256",
         "transitive_dependents",
+        "secure_path_within",
+        "assert_no_link_like",
     ):
         if marker not in exchange_source:
             failures.append(f"Artifact Exchange exécutable incomplet: {marker}")
+
+    context_source = (ROOT / "src/clawlocal/project_context.py").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "copytree_no_links",
+        "iter_regular_files_no_links",
+        "secure_path_within",
+    ):
+        if marker not in context_source:
+            failures.append(f"confinement snapshot incomplet: {marker}")
 
     if failures:
         for failure in failures:
@@ -186,6 +237,7 @@ def main() -> int:
         return 2
     print("OK  Document Ingestion + Artifact Exchange Gate")
     print("OK  PDF/images local-first + Office/text deterministic extraction")
+    print("OK  Office archives bornées + filesystem link/reparse fail-closed")
     print("OK  source_coverage complet et ingestion stale fail-closed")
     print("OK  artefacts versionnés, hashés, propagés et resynchronisés")
     print("Verdict: CONFORME")
