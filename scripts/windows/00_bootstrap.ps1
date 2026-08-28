@@ -272,6 +272,12 @@ function Invoke-LocalEnvironmentSetup([string]$PlatformRoot, [string]$RuntimeHom
     $env:PATH = "$NodeHome;$NpmPrefix;$VenvScripts;$env:PATH"
 }
 
+$OpenClawHelperPath = Join-Path $PSScriptRoot 'lib\bootstrap_openclaw.ps1'
+if (-not (Test-Path -LiteralPath $OpenClawHelperPath)) {
+    Write-BootstrapFailure "Bibliothèque OpenClaw absente: $OpenClawHelperPath"
+}
+. $OpenClawHelperPath
+
 function Test-BootstrapFunctionContract {
     $RequiredFunctions = @(
         'Write-BootstrapFailure',
