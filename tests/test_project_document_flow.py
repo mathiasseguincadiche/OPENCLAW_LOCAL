@@ -13,10 +13,17 @@ from clawlocal.project_orchestrator_superset import (
 )
 
 
-def test_phase_prompts_require_ingestion_and_exchange() -> None:
-    analyze = build_phase_prompt("projet-test", "analyze")
-    execute = build_phase_prompt("projet-test", "execute", task_id="task-001")
-    review = build_phase_prompt("projet-test", "review")
+def test_phase_prompts_require_ingestion_exchange_and_transversal_pedagogy() -> None:
+    prompts = {
+        "analyze": build_phase_prompt("projet-test", "analyze"),
+        "plan": build_phase_prompt("projet-test", "plan"),
+        "execute": build_phase_prompt("projet-test", "execute", task_id="task-001"),
+        "validate": build_phase_prompt("projet-test", "validate"),
+        "review": build_phase_prompt("projet-test", "review"),
+    }
+    analyze = prompts["analyze"]
+    execute = prompts["execute"]
+    review = prompts["review"]
 
     assert "context/ingestion/index.json" in analyze
     assert "source_coverage" in analyze
@@ -25,6 +32,22 @@ def test_phase_prompts_require_ingestion_and_exchange() -> None:
     assert "context/exchange/task-001" in execute
     assert "lecture seule" in execute
     assert "context/exchange/" in review
+
+    for phase, prompt in prompts.items():
+        assert "contrat pédagogique transversal" in prompt, phase
+        assert "context/learning/LEARNING_CONTRACT.json" in prompt, phase
+        assert "context/learning/learning_profile.json" in prompt, phase
+        assert "context/documentation_profile.json" in prompt, phase
+        assert "accessible à un débutant" in prompt, phase
+        assert "fausse simplification" in prompt, phase
+        assert "Comprendre" in prompt, phase
+        assert "Utiliser" in prompt, phase
+        assert "Approfondir" in prompt, phase
+        assert "Diagnostiquer" in prompt, phase
+
+    assert "qualité pédagogique" in prompts["validate"]
+    assert "qualité pédagogique" in review
+    assert "profondeur expert préservée" in review
 
 
 def test_store_analysis_requires_complete_document_coverage(tmp_path: Path) -> None:
