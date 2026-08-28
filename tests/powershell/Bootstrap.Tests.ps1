@@ -71,6 +71,21 @@ Describe 'Contrat interne du bootstrap Windows' {
         $AllowScripts | Should -BeGreaterThan $NpmInstall
     }
 
+    It 'ne valide OpenClaw qu'après écriture du marqueur de réussite' {
+        $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $OpenClawHelperPath = Join-Path $RepoRoot 'scripts\windows\lib\bootstrap_openclaw.ps1'
+        $Content = (Get-Content -Raw -LiteralPath $OpenClawHelperPath) -replace "`r`n", "`n"
+
+        $MarkerCheck = $Content.IndexOf("'.openclaw-local-install.json'")
+        $NpmInstall = $Content.IndexOf('Invoke-NativeChecked -Command $Npm -Arguments @(')
+        $MarkerWrite = $Content.LastIndexOf("`$Marker = Join-Path `$NpmPrefix '.openclaw-local-install.json'")
+        $FinalValidation = $Content.LastIndexOf('if (-not (Test-OpenClawPreferred -NpmPrefix $NpmPrefix))')
+
+        $MarkerCheck | Should -BeGreaterOrEqual 0
+        $MarkerWrite | Should -BeGreaterThan $NpmInstall
+        $FinalValidation | Should -BeGreaterThan $MarkerWrite
+    }
+
     It 'interdit les guillemets typographiques dans les sources PowerShell' {
         $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $SmartQuotes = @(
