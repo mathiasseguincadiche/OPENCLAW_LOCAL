@@ -10,8 +10,11 @@ behavior:
   on_limit: deny
   require_reason: true
   default_reservation_eur: 0.25
+  reservation_ttl_seconds: 3600
   require_cost_logging_when_available: true
   allow_manual_override: false
 ledger:
   relative_path: state/finops/cloud-costs.jsonl
   commit_to_git: false
+  append_only_events: true
+  process_lock_required: true
