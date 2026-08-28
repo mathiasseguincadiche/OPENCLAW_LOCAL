@@ -2,23 +2,33 @@
 
 ## Objectif
 
-`OPENCLAW_LOCAL` matérialise huit rôles versionnés dans OpenClaw. La configuration générée privilégie les modèles locaux, active les outils Web et documentaires du parcours nominal et n'incorpore aucun fallback cloud silencieux ni secret.
+`OPENCLAW_LOCAL` matérialise huit rôles versionnés dans OpenClaw, avec workspaces séparés, outils bornés, projets synchronisés et routage strictement local-first. Aucun fallback cloud silencieux ni secret n'est injecté dans la configuration.
 
 ## Sources de vérité
 
-- `config/v1/model_catalog.yaml` : modèles locaux et routes cloud connues ;
-- `config/v1/model_routing.yaml` : routes LOCAL_FAST, LOCAL_DEEP, spécialiste et escalade cloud ;
-- `config/v1/tool_policy.yaml` : posture outils par rôle ;
-- `config/v1/web_policy.yaml` : recherche/fetch Web local-first ;
-- `config/v1/project_policy.yaml` : Project Intake et snapshots ;
-- `config/v1/document_ingestion_policy.yaml` : PDF/images/Office/texte et couverture documentaire ;
-- `config/v1/artifact_exchange_policy.yaml` : propagation versionnée des productions entre tâches ;
-- `config/v1/budget_policy.yaml` : garde-fous FinOps ;
-- `agents/*` : contrat, identité et posture de chaque agent ;
-- `src/clawlocal/openclaw_config.py` : rendu du patch OpenClaw ;
-- `src/clawlocal/runtime.py` : pont entre décision `clawlocal` et référence modèle OpenClaw.
+- `config/v1/model_catalog.yaml` : exactement trois modèles locaux supportés ;
+- `config/v1/model_routing.yaml` : route nominale et fallbacks dans cette flotte fermée ;
+- `config/v1/tool_policy.yaml` : permissions par rôle ;
+- `config/v1/web_policy.yaml` : Web local-first ;
+- `config/v1/project_policy.yaml` : projets et snapshots ;
+- `config/v1/document_ingestion_policy.yaml` : PDF/images/Office/texte ;
+- `config/v1/artifact_exchange_policy.yaml` : échange versionné ;
+- `config/v1/budget_policy.yaml` : FinOps ;
+- `agents/*` : identité et contrat des huit rôles ;
+- `src/clawlocal/openclaw_config.py` : génération du patch ;
+- `src/clawlocal/runtime.py` : résolution des modèles.
 
-## Générer le patch sans l'appliquer
+## Flotte locale
+
+```text
+qwen-max          -> ollama/qwen3.8:27b
+gemma-deep        -> ollama/gemma4:26b
+devstral-devops   -> ollama/devstral-small-2:24b
+```
+
+Aucun quatrième modèle, petit modèle ou candidat legacy n'est supporté.
+
+## Générer le patch
 
 ```powershell
 $root = if ($env:OPENCLAW_LOCAL_ROOT) {
@@ -36,20 +46,18 @@ Le patch configure notamment :
 
 - Gateway local sur loopback ;
 - API Ollama native `http://127.0.0.1:11434` ;
-- modèles Ollama lus depuis `model_catalog.yaml` ;
-- contexte conservateur de 16K avant qualification ;
-- métadonnées `text` / `image` pour les modèles concernés ;
-- `imageModel` local Qwen avec fallback local Gemma ;
-- `pdfModel` local Qwen avec fallback local Gemma ;
-- limites PDF explicites `pdfMaxBytesMb` et `pdfMaxPages` ;
-- huit entrées `agents.entries` avec workspaces séparés ;
-- outils `pdf` et `view_image` autorisés pour les huit rôles sans élargir leurs droits d'écriture ;
-- fallbacks persistants uniquement entre modèles locaux ;
+- les trois modèles lus depuis `model_catalog.yaml` ;
+- contexte prudent avant qualification ;
+- `imageModel` et `pdfModel` locaux ;
+- huit `agents.entries` ;
+- workspaces séparés ;
+- outils documentaires ;
+- fallbacks persistants uniquement dans la flotte supportée ;
 - `tools.fs.workspaceOnly=true` ;
 - `tools.exec.mode=ask` ;
-- mode elevated désactivé ;
-- `web_search` et `web_fetch` activés ;
-- navigateur supplémentaire pour `expert-recherche`.
+- elevated désactivé ;
+- `web_search` / `web_fetch` ;
+- navigateur supplémentaire pour l'Expert recherche.
 
 ## Appliquer la configuration
 
@@ -58,124 +66,128 @@ Le patch configure notamment :
 .\menu.ps1 -Action configure-openclaw
 ```
 
-Le parcours réel :
+Le parcours :
 
 1. crée la baseline OpenClaw si nécessaire ;
 2. déploie les workspaces gérés ;
 3. génère le patch ;
-4. lance `openclaw config patch --dry-run` ;
-5. applique le patch seulement si la validation réussit ;
+4. exécute `openclaw config patch --dry-run` ;
+5. applique uniquement si la validation réussit ;
 6. exécute `openclaw config validate --json` ;
-7. vérifie la flotte avec `openclaw agents list --json`.
+7. vérifie `openclaw agents list --json`.
 
-## Workspaces et projets
+## Stockage et workspaces
 
-Chaque rôle reçoit un workspace distinct :
+Les modèles Ollama sont stockés sous :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\models\ollama
+```
+
+Chaque rôle dispose de :
 
 ```text
 <OPENCLAW_LOCAL_ROOT>\workspaces\<agent-id>
 ```
 
-Le déploiement assemble les contrats `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `TOOLS.md` et `HEARTBEAT.md`. Un marqueur `.openclaw-local-managed` empêche l'écrasement d'un workspace non géré.
+Le déploiement assemble `AGENTS.md`, `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `HEARTBEAT.md` et le contrat pédagogique partagé. Le marqueur `.openclaw-local-managed` protège les dossiers non gérés.
 
-Pour un projet, `scripts/31_sync_project_context.py` crée en plus un snapshot protégé sous :
+## Projets et snapshots
+
+Le projet central reste sous :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\projects\<project-id>
+```
+
+Le snapshot agent est sous :
 
 ```text
 <OPENCLAW_LOCAL_ROOT>\workspaces\<agent-id>\projects\<project-id>
 ```
 
-Le snapshot contient `intake/`, `sources/` et `context/`. `context/ingestion/` fournit les représentations documentaires locales et `context/exchange/` transporte les sorties versionnées des tâches amont. Les workspaces restent jetables : le projet central demeure la source de vérité et l'orchestrateur resynchronise les agents concernés après chaque tentative.
+`scripts/31_sync_project_context.py` synchronise les données autorisées. Les workspaces restent jetables : ils ne remplacent jamais le projet central.
 
-Voir `docs/PROJECT_INTAKE.md` et `docs/DOCUMENT_INGESTION_AND_EXCHANGE.md`.
+Le snapshot inclut notamment `intake/`, `sources/`, `context/`, les représentations `context/ingestion/` et les bundles `context/exchange/` destinés à la tâche.
 
-## Documents multimodaux
+## Document Ingestion
 
-Lors de la création d'un projet, `scripts/28_create_project.py` construit `context/ingestion/index.json` :
+Lors de la création d'un projet, `scripts/28_create_project.py` construit `context/ingestion/index.json`.
 
 ```text
 intake/original.pdf
-        ↓
+        |
+        v
 SHA-256 + MIME + document_id
-        ↓
+        |
+        v
 context/ingestion/<document-id>/
-        ├── metadata.json
-        └── tool.md / extracted.md
+        +-- metadata.json
+        +-- tool.md / extracted.md
 ```
 
-- PDF : l'agent utilise `pdf`; les documents longs sont parcourus par tranches et le chemin local peut exploiter le fallback vision pour les pages scannées/pauvres en texte ;
-- images : l'agent utilise `view_image` ;
-- DOCX/PPTX/XLSX : extraction locale déterministe des parties XML utiles ;
+- PDF : outil `pdf`, lecture bornée et fallback vision lorsque nécessaire ;
+- images : `view_image` ;
+- DOCX/PPTX/XLSX : extraction locale déterministe ;
 - texte/code : normalisation locale ;
-- format inconnu : inventaire puis déclaration explicite `UNREADABLE` si aucun outil compatible n'est disponible.
+- format inconnu : inventaire puis `UNREADABLE` si aucun outil compatible n'est disponible.
 
-L'analyse du Chef doit rendre `source_coverage[]` avec une entrée par document. Un index absent/périmé ou une couverture incomplète bloque l'analyse. Les originaux sous `intake/` ne sont jamais modifiés par cette couche.
+L'analyse doit fournir `source_coverage[]`. Un index absent, périmé ou une couverture incomplète bloque l'avancement.
 
 ## Artifact Exchange
 
-Lorsqu'une tâche termine une tentative, ses sorties collectées sont conservées dans l'historique central et publiées dans :
+Après chaque tentative, les sorties sont conservées :
 
 ```text
 context/exchange/<task-id>/self/run-001/
 ```
 
-Si la tentative est `PASS`, elles sont également propagées aux tâches dépendantes :
+Après `PASS`, elles sont propagées aux dépendants :
 
 ```text
 context/exchange/<consumer>/dependencies/<producer>/run-001/
 ```
 
-Chaque bundle contient un `manifest.json`, les SHA-256 individuels et un digest agrégé. Les consommateurs lisent ces bundles mais ne les modifient jamais en place. Une correction crée `run-002`, `run-003`, etc. Les agents impactés sont resynchronisés automatiquement depuis le projet central.
+Chaque bundle contient provenance, tentative, fichiers, SHA-256 et digest agrégé. Les consommateurs ne modifient jamais un bundle en place.
 
-Les transitions vers validation/revue/packaging/completion sont fail-closed si l'échange attendu est absent ou corrompu.
+Une correction produit `run-002`, puis les agents affectés sont resynchronisés depuis le projet central. Les transitions vers validation, revue, packaging et completion sont fail-closed si l'échange requis est absent ou corrompu.
 
-## Routage runtime
+## Routage nominal
 
-Plan local sans exécution :
-
-```powershell
-python .\scripts\27_route_openclaw.py `
-  --agent ingenieur-devops `
-  --message 'Diagnostique ce manifeste Kubernetes.'
+```text
+Chef opérations       -> qwen-max
+Expert recherche      -> qwen-max + Web
+Architecte solutions  -> gemma-deep
+Ingénieur DevOps      -> devstral-devops
+Ingénieur sécurité    -> qwen-max
+Release/Forges        -> qwen-max
+Rédacteur technique   -> gemma-deep
+Auditeur qualité      -> gemma-deep
+                         -> qwen-max si producteur Gemma
 ```
 
-LOCAL_DEEP lorsqu'un candidat qualifié est réellement disponible :
+Les champs de tier servent à exprimer la spécialité et aux diagnostics ; ils ne permettent jamais de sortir de la flotte des trois alias supportés.
 
-```powershell
-python .\scripts\27_route_openclaw.py `
-  --agent ingenieur-devops `
-  --message 'Analyse ce problème complexe.' `
-  --deep-local-available
-```
-
-Le simple fait qu'un modèle existe dans le catalogue ne suffit pas à le rendre disponible : l'opérateur doit avoir importé et qualifié la route correspondante.
-
-## Recherche Internet récente
-
-Une information récente ne déclenche pas OpenRouter par défaut. Le parcours nominal est :
+## Recherche Internet
 
 ```text
 expert-recherche local
-      ↓
-web_search / web_fetch / browser si nécessaire
-      ↓
-sources récentes
-      ↓
-synthèse locale
+      -> web_search / web_fetch / browser si nécessaire
+      -> sources récentes
+      -> synthèse locale
 ```
 
-Voir `docs/WEB_LOCAL_FIRST.md`.
+La fraîcheur seule n'est pas un motif d'escalade LLM cloud.
 
 ## Escalade cloud explicite
 
-Après une tentative Web locale réellement effectuée :
-
 ```powershell
 $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'true'
-$env:OPENROUTER_API_KEY = '<secret local, jamais Git>'
+$env:OPENROUTER_API_KEY = '<secret-local>'
 
 python .\scripts\27_route_openclaw.py `
   --agent expert-recherche `
-  --message 'Approfondis la recherche à partir des sources déjà collectées.' `
+  --message 'Approfondis la recherche à partir des sources collectées.' `
   --cloud `
   --reason deep_web_research `
   --local-web-attempted `
@@ -183,44 +195,27 @@ python .\scripts\27_route_openclaw.py `
   --execute
 ```
 
-Le routeur refuse une escalade si :
+Une exécution réelle est refusée si une précondition manque. Juste avant l'appel, le routeur effectue une **réservation FinOps atomique**. Le coût observé est ensuite réglé avec l'identifiant de réservation lorsque disponible.
 
-- le cloud n'est pas activé ;
-- le budget n'est pas validé ;
-- le motif est absent ou inconnu ;
-- le rôle n'est pas autorisé ;
-- une précondition n'est pas démontrée ;
-- une approbation humaine requise manque.
+## Backends
 
-`web_freshness_only` est un motif explicitement interdit. La Document Ingestion elle-même n'est jamais un motif d'escalade cloud automatique.
+- `ollama-vulkan` : chemin nominal avant qualification ;
+- `llama-cpp-sycl` : candidat ;
+- `llama-cpp-vulkan` : candidat.
 
-## SERA et autres backends
+Le changement de backend ne change ni les huit rôles ni la flotte supportée. Il exige import, configuration, benchmark et E2E.
 
-`sera-devops` reste un candidat optionnel. Son import GGUF et son backend doivent être qualifiés séparément.
-
-Les backends `llama-cpp-sycl` et `llama-cpp-vulkan` sont eux aussi des candidats : le renderer nominal V0.2 reste Ollama tant que la comparaison B580 n'a pas produit de preuve en faveur d'un autre backend.
-
-## Gate E2E réel
+## Gate E2E
 
 ```powershell
 .\menu.ps1 -Action e2e -DryRun
 .\menu.ps1 -Action e2e
 ```
 
-Le test vérifie :
+Le test vérifie notamment les huit agents, le provider local, le modèle primaire conforme au catalogue, le vrai tool-calling, la réparation après erreur d'outil, la stabilité et l'absence de dépendance cloud nominale.
 
-- les huit agents via le Gateway ;
-- preuve `provider=ollama` sur le parcours nominal ;
-- modèle primaire lu depuis le catalogue ;
-- un vrai appel d'outil d'écriture ;
-- une erreur d'outil contrôlée suivie d'une réparation ;
-- trois exécutions locales stables ;
-- absence de dépendance cloud sur le parcours nominal.
-
-Les contrats CI vérifient en plus le câblage `pdf`/`view_image`, `imageModel`/`pdfModel`, la couverture documentaire et l'Artifact Exchange. Leur qualité sémantique réelle sur PDF/images doit toutefois être qualifiée sur la workstation avec les vrais modèles locaux : GitHub CI ne possède ni l'Arc B580 ni les modèles Ollama de la machine.
-
-Les preuves sont écrites sous `<OPENCLAW_LOCAL_ROOT>\proofs\` et restent hors Git.
+Les preuves restent sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
 
 ## Promotion
 
-Un succès E2E ne promeut pas automatiquement un modèle. La promotion exige encore la qualification matérielle, la stabilité, la revue humaine et les critères de `config/v1/qualification_policy.yaml`.
+Un succès E2E ne modifie pas automatiquement un modèle ou un backend. La décision finale reste fondée sur la qualification matérielle et la revue humaine.

@@ -1,6 +1,6 @@
 # Troubleshooting OPENCLAW_LOCAL
 
-Ce runbook suit une règle : diagnostiquer le parcours local avant toute escalade cloud. Un problème local ne doit jamais être masqué par un fallback distant.
+Ce runbook suit une règle simple : **diagnostiquer le parcours local avant toute escalade cloud**. Un défaut local ne doit jamais être masqué par un fallback distant.
 
 ## Ordre de diagnostic
 
@@ -15,22 +15,46 @@ ollama list
 
 Ensuite seulement : benchmark, E2E, inventaire et qualification.
 
-## PowerShell ou commandes introuvables
+## Variables et stockage
 
-Vérifier :
+```powershell
+$env:OPENCLAW_LOCAL_ROOT
+$env:OPENCLAW_STATE_DIR
+$env:OLLAMA_MODELS
+```
+
+Avec le réglage par défaut sur `E:` :
+
+```text
+E:\AI\OpenClawLocal\
+├── runtime\
+├── models\ollama\
+├── projects\
+├── workspaces\
+├── state\
+└── proofs\
+```
+
+Si `OLLAMA_MODELS` ne pointe pas vers `<OPENCLAW_LOCAL_ROOT>\models\ollama`, exécuter :
+
+```powershell
+.\menu.ps1 -Action configure-local
+```
+
+Le script persiste la variable et redémarre le serveur Ollama lorsqu'un changement d'emplacement l'exige.
+
+## PowerShell ou commandes introuvables
 
 ```powershell
 $PSVersionTable.PSVersion
 Get-Command python -ErrorAction SilentlyContinue
 Get-Command ollama -ErrorAction SilentlyContinue
 Get-Command openclaw -ErrorAction SilentlyContinue
-$env:OPENCLAW_LOCAL_ROOT
-$env:OPENCLAW_STATE_DIR
 ```
 
-Après `install-core`, fermer puis rouvrir PowerShell si un ancien shell n'a pas récupéré le PATH utilisateur.
+Après une première installation, fermer puis rouvrir PowerShell pour récupérer le PATH utilisateur.
 
-## Runtime verrouillé différent
+## Runtime différent du lock
 
 La source de vérité est `config/v1/runtime_versions.json`.
 
@@ -41,7 +65,7 @@ ollama --version
 openclaw --version
 ```
 
-Le bootstrap refuse par défaut une dérive Ollama déjà installée. `-AllowRuntimeDrift` doit être un choix explicite et implique une nouvelle qualification ; il ne transforme pas une version différente en version validée.
+`-AllowRuntimeDrift` est un choix explicite. Il ne transforme jamais une version différente en version qualifiée : benchmark, E2E et qualification doivent être refaits.
 
 ## Ollama ne répond pas
 
@@ -56,7 +80,20 @@ Puis :
 .\menu.ps1 -Action configure-local
 ```
 
-Ne jamais remplacer l'URL native par `http://127.0.0.1:11434/v1` : le projet dépend de l'API Ollama native pour le tool-calling.
+Ne pas remplacer l'URL native par `/v1` : le projet utilise l'API Ollama native.
+
+## Modèles stockés sur le mauvais disque
+
+1. vérifier `$env:OLLAMA_MODELS` ;
+2. exécuter `configure-local` ;
+3. vérifier que le serveur Ollama a été redémarré si la valeur a changé ;
+4. télécharger les modèles uniquement après cette configuration :
+
+```powershell
+.\menu.ps1 -Action models
+```
+
+Ne pas déplacer manuellement un répertoire de modèles pendant qu'Ollama fonctionne.
 
 ## Modèle absent
 
@@ -66,7 +103,7 @@ ollama list
 .\menu.ps1 -Action models
 ```
 
-Le benchmark ne télécharge aucun modèle implicitement. Un tag manquant doit être corrigé dans le catalogue via Pull Request s'il a réellement changé ; ne substituez pas silencieusement un autre modèle.
+La flotte attendue contient exactement trois modèles : Qwen 3.8 27B, Gemma 4 26B et Devstral Small 2 24B. Ne pas substituer silencieusement un autre runtime.
 
 ## OpenClaw invalide
 
@@ -76,14 +113,14 @@ openclaw config validate --json
 openclaw doctor
 ```
 
-Pour régénérer le patch géré :
+Puis :
 
 ```powershell
 .\menu.ps1 -Action configure-openclaw -DryRun
 .\menu.ps1 -Action configure-openclaw
 ```
 
-Le script exécute d'abord le dry-run natif `config patch`; une configuration qui ne passe pas le schéma n'est pas appliquée.
+Le patch est validé en dry-run avant application.
 
 ## Gateway indisponible
 
@@ -100,7 +137,7 @@ openclaw gateway install --runtime node --force --json
 openclaw gateway start --json
 ```
 
-La configuration gérée impose `gateway.mode=local` et `bind=loopback`.
+La configuration gérée impose le mode local et le bind loopback.
 
 ## Agent absent ou mauvais workspace
 
@@ -111,146 +148,192 @@ openclaw agents list --json
 .\menu.ps1 -Action configure-openclaw
 ```
 
-Le projet refuse d'écraser un workspace existant sans marqueur `.openclaw-local-managed`. Si le chemin contient des données importantes, sauvegardez-le et déplacez-le manuellement avant de reprendre.
+Un workspace existant sans marqueur `.openclaw-local-managed` n'est pas écrasé. Sauvegarder ou déplacer manuellement les données concernées avant de reprendre.
+
+## Projet incohérent entre agents
+
+Le projet central est la source de vérité. Ne pas corriger directement plusieurs workspaces.
+
+Vérifier :
+
+```powershell
+python .\scripts\32_orchestrate_project.py --project <id> --action status
+python .\scripts\43_project_exchange.py --project <id>
+```
+
+Puis resynchroniser si nécessaire :
+
+```powershell
+python .\scripts\31_sync_project_context.py --project <id> --agent all
+```
+
+Un changement amont validé doit être propagé via l'Artifact Exchange et les dépendances du plan, pas par copie manuelle entre agents.
 
 ## Tool-calling en échec
 
-Distinguer trois couches :
+Distinguer :
 
-1. modèle Ollama répond-il à une inférence simple ?
-2. `openclaw agent exec` obtient-il de vrais appels d'outils ?
-3. l'agent configuré possède-t-il la permission correspondante ?
-
-Exécuter :
+1. Ollama répond-il à une inférence simple ?
+2. OpenClaw obtient-il un vrai appel d'outil ?
+3. le rôle possède-t-il l'autorisation correspondante ?
 
 ```powershell
 .\menu.ps1 -Action verify
 .\menu.ps1 -Action e2e
 ```
 
-Pour les rôles autorisés à exécuter des commandes, `tools.exec.mode=ask` exige une approbation humaine hors allowlist. Les rôles de revue refusent explicitement `exec` et les mutations de fichiers ; ce comportement est attendu.
+`tools.exec.mode=ask` exige une approbation hors allowlist. Sécurité et Audit refusent les mutations par conception.
 
 ## Réparation après erreur d'outil en échec
 
-Le gate E2E crée volontairement un scénario avec fichier absent. Vérifier la preuve locale :
+Le gate E2E provoque volontairement une erreur contrôlée.
 
 ```powershell
 Get-ChildItem "$env:OPENCLAW_LOCAL_ROOT\proofs" | Sort-Object LastWriteTime -Descending
 ```
 
-Ne modifiez pas la politique de qualification pour faire passer artificiellement un modèle. Conservez l'échec comme preuve, identifiez le modèle, la version OpenClaw, Ollama et le pilote GPU, puis ouvrez une PR de correction.
+Conserver l'échec comme preuve. Ne pas affaiblir la politique de qualification pour le masquer.
 
 ## GPU Intel Arc non utilisé ou débit anormal
-
-Commencer par l'inventaire :
 
 ```powershell
 .\menu.ps1 -Action inventory
 .\menu.ps1 -Action benchmark
 ```
 
-Comparer : pilote, version Ollama, modèle exact, contexte demandé, TTFT et tokens/s. Ne concluez pas à une accélération GPU à partir du seul nom de la carte détectée. Les résultats de `Win32_VideoController.AdapterRAM` peuvent être approximatifs ; le profil matériel versionné reste la référence documentaire et le benchmark réel la preuve opérationnelle.
+Comparer : pilote, backend, runtime exact, contexte, TTFT, tokens/s, VRAM/RAM lorsque réellement mesurées. Le nom de la carte détectée ne prouve pas l'accélération effective.
 
 ## VRAM insuffisante / contexte trop grand
 
-Le patch OpenClaw reste volontairement à 16K avant promotion. Si 16K échoue :
+Si 16K échoue :
 
 - ne pas augmenter le contexte ;
-- collecter le benchmark ;
-- vérifier les autres processus GPU ;
+- collecter la preuve ;
+- fermer les processus GPU inutiles ;
 - tester 8K ;
-- conserver le verdict `NOT_READY` si les seuils ne sont pas atteints.
+- conserver `NOT_READY` si les seuils requis échouent.
 
-32K reste optionnel jusqu'à preuve matérielle.
+32K et plus restent hors qualification nominale tant qu'ils ne sont pas prouvés.
 
 ## Cloud refusé
 
-C'est le comportement normal si l'un de ces éléments manque :
+Le refus est normal si un élément manque :
 
 ```text
 OPENCLAW_LOCAL_CLOUD_ENABLED=true
-motif d'escalade versionné
+motif versionné
 rôle autorisé
-OPENROUTER_API_KEY pour une exécution réelle
+préconditions du motif
+budget disponible
+OPENROUTER_API_KEY pour --execute
+approbation humaine si requise
 ```
 
-Planifier une route sans l'exécuter :
+Une exécution réelle crée en plus une réservation FinOps atomique juste avant l'appel.
 
-```powershell
-python .\scripts\27_route_openclaw.py `
-  --agent expert-recherche `
-  --message 'test' `
-  --cloud `
-  --reason web_freshness
+## Réservation FinOps bloquée
+
+Vérifier le ledger :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\state\finops\cloud-costs.jsonl
 ```
+
+Une réservation active compte dans les limites. Elle est clôturée par `settlement` ou `release`, ou cesse de bloquer après son TTL. Ne pas éditer manuellement le ledger pour contourner une limite.
 
 ## Rotation de la clé OpenRouter
-
-La clé n'est jamais écrite dans Git ni dans le renderer.
 
 ```powershell
 Remove-Item Env:OPENROUTER_API_KEY -ErrorAction SilentlyContinue
 $env:OPENROUTER_API_KEY = '<nouvelle-cle>'
 ```
 
-Si elle est persistée par votre propre gestionnaire de secrets, faites la rotation dans ce gestionnaire, puis redémarrez le Gateway pour que le nouveau processus récupère l'environnement.
+La clé ne doit jamais entrer dans Git, les prompts publiables ou les preuves.
 
 ## Sauvegarde avant maintenance
 
-Sauvegarder au minimum l'état runtime local avant une opération destructive :
+Sauvegarder au minimum les données non reconstruisibles :
 
 ```powershell
 $root = $env:OPENCLAW_LOCAL_ROOT
-Copy-Item "$root\state" "$root\backup\state-$(Get-Date -Format yyyyMMdd-HHmmss)" -Recurse
+$stamp = Get-Date -Format yyyyMMdd-HHmmss
+$backup = Join-Path $root "backup\$stamp"
+New-Item -ItemType Directory -Path $backup -Force | Out-Null
+
+foreach ($name in @('projects', 'state', 'proofs')) {
+  $source = Join-Path $root $name
+  if (Test-Path -LiteralPath $source) {
+    Copy-Item $source (Join-Path $backup $name) -Recurse
+  }
+}
 ```
 
-Les workspaces gérés peuvent être régénérés depuis Git. Les données personnelles, sessions et secrets ne doivent pas être rapatriés dans le dépôt public.
+`runtime/` et `workspaces/` sont reconstruisibles. Les modèles peuvent être retéléchargés ; les sauvegarder est optionnel selon le coût de téléchargement et l'espace disponible.
+
+## Test de restauration
+
+Une sauvegarde doit être restaurable.
+
+1. utiliser une copie de test ou une fenêtre de maintenance ;
+2. restaurer `projects/`, `state/` et les preuves nécessaires ;
+3. réparer le runtime depuis le commit/tag connu plutôt que restaurer un runtime incompatible ;
+4. resynchroniser les workspaces ;
+5. exécuter :
+
+```powershell
+.\menu.ps1 -Action audit
+.\menu.ps1 -Action verify
+.\menu.ps1 -Action e2e
+```
+
+6. vérifier un projet critique avec `--action status` et l'Artifact Exchange.
 
 ## Mise à jour
 
-1. `git pull` ;
-2. lire `CHANGELOG.md` et `config/v1/runtime_versions.json` ;
-3. `install-core -DryRun` ;
-4. sauvegarder l'état ;
-5. exécuter `install-core` ;
-6. `configure-openclaw` ;
-7. `verify` ;
-8. `e2e` ;
-9. benchmark/qualification si un runtime, modèle ou pilote a changé.
+1. sauvegarder `projects/`, `state/`, `proofs/` ;
+2. `git pull` ;
+3. lire `CHANGELOG.md` et `runtime_versions.json` ;
+4. `install-core -DryRun` ;
+5. `install-core` ;
+6. `configure-local` ;
+7. `configure-openclaw` ;
+8. `verify` ;
+9. `e2e` ;
+10. benchmark/qualification si runtime, modèle, backend ou pilote a changé.
 
 ## Rollback
 
-Le dépôt ne déclare jamais un nouveau runtime qualifié sans preuve. Si une mise à jour casse le parcours local :
-
-1. conserver les preuves/logs ;
+1. conserver les logs et preuves de l'échec ;
 2. revenir au commit/tag Git connu ;
-3. restaurer le lock runtime correspondant ;
-4. réexécuter `install-core` et `configure-openclaw` ;
-5. restaurer l'état sauvegardé seulement si le format reste compatible ;
-6. refaire `verify` et `e2e`.
+3. utiliser le runtime lock correspondant ;
+4. réinstaller/réparer le runtime ;
+5. restaurer `state/` uniquement si le format est compatible ;
+6. resynchroniser les workspaces ;
+7. refaire `audit`, `verify` et `e2e`.
+
+Ne jamais écraser les projets centraux avec un ancien snapshot de workspace.
 
 ## Désinstallation
-
-Arrêter et retirer le service Gateway avant de supprimer le runtime :
 
 ```powershell
 openclaw gateway stop --force --json
 openclaw gateway uninstall --json
 ```
 
-Ensuite sauvegarder ce qui doit l'être et supprimer volontairement `<OPENCLAW_LOCAL_ROOT>`. Le dépôt n'automatise pas la suppression de l'état utilisateur afin d'éviter une perte de données silencieuse.
+Sauvegarder ensuite les données à conserver avant de supprimer volontairement `<OPENCLAW_LOCAL_ROOT>`. La suppression de l'état utilisateur n'est pas automatisée.
 
 ## Preuves à joindre à un diagnostic
 
 Sans secrets :
 
 - commit Git ;
-- `config/v1/runtime_versions.json` ;
-- dernier inventaire JSON ;
-- dernier benchmark/evaluation JSON ;
-- preuve E2E JSON ;
+- runtime lock ;
+- inventaire ;
+- benchmark/evaluation ;
+- preuve E2E ;
 - versions OpenClaw/Ollama/Python/PowerShell ;
 - pilote GPU ;
+- backend ;
 - message d'erreur exact.
 
-Ne joignez jamais `.env`, clés API, tokens Gateway ou données privées de sessions.
+Ne jamais joindre `.env`, clés API, tokens Gateway ou documents privés.

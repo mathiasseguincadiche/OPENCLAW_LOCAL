@@ -2,67 +2,87 @@
 
 ## Objectif
 
-La V0.2 ne lie pas définitivement la plateforme à un seul backend GPU. Le contrat `config/v1/runtime_backends.yaml` décrit les backends locaux à comparer sur la workstation Windows 11 + Intel Arc B580.
+La plateforme ne lie pas définitivement les trois modèles supportés à un seul backend GPU. Le backend est un axe d'exploitation distinct du choix du modèle et du rôle.
 
-## Backends V0.2
+## Backends déclarés
 
 | ID | Provider | Accélération | Statut |
 |---|---|---|---|
-| `ollama-vulkan` | Ollama | Vulkan | nominal, qualification requise |
+| `ollama-vulkan` | Ollama | Vulkan | nominal pré-qualification |
 | `llama-cpp-sycl` | llama.cpp | SYCL | candidat |
 | `llama-cpp-vulkan` | llama.cpp | Vulkan | candidat |
 
-Le mot **nominal** signifie « chemin d'installation V0.2 », pas « vainqueur de performance ». Aucun backend n'est promu sur la seule base d'une documentation ou d'un benchmark externe.
+Le mot **nominal** signifie « chemin d'installation et d'intégration actuel », pas « vainqueur de performance ».
 
-## Règles de qualification
+## Flotte indépendante du backend
 
-La comparaison Intel Arc doit mesurer, lorsque possible avec le même modèle et la même quantification :
+```text
+Modèles supportés
+  +-- LOCAL_MAX        -> qwen-max        -> qwen3.8:27b
+  +-- LOCAL_DEEP       -> gemma-deep      -> gemma4:26b
+  +-- LOCAL_SPECIALIST -> devstral-devops -> devstral-small-2:24b
+
+Backends
+  +-- Ollama/Vulkan
+  +-- llama.cpp/SYCL
+  +-- llama.cpp/Vulkan
+```
+
+Changer de backend ne doit pas nécessiter de réécrire les huit rôles, le Project Orchestrator ou les politiques d'escalade.
+
+## Ollama/Vulkan
+
+Ollama est le chemin nominal car il simplifie :
+
+- téléchargement et inventaire des modèles ;
+- API locale ;
+- intégration OpenClaw ;
+- exploitation quotidienne ;
+- tool-calling sur le parcours actuel.
+
+L'API reste liée à `127.0.0.1:11434`. Les modèles sont stockés sous `<OPENCLAW_LOCAL_ROOT>\models\ollama` via `OLLAMA_MODELS`.
+
+## llama.cpp/SYCL et Vulkan
+
+Ces backends restent candidats tant qu'ils n'ont pas été :
+
+1. installés explicitement ;
+2. configurés ;
+3. testés avec les modèles/quantifications compatibles ;
+4. intégrés au parcours OpenClaw ;
+5. benchmarkés ;
+6. validés E2E.
+
+Aucun candidat n'est installé ni promu silencieusement.
+
+## Protocole de comparaison
+
+Comparer, autant que possible, le même modèle et la même quantification sur :
 
 - TTFT ;
 - tokens/seconde ;
 - VRAM ;
 - RAM ;
 - stabilité ;
-- tool calling OpenClaw ;
 - erreurs ou sorties corrompues ;
-- comportement aux contextes 8K/16K et éventuellement 32K.
+- tool-calling OpenClaw ;
+- contextes 8K et 16K ;
+- simplicité de démarrage, mise à jour et récupération.
 
-Le contrat `qualification_policy.yaml` impose `automatic_winner_promotion: false`.
+Une différence de débit seule ne suffit pas si elle dégrade la stabilité ou l'intégration agentique.
 
-## Ollama/Vulkan
+## Promotion
 
-Ollama reste le chemin nominal car il simplifie :
+`qualification_policy.yaml` impose l'absence de promotion automatique. Une décision de backend doit être documentée avec :
 
-- téléchargement et inventaire des modèles ;
-- API locale ;
-- intégration OpenClaw ;
-- gestion quotidienne.
+- versions exactes ;
+- pilote GPU ;
+- protocole ;
+- résultats ;
+- limites ;
+- raison du choix ;
+- procédure de rollback.
 
-L'API doit rester liée à `127.0.0.1` et ne doit pas être exposée au LAN par défaut.
+## Preuve matérielle
 
-## llama.cpp/SYCL et Vulkan
-
-Les variantes llama.cpp restent des candidats de qualification afin de déterminer si la B580 obtient un meilleur compromis débit/latence/VRAM que le parcours Ollama.
-
-La V0.2 n'installe pas silencieusement un backend candidat et ne route pas vers lui sans import, configuration et preuve E2E.
-
-## LOCAL_FAST et LOCAL_DEEP
-
-Le backend et la classe de modèle sont deux notions différentes :
-
-```text
-Modèle
-  ├── LOCAL_FAST
-  └── LOCAL_DEEP
-
-Backend
-  ├── Ollama/Vulkan
-  ├── llama.cpp/SYCL
-  └── llama.cpp/Vulkan
-```
-
-Un changement de backend ne doit pas imposer de réécrire les rôles OpenClaw ni les politiques d'escalade.
-
-## Preuve matérielle obligatoire
-
-Les performances B580 ne sont pas stockées comme vérités dans Git tant qu'elles n'ont pas été mesurées sur la machine cible. Les rapports locaux restent sous l'état runtime/proofs et ne deviennent publiables qu'après revue et redaction.
+Les performances de la workstation ne sont jamais dérivées du nom de la carte graphique ni d'un benchmark externe. Les rapports locaux constituent la preuve opérationnelle et ne deviennent publiables qu'après revue et redaction.

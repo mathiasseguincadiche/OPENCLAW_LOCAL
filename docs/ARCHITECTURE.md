@@ -2,268 +2,268 @@
 
 ## Frontière de responsabilité
 
-`OPENCLAW_LOCAL` gère la plateforme IA local-first sous Windows 11 Pro. Il reprend l'ADN de `openclaw_openrouter` — OpenClaw, huit rôles, projets, preuves, validation et gouvernance — en remplaçant le cloud comme chemin nominal par des modèles locaux. WSL2 Ubuntu reste un environnement DevOps/Linux externe : il peut héberger des dépôts et outils Linux, mais il n'est pas l'hôte du runtime IA nominal.
+`OPENCLAW_LOCAL` est une plateforme IA **local-first, multi-agents et project-first** pour Windows 11 Pro x64. Le runtime IA nominal reste natif Windows. WSL2 peut héberger des outils et projets DevOps/Linux, mais il n'est pas l'hôte du runtime IA nominal.
+
+Le système sépare explicitement :
+
+- le **control plane déterministe** `clawlocal` ;
+- les **huit rôles OpenClaw** ;
+- la **flotte locale fermée de trois modèles** ;
+- les **backends d'inférence** ;
+- le **projet central**, source de vérité ;
+- les **workspaces agents**, snapshots jetables ;
+- l'**escalade cloud**, facultative, explicite et budgétée.
+
+## Architecture de référence
 
 ```text
-HOST Windows 11 Pro
+HOST Windows 11 Pro x64
 |
-+-- OPENCLAW_LOCAL runtime
-|    +-- Python / venv clawlocal
-|    +-- Node.js isolé
-|    +-- OpenClaw
-|    +-- backend IA natif Windows
++-- <OPENCLAW_LOCAL_ROOT>
+|    +-- runtime/
+|    |    +-- node/
+|    |    +-- npm-global/          -> OpenClaw
+|    |    +-- venv/                -> clawlocal
+|    +-- models/
+|    |    +-- ollama/              -> OLLAMA_MODELS
+|    +-- projects/                 -> source de vérité des projets
+|    +-- workspaces/               -> snapshots gérés des 8 agents
+|    +-- state/                    -> état local, FinOps, intake canonique
+|    +-- proofs/                   -> preuves E2E/runtime locales
 |
-+-- Project Intake durci
-|    +-- archive canonique hors projet
-|    +-- scan secrets / refus symlinks
-|    +-- SHA-256 / MIME / manifest / rapport
-|    +-- copie projet et archive read-only / ACL Windows
++-- Ollama loopback 127.0.0.1:11434
 |
-+-- Project Orchestrator
-|    +-- ANALYZE / CLARIFY / PLAN / ASSIGN
-|    +-- EXECUTE / VALIDATE / REVIEW / PACKAGE
-|    +-- remediation + COMPLETE sous validation humaine
++-- OpenClaw Gateway loopback
+|    +-- chef-operations
+|    +-- expert-recherche
+|    +-- architecte-solutions
+|    +-- ingenieur-devops
+|    +-- ingenieur-securite
+|    +-- ingenieur-release-forges
+|    +-- redacteur-technique
+|    +-- auditeur-qualite
 |
-+-- Capacités projet héritées/améliorées de V7
-|    +-- pédagogie efficient/balanced/intensive
-|    +-- documentation Comprendre/Utiliser/Approfondir/Diagnostiquer
-|    +-- publication GitHub/GitLab gouvernée
-|    +-- télémétrie locale privacy-safe
-|
-+-- OpenClaw / Gateway loopback
-|    +-- 8 agents matérialisés
-|    +-- 8 workspaces gérés
-|    +-- snapshots projet protégés
-|    +-- politiques outils par rôle
-|    +-- web_search / web_fetch
-|    +-- browser pour expert-recherche
-|
-+-- Pool local
-|    +-- LOCAL_FAST
-|    |    +-- Qwen 3.5 9B
-|    |    +-- Gemma 4 12B
-|    +-- LOCAL_DEEP candidats
-|         +-- Qwen 3.5 27B
-|         +-- SERA 14B
++-- Flotte locale supportée — exactement 3 modèles
+|    +-- qwen-max          -> qwen3.8:27b              [LOCAL_MAX]
+|    +-- gemma-deep        -> gemma4:26b               [LOCAL_DEEP]
+|    +-- devstral-devops   -> devstral-small-2:24b     [LOCAL_SPECIALIST]
 |
 +-- Backends
-|    +-- Ollama/Vulkan (nominal V0.2)
-|    +-- llama.cpp/SYCL (candidat)
-|    +-- llama.cpp/Vulkan (candidat)
+|    +-- ollama-vulkan     -> nominal pré-qualification
+|    +-- llama-cpp-sycl    -> candidat
+|    +-- llama-cpp-vulkan  -> candidat
 |
-+-- clawlocal control plane
-|    +-- contrats / routage / FinOps
-|    +-- Project Orchestrator
-|    +-- publication / apprentissage / télémétrie
-|    +-- writer architecture borné
-|    +-- qualification / preuves
-|
-+-- OpenRouter (optionnel)
-|    +-- escalade explicite uniquement
-|
-+-- WSL2 Ubuntu (externe)
-     +-- outils et projets DevOps/Linux
++-- OpenRouter
+     +-- escalade explicite uniquement
+     +-- préconditions + approbation éventuelle + FinOps
 ```
+
+Il n'existe **aucun modèle LOCAL_FAST, petit fallback ou quatrième candidat local** dans la flotte supportée. Le catalogue `config/v1/model_catalog.yaml` est la source de vérité des trois modèles locaux.
+
+## Stockage
+
+Le bootstrap choisit par défaut :
+
+```text
+E:\AI\OpenClawLocal
+```
+
+si `E:` existe ; sinon `%LOCALAPPDATA%\OpenClawLocal`. `OPENCLAW_LOCAL_ROOT` permet de choisir explicitement une autre racine.
+
+Les modèles Ollama sont confinés sous :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\models\ollama
+```
+
+via `OLLAMA_MODELS`. Les projets centraux sont conservés sous :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\projects\<project-id>
+```
+
+`runtime/` et `workspaces/` sont reconstruisibles. `projects/`, `state/` et les preuves utiles sont des données opérationnelles à protéger.
 
 ## Flux projet principal
 
 ```text
-consignes + cahier des charges + sources + livrables
+consignes + PDF + images + Office + code + sources
                          |
                          v
                 Project Intake durci
                          |
                          v
+               Document Ingestion
+                         |
+                         v
                  Project Orchestrator
                          |
-                    ANALYZE
+      ANALYZE -> CLARIFY -> PLAN -> ASSIGN
                          |
-               ambiguïté bloquante ?
-                  |             |
-                 oui           non
-                  |             |
-                  v             |
-               CLARIFY <--------+
-                  |
-                  v
-                 PLAN
-                  |
-                  v
-                ASSIGN
-                  |
-                  v
-                EXECUTE
-                  |
-        +---------+----------+
-        |                    |
-        v                    v
-   agents locaux        expert recherche
-                        LOCAL + WEB
-        |                    |
-        +---------+----------+
-                  |
-                  v
-               VALIDATE
-                  |
-             PASS ? -- non --> IN_PROGRESS/remediation
-                  |
-                 oui
-                  v
-                REVIEW
-                  |
-             PASS ? -- non --> IN_PROGRESS/remediation
-                  |
-                 oui
-                  v
-               PACKAGE
-                  |
-                  v
-          APPROBATION HUMAINE
-                  |
-                  v
-               COMPLETE
-                  |
-            si publication
-                  v
-        publication state machine
+                      EXECUTE
+                         |
+              Artifact Exchange versionné
+                         |
+                      VALIDATE
+                         |
+                       REVIEW
+                         |
+                      PACKAGE
+                         |
+                APPROBATION HUMAINE
+                         |
+                      COMPLETE
 ```
 
-Le cloud n'est **pas** une étape automatique de ce flux. Si une tâche locale justifie une escalade, celle-ci passe par le routeur existant, ses préconditions et FinOps.
+Le cloud n'est pas une étape automatique de ce flux.
 
-## Séparation control plane / agents
+## Control plane et modèles
 
-Le Project Orchestrator et les modules `clawlocal` constituent un **control plane déterministe** :
+Le Project Orchestrator et les modules `clawlocal` constituent un **control plane déterministe**. Ils :
 
-- ils contrôlent les états ;
-- vérifient les artefacts et preuves ;
-- valident les dépendances de tâches ;
-- synchronisent les snapshots ;
-- lancent OpenClaw ;
+- contrôlent les états et transitions ;
+- valident les contrats et dépendances ;
+- construisent et synchronisent les snapshots ;
 - collectent les sorties ;
-- conservent les preuves ;
-- refusent les transitions invalides ;
-- bornent les écritures spécialisées ;
-- gouvernent la publication et la télémétrie.
+- maintiennent l'Artifact Exchange ;
+- calculent les hashes et preuves ;
+- imposent les gates ;
+- gouvernent FinOps, publication et télémétrie ;
+- refusent les transitions incohérentes.
 
-Les modèles restent responsables du contenu sémantique : comprendre les consignes, proposer le plan, exécuter les tâches, analyser les résultats et auditer le travail.
+Les modèles produisent le contenu sémantique : analyse, plan, rédaction, code, diagnostic, revue et explication. Un modèle ne peut pas promouvoir l'état canonique d'un projet par simple affirmation.
 
-Un modèle ne peut donc pas modifier directement l'état canonique du projet simplement en affirmant qu'une étape est terminée.
+## Rôles et séparation des responsabilités
 
-## Intake et sources de confiance
+| Rôle | Responsabilité principale |
+|---|---|
+| Chef des opérations | cadrage, plan, délégation, consolidation |
+| Expert recherche | recherche Web, sources, synthèse factuelle |
+| Architecte solutions | architecture, ADR, compromis, schémas |
+| Ingénieur DevOps | implémentation, automatisation, CI/CD, IaC, conteneurs |
+| Ingénieur sécurité | audit et findings, sans correction silencieuse |
+| Ingénieur Release/Forges | Git, PR/MR, CI distante, release et publication |
+| Rédacteur technique | documentation progressive et fidèle |
+| Auditeur qualité | validation indépendante et verdict |
 
-Le Project Intake crée une archive canonique sous `state/intake/<project>/<timestamp>/`, puis une copie gérée dans `projects/<id>/intake/`. SHA-256, MIME, manifest et rapport d'ingestion sont conservés. Les documents entrants sont non fiables ; les symlinks sont interdits dans l'Intake et les secrets évidents bloquent la création.
+L'Architecte écrit uniquement via un writer borné à `context/architecture/` et `diagrams/`. Sécurité et Audit restent non-mutants vis-à-vis des sources auditées.
 
-Le dépôt ou les fichiers sous `sources/` restent la vérité de travail pour le code. Les snapshots agents n'autorisent jamais un document entrant à redéfinir les permissions des rôles.
+## Flotte locale et routage nominal
 
-## Pédagogie et documentation
+| Agent | Modèle nominal |
+|---|---|
+| Chef des opérations | Qwen 3.8 27B |
+| Expert recherche | Qwen 3.8 27B + Web |
+| Architecte solutions | Gemma 4 26B |
+| Ingénieur DevOps | Devstral Small 2 24B |
+| Ingénieur sécurité | Qwen 3.8 27B |
+| Release/Forges | Qwen 3.8 27B |
+| Rédacteur technique | Gemma 4 26B |
+| Auditeur qualité | Gemma 4 26B, ou Qwen si le producteur est Gemma |
 
-Le contexte projet embarque un profil pédagogique et un profil documentaire. Le profil pédagogique module la part d'explication sans empêcher la livraison. La documentation progressive conserve quatre profondeurs : Comprendre, Utiliser, Approfondir et Diagnostiquer.
+Les fallbacks locaux restent strictement dans ces trois modèles. Une indisponibilité locale ne déclenche jamais automatiquement OpenRouter.
 
-Ces éléments sont des **capacités d'accompagnement**, pas des gates artificiels de livraison sauf lorsqu'un projet ou une évaluation les exige explicitement.
+## Modèle et backend sont indépendants
 
-## Publication projet
-
-La publication du projet utilisateur possède une machine d'états indépendante de la machine `INTAKE_READY -> COMPLETE`. Elle enregistre les checks locaux, les preuves distantes, la CI, le clone propre, l'audit indépendant, l'URL canonique et le SHA publié.
-
-Le rôle Release/Forge prépare et vérifie ; les opérations distantes sensibles conservent une approbation humaine.
-
-## Permissions spécialisées
-
-L'Ingénieur sécurité est read-only vis-à-vis des modifications de sources : il audite et renvoie les corrections au producteur.
-
-L'Architecte ne dispose pas de droits génériques `write/edit/apply_patch`. Le control plane lui fournit un writer `architecture_scoped` exclusivement pour :
-
-```text
-context/architecture/
-diagrams/
-```
-
-Cela permet de produire ADR et schémas sans ouvrir l'ensemble du workspace à l'écriture architecturale.
-
-## Télémétrie opérationnelle
-
-La télémétrie projet est append-only dans `evidence/telemetry/runs.jsonl`. Elle stocke uniquement des métadonnées et mesures observées : agent, modèle, backend, route, durée et, lorsque disponibles, TTFT, débit, tokens, VRAM/RAM, outils, retries, passage LOCAL_DEEP et coût cloud.
-
-Prompts, réponses, secrets et documents privés sont explicitement exclus.
-
-## Sorties de tâches
-
-Chaque tâche possède un packet dans `context/tasks/<task-id>.json`.
-
-Le workspace de l'agent utilise des racines namespacées :
+Une classe de modèle n'est pas un backend :
 
 ```text
-work/<task-id>
-deliverables/<task-id>
-evidence/<task-id>
-diagrams/<task-id>
+Modèles
+  +-- LOCAL_MAX        -> Qwen 3.8 27B
+  +-- LOCAL_DEEP       -> Gemma 4 26B
+  +-- LOCAL_SPECIALIST -> Devstral Small 2 24B
+
+Backends
+  +-- Ollama/Vulkan
+  +-- llama.cpp/SYCL
+  +-- llama.cpp/Vulkan
 ```
 
-La collecte centrale produit des runs immuables :
+Le backend final est choisi uniquement après qualification réelle sur la workstation cible.
+
+## Intake et documents
+
+Le Project Intake crée une archive canonique sous `state/intake/<project>/<timestamp>/`, puis une copie gérée sous `projects/<id>/intake/`.
+
+Les entrées sont considérées comme non fiables :
+
+- scan de secrets ;
+- refus des symlinks, junctions et reparse points ;
+- SHA-256 et MIME ;
+- ACL/lecture seule ;
+- limites sur PDF et conteneurs Office ;
+- aucune exécution de document entrant.
+
+La Document Ingestion produit `context/ingestion/` sans remplacer les originaux.
+
+## Artifact Exchange et cohérence entre agents
+
+Le projet central reste la source de vérité. Chaque tentative de tâche conserve une version immuable :
 
 ```text
-deliverables/tasks/<task-id>/<agent-id>/run-001/
-deliverables/tasks/<task-id>/<agent-id>/run-002/
+context/exchange/<task-id>/self/run-001/
+context/exchange/<task-id>/self/run-002/
 ```
 
-La correction d'une tâche ne détruit donc pas la preuve de l'essai précédent.
+Après `PASS`, les artefacts sont propagés aux dépendants directs et transitifs :
+
+```text
+context/exchange/<consumer>/dependencies/<producer>/run-NNN/
+```
+
+Les agents impactés sont resynchronisés avant leur prochaine tâche. Une correction amont peut rouvrir les dépendants transitifs afin d'éviter des livrables construits sur une version obsolète.
+
+## Pédagogie
+
+La pédagogie est transversale aux huit rôles et aux trois modèles. Trois profils existent :
+
+- `efficient` : 90 % exécution / 10 % apprentissage ;
+- `balanced` : 70 % / 30 % ;
+- `intensive` : 60 % / 40 %.
+
+La documentation progressive suit quatre profondeurs : **Comprendre, Utiliser, Approfondir, Diagnostiquer**.
+
+## Web et cloud
+
+Une donnée récente suit d'abord :
+
+```text
+agent local
+  -> web_search / web_fetch / browser si autorisé
+  -> sources récentes
+  -> raisonnement local
+```
+
+Une escalade cloud exige un motif versionné, ses préconditions, le budget disponible, une réservation FinOps atomique juste avant l'appel réel et une approbation humaine lorsque le motif l'exige.
 
 ## Sources de vérité
 
-- `config/v1/platform.yaml` : mode de déploiement et contrats liés ;
-- `model_catalog.yaml` : modèles et identifiants runtime ;
-- `model_routing.yaml` : routes par agent ;
-- `project_policy.yaml` : structure projet et contrats liés ;
-- `orchestration_policy.yaml` : transitions et gates du Project Orchestrator ;
-- `intake_policy.yaml` : intégrité et immutabilité de l'Intake ;
-- `pedagogy_policy.yaml` : profils d'apprentissage ;
-- `accessibility_policy.yaml` : profondeur documentaire ;
-- `publication_policy.yaml` : publication d'un projet utilisateur ;
-- `telemetry_policy.yaml` : métriques opérationnelles ;
-- `web_policy.yaml` : recherche Web local-first ;
-- `runtime_backends.yaml` : backends d'inférence ;
-- `budget_policy.yaml` : limites FinOps ;
-- `diagram_policy.yaml` : rendu de schémas ;
-- `qualification_policy.yaml` : suites, seuils et règles de promotion ;
-- `agents/*` : comportements humainement lisibles ;
-- `runtime_versions.json` : versions runtime supportées/préférées.
+- `config/v1/model_catalog.yaml` : trois modèles supportés ;
+- `config/v1/model_routing.yaml` : routage par rôle ;
+- `config/v1/runtime_backends.yaml` : backends ;
+- `config/v1/orchestration_policy.yaml` : états et gates ;
+- `config/v1/document_ingestion_policy.yaml` : documents ;
+- `config/v1/artifact_exchange_policy.yaml` : propagation ;
+- `config/v1/pedagogy_policy.yaml` : pédagogie ;
+- `config/v1/tool_policy.yaml` : permissions ;
+- `config/v1/budget_policy.yaml` : FinOps ;
+- `config/v1/qualification_policy.yaml` : qualification ;
+- `agents/*` : contrats humains des rôles ;
+- `config/v1/runtime_versions.json` : versions runtime.
 
-Le runtime local reste un **état observé**. Les contrats Git décrivent l'état attendu mais ne constituent pas une preuve matérielle.
+Les contrats Git décrivent l'état attendu. Les performances GPU, la qualité multimodale et la stabilité sont des **états observés** qui doivent être prouvés sur la workstation réelle.
 
-## Modes de routage
+## Invariants V1
 
-1. **LOCAL_FAST** : parcours quotidien ;
-2. **LOCAL + WEB** : recherche/fetch Internet puis raisonnement local ;
-3. **LOCAL_DEEP** : modèle plus lourd/offload explicitement disponible ;
-4. **LOCAL_SPECIALIST** : modèle spécialisé explicitement qualifié ;
-5. **CLOUD_ESCALATION** : dernier niveau, sous motif, préconditions et budget.
-
-Le cloud n'apparaît pas dans les fallbacks persistants OpenClaw et le Project Orchestrator ne l'active pas automatiquement.
-
-## Découplage modèle / backend
-
-Un alias modèle et un backend d'inférence sont deux axes indépendants. Le projet doit pouvoir comparer Ollama/Vulkan et llama.cpp sans réécrire les huit rôles ni les politiques de projet.
-
-## Contrôles de sécurité structurants
-
-- endpoints locaux en loopback ;
-- Intake immuable avec preuves d'intégrité ;
-- contenus entrants non fiables ;
-- filesystem borné au workspace ;
-- snapshots projet gérés explicitement ;
-- sorties de tâches collectées sans écrasement ;
-- transitions projet soumises à des gates ;
-- ambiguïtés bloquantes soumises à l'humain ;
-- `COMPLETE` soumis à l'humain ;
-- exec en mode `ask` ;
-- elevated désactivé ;
-- sécurité/audit sans mutation directe des sources ;
-- architecture via writer borné ;
-- recherche Web considérée comme entrée non fiable ;
-- publication distante gouvernée ;
-- télémétrie sans contenu privé ;
+- Windows natif pour le runtime IA nominal ;
+- exactement trois modèles locaux supportés ;
+- aucun fallback cloud silencieux ;
+- projet central source de vérité ;
+- workspaces jetables ;
+- provenance et historique conservés ;
+- gates fail-closed ;
+- séparation producteur/reviewer lorsque praticable ;
+- sécurité et audit sans correction silencieuse ;
 - cloud désactivé par défaut ;
-- Project Orchestrator sans auto-escalade cloud ;
-- budget cloud fail-closed ;
-- secrets hors Git et hors requêtes Web ;
-- aucune promotion automatique depuis la CI.
+- approbation humaine pour `COMPLETE` ;
+- aucune affirmation de performance sans preuve matérielle.
