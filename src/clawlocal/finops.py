@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from clawlocal.config import load_contract
 
@@ -341,7 +342,11 @@ def settle_cloud_reservation(
         allowed, budget_reason = _budget_allowed_rows(
             rows,
             proposed_cost_eur=cost_eur,
-            project_id=(str(reservation["project_id"]) if reservation.get("project_id") else None),
+            project_id=(
+                str(reservation["project_id"])
+                if reservation.get("project_id")
+                else None
+            ),
             now=moment,
             exclude_reservation_id=reservation_id,
         )
