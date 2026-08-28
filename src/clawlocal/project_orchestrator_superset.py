@@ -25,6 +25,7 @@ from clawlocal.project_ingestion import (
     validate_source_coverage,
 )
 from clawlocal.project_integrity import snapshot_integrity
+from clawlocal.safe_fs import assert_no_link_like
 
 create_assignments = base.create_assignments
 open_blocking_clarifications = base.open_blocking_clarifications
@@ -275,6 +276,10 @@ def package_project(project: Path) -> tuple[Path, Path]:
     if failures:
         details = "; ".join(failures)
         raise PermissionError(f"packaging bloqué; artifact exchange incomplet: {details}")
+    for name in ("deliverables", "diagrams", "context"):
+        root = project / name
+        if root.exists():
+            assert_no_link_like(root, label=f"packaging {name}")
     snapshot_integrity(project, "PRE_PACKAGE")
     archive, manifest = base.package_project(project)
     snapshot_integrity(
