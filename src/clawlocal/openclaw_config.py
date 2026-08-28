@@ -47,7 +47,7 @@ def _agent_tools(
 
 def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
     models: list[dict[str, Any]] = []
-    for alias, model in catalog["models"].items():
+    for model in catalog["models"].values():
         if model["provider"] != "ollama":
             continue
         models.append(
@@ -59,10 +59,6 @@ def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
                 "params": {
                     "num_ctx": 16384,
                     "keep_alive": "15m",
-                },
-                "metadata": {
-                    "clawlocalAlias": alias,
-                    "status": model.get("status"),
                 },
             }
         )
@@ -78,23 +74,27 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
     ingestion_policy = load_contract("document_ingestion_policy.yaml")
 
     workspaces_root = platform_root / "workspaces"
-    entries: dict[str, Any] = {}
+    agent_list: list[dict[str, Any]] = []
     for agent_id, route in routing["agents"].items():
         primary = _local_ref(route["local_primary"], catalog)
         fallbacks: list[str] = []
         fallback_alias = route.get("local_fallback")
         if fallback_alias:
             fallbacks.append(_local_ref(fallback_alias, catalog))
-        entries[agent_id] = {
-            "name": agent_id,
-            "workspace": str(workspaces_root / agent_id),
-            "model": {
-                "primary": primary,
-                "fallbacks": fallbacks,
-            },
-            "experimental": {"localModelLean": True},
-            "tools": _agent_tools(agent_id, tool_policy),
-        }
+        agent_list.append(
+            {
+                "id": agent_id,
+                "default": agent_id == "chef-operations",
+                "name": agent_id,
+                "workspace": str(workspaces_root / agent_id),
+                "model": {
+                    "primary": primary,
+                    "fallbacks": fallbacks,
+                },
+                "experimental": {"localModelLean": True},
+                "tools": _agent_tools(agent_id, tool_policy),
+            }
+        )
 
     qwen = catalog["models"]["qwen-max"]["runtime_id"]
     gemma = catalog["models"]["gemma-deep"]["runtime_id"]
@@ -119,7 +119,6 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
             }
         },
         "agents": {
-            "ownership": "explicit",
             "defaults": {
                 "skipBootstrap": True,
                 "model": {
@@ -137,7 +136,7 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
                 "pdfMaxBytesMb": int(pdf_policy.get("max_bytes_mb", 50)),
                 "pdfMaxPages": int(pdf_policy.get("max_pages_per_tool_call", 20)),
             },
-            "entries": entries,
+            "list": agent_list,
         },
         "tools": {
             "profile": tool_policy["security_defaults"]["profile"],
