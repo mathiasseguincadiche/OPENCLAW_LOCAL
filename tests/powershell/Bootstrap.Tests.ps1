@@ -57,11 +57,20 @@ Describe 'Contrat interne du bootstrap Windows' {
 
     It 'interdit les guillemets typographiques dans les sources PowerShell' {
         $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $SmartQuotes = @(
+            [char]0x2018,
+            [char]0x2019,
+            [char]0x201C,
+            [char]0x201D
+        )
         $Unsafe = @()
         foreach ($Script in Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter '*.ps1' -File) {
             $Content = Get-Content -Raw -LiteralPath $Script.FullName
-            if ($Content -match '[‘’“”]') {
-                $Unsafe += $Script.FullName
+            foreach ($Quote in $SmartQuotes) {
+                if ($Content.Contains([string]$Quote)) {
+                    $Unsafe += $Script.FullName
+                    break
+                }
             }
         }
         $Unsafe | Should -BeNullOrEmpty -Because ($Unsafe -join ', ')
