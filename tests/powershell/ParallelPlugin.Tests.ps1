@@ -1,0 +1,32 @@
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+BeforeAll {
+    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+}
+
+Describe 'Contrat Parallel Search OpenClaw' {
+    It 'verrouille le plugin officiel requis par parallel-free' {
+        $Lock = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'config\v1\runtime_versions.json') |
+            ConvertFrom-Json
+        [string]$Lock.openclaw.plugins.parallel.package | Should -Be '@openclaw/parallel-plugin'
+        [string]$Lock.openclaw.plugins.parallel.preferred | Should -Be '2026.7.1'
+        [string]$Lock.openclaw.plugins.parallel.provider | Should -Be 'parallel-free'
+    }
+
+    It 'prépare le plugin avant la validation dry-run du patch OpenClaw' {
+        $Script = Get-Content -Raw -LiteralPath (
+            Join-Path $RepoRoot 'scripts\windows\08_configure_openclaw.ps1'
+        )
+        $InitializeIndex = $Script.IndexOf('Initialize-ParallelSearchPlugin -OpenClaw')
+        $PatchIndex = $Script.IndexOf("'config', 'patch', '--file', `$PatchPath, '--dry-run'")
+        $InitializeIndex | Should -BeGreaterThan -1
+        $PatchIndex | Should -BeGreaterThan -1
+        $InitializeIndex | Should -BeLessThan $PatchIndex
+        $Script | Should -Match "'plugins', 'install'"
+        $Script | Should -Match "'plugins', 'enable'"
+        $Script | Should -Match "'plugins', 'inspect'"
+        $Script | Should -Match '--runtime'
+        $Script | Should -Match '--pin'
+    }
+}
