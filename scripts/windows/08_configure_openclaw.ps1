@@ -71,7 +71,7 @@ function Get-PluginInventory {
     }
 }
 
-function Ensure-ParallelSearchPlugin {
+function Initialize-ParallelSearchPlugin {
     param(
         [Parameter(Mandatory)][string]$OpenClaw,
         [Parameter(Mandatory)][string]$LockPath
@@ -164,7 +164,7 @@ if (-not (Test-Path -LiteralPath $ConfigPath)) {
     ) -Description 'Initialisation baseline OpenClaw'
 }
 
-Ensure-ParallelSearchPlugin -OpenClaw $OpenClaw -LockPath $RuntimeLockPath
+Initialize-ParallelSearchPlugin -OpenClaw $OpenClaw -LockPath $RuntimeLockPath
 
 $SchemaOutput = & $OpenClaw 'config' 'schema'
 if ($LASTEXITCODE -ne 0) {
