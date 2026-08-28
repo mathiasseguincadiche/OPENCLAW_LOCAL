@@ -70,15 +70,13 @@ def _ledger_lock(path: Path) -> Iterator[None]:
         if os.name == "nt":
             import msvcrt
 
-            locking = getattr(msvcrt, "locking")
-            lock_mode = getattr(msvcrt, "LK_LOCK")
-            unlock_mode = getattr(msvcrt, "LK_UNLCK")
-            locking(handle.fileno(), lock_mode, 1)
+            msvcrt_api: Any = msvcrt
+            msvcrt_api.locking(handle.fileno(), msvcrt_api.LK_LOCK, 1)
             try:
                 yield
             finally:
                 handle.seek(0)
-                locking(handle.fileno(), unlock_mode, 1)
+                msvcrt_api.locking(handle.fileno(), msvcrt_api.LK_UNLCK, 1)
         else:
             import fcntl
 
