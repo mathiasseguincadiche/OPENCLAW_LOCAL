@@ -98,7 +98,7 @@ function Install-OpenClawPreferred {
         New-Item -ItemType Directory -Path $NpmPrefix -Force | Out-Null
         Invoke-NativeChecked -Command $Npm -Arguments @(
             'install', '--global', '--prefix', $NpmPrefix,
-            '--ignore-scripts=false', '--allow-scripts', 'openclaw', $Tarball
+            '--ignore-scripts=false', $Tarball
         ) -Description 'Installation OpenClaw'
 
         $Marker = Join-Path $NpmPrefix '.openclaw-local-install.json'
