@@ -4,6 +4,14 @@ Ce runbook suit une règle simple : **diagnostiquer le parcours local avant tout
 
 ## Ordre de diagnostic
 
+Commencer par afficher les derniers logs et preuves :
+
+```powershell
+.\menu.ps1 -Action logs
+```
+
+Puis :
+
 ```powershell
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
@@ -14,6 +22,53 @@ ollama list
 ```
 
 Ensuite seulement : benchmark, E2E, inventaire et qualification.
+
+## Logs automatiques et diagnostic en temps réel
+
+Toute action **réelle** exécutée via `menu.ps1` crée automatiquement un transcript sous :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\proofs\logs\
+```
+
+Le fichier est horodaté par action, par exemple :
+
+```text
+20260828_142530123_install-full.log
+20260828_151004772_audit.log
+20260828_151115904_verify.log
+20260828_153812441_qualification.log
+```
+
+Le chemin courant est affiché immédiatement avec `LOG=<chemin>`. À la fin, le transcript contient `ACTION_RESULT=PASS` ou `ACTION_RESULT=FAIL` et le menu affiche `LOG_SAVED=<chemin>`.
+
+Pour récupérer le dernier transcript :
+
+```powershell
+$latest = Get-ChildItem "$env:OPENCLAW_LOCAL_ROOT\proofs\logs\*.log" |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+$latest.FullName
+Get-Content -LiteralPath $latest.FullName -Tail 100
+```
+
+Pour le suivre depuis une deuxième fenêtre PowerShell pendant une installation ou une qualification :
+
+```powershell
+Get-Content -LiteralPath $latest.FullName -Tail 50 -Wait
+```
+
+Les `-DryRun` ne créent pas de transcript automatique afin de rester sans mutation. Une action réelle peut exceptionnellement être lancée sans transcript avec `-NoLog`.
+
+Si la journalisation elle-même échoue, l'action opérationnelle n'est pas bloquée : le menu affiche un avertissement et continue. Si un transcript PowerShell externe est déjà actif, conserver ce transcript comme preuve plutôt que relancer une installation uniquement pour produire un second log.
+
+Les transcripts ne remplacent pas les preuves structurées :
+
+- E2E : `<OPENCLAW_LOCAL_ROOT>\proofs\openclaw_e2e_*.json` ;
+- inventaire/benchmark : `<REPO>\benchmarks\results\*.json` ;
+- console et erreurs : `<OPENCLAW_LOCAL_ROOT>\proofs\logs\*.log`.
+
+Avant de partager un log, vérifier qu'aucun secret saisi ou affiché par un outil externe n'y apparaît. Ne jamais transmettre `.env`, `OPENROUTER_API_KEY`, token Gateway ou document privé.
 
 ## Variables et stockage
 
@@ -33,6 +88,7 @@ E:\AI\OpenClawLocal\
 ├── workspaces\
 ├── state\
 └── proofs\
+    └── logs\
 ```
 
 Si `OLLAMA_MODELS` ne pointe pas vers `<OPENCLAW_LOCAL_ROOT>\models\ollama`, exécuter :
@@ -326,6 +382,7 @@ Sauvegarder ensuite les données à conserver avant de supprimer volontairement 
 
 Sans secrets :
 
+- dernier transcript `proofs\logs\*.log` ;
 - commit Git ;
 - runtime lock ;
 - inventaire ;
