@@ -3,13 +3,31 @@ Set-StrictMode -Version Latest
 function Test-OpenClawPreferred {
     param([Parameter(Mandatory)][string]$NpmPrefix)
 
-    $PackageJson = Join-Path $NpmPrefix 'node_modules\openclaw\package.json'
+    $PackageRoot = Join-Path $NpmPrefix 'node_modules\openclaw'
+    $PackageJson = Join-Path $PackageRoot 'package.json'
+    $EntryPoint = Join-Path $PackageRoot 'openclaw.mjs'
     $Command = Join-Path $NpmPrefix 'openclaw.cmd'
-    if (-not (Test-Path -LiteralPath $PackageJson) -or -not (Test-Path -LiteralPath $Command)) {
+    $Marker = Join-Path $NpmPrefix '.openclaw-local-install.json'
+    foreach ($RequiredPath in @($PackageJson, $EntryPoint, $Command, $Marker)) {
+        if (-not (Test-Path -LiteralPath $RequiredPath)) {
+            return $false
+        }
+    }
+
+    try {
+        $Installed = [string](Get-Content -Raw -LiteralPath $PackageJson | ConvertFrom-Json).version
+        $MarkerData = Get-Content -Raw -LiteralPath $Marker | ConvertFrom-Json
+    }
+    catch {
         return $false
     }
-    $Installed = [string](Get-Content -Raw -LiteralPath $PackageJson | ConvertFrom-Json).version
-    return $Installed -eq [string]$Lock.openclaw.preferred
+
+    return (
+        $Installed -eq [string]$Lock.openclaw.preferred -and
+        [string]$MarkerData.openclaw_version -eq [string]$Lock.openclaw.preferred -and
+        [string]$MarkerData.node_version -eq [string]$Lock.node.preferred -and
+        [string]$MarkerData.integrity -eq [string]$Lock.openclaw.integrity
+    )
 }
 
 function Install-OpenClawPreferred {
@@ -82,6 +100,16 @@ function Install-OpenClawPreferred {
             'install', '--global', '--prefix', $NpmPrefix,
             '--ignore-scripts=false', '--allow-scripts', 'openclaw', $Tarball
         ) -Description 'Installation OpenClaw'
+
+        $Marker = Join-Path $NpmPrefix '.openclaw-local-install.json'
+        $MarkerTemp = "$Marker.tmp"
+        [ordered]@{
+            schema_version = '1.0.0'
+            openclaw_version = [string]$Lock.openclaw.preferred
+            node_version = [string]$Lock.node.preferred
+            integrity = [string]$Lock.openclaw.integrity
+        } | ConvertTo-Json | Set-Content -LiteralPath $MarkerTemp -Encoding utf8
+        Move-Item -LiteralPath $MarkerTemp -Destination $Marker -Force
     }
     finally {
         if (Test-Path -LiteralPath $Temp) {
