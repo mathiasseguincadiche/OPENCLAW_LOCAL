@@ -2,7 +2,9 @@
 param(
     [switch]$DryRun,
     [switch]$AllowRuntimeDrift,
-    [switch]$SkipGatewayService
+    [switch]$SkipGatewayService,
+    [ValidateRange(5, 300)][int]$GatewayReadyTimeoutSeconds = 90,
+    [ValidateRange(1, 10000)][int]$GatewayPollIntervalMilliseconds = 2000
 )
 
 Set-StrictMode -Version Latest
@@ -15,6 +17,12 @@ $ConfigureOllama = Join-Path $PSScriptRoot '02_configure_local.ps1'
 $PullModels = Join-Path $PSScriptRoot '03_pull_models.ps1'
 $ConfigureOpenClaw = Join-Path $PSScriptRoot '08_configure_openclaw.ps1'
 $VerifyLocal = Join-Path $PSScriptRoot '04_verify_local.ps1'
+$GatewayHealth = Join-Path $PSScriptRoot 'lib\gateway_health.ps1'
+
+if (-not (Test-Path -LiteralPath $GatewayHealth)) {
+    throw "Bibliothèque de santé Gateway introuvable: $GatewayHealth"
+}
+. $GatewayHealth
 
 function Get-PlatformRoot {
     if ($env:OPENCLAW_LOCAL_ROOT) {
@@ -62,6 +70,8 @@ if ($DryRun) {
     Invoke-ScriptChecked -Path $ConfigureOpenClaw -Parameters @{ DryRun = $true } `
         -Description 'Dry-run OpenClaw'
     Write-Host '[DRY-RUN] Gateway service: install/start en mode réel uniquement.'
+    Write-Host "[DRY-RUN] Readiness RPC bornée: timeout=${GatewayReadyTimeoutSeconds}s, intervalle=${GatewayPollIntervalMilliseconds}ms."
+    Write-Host '[DRY-RUN] En cas d’échec persistant, diagnostic local redigé sous proofs\gateway.'
     Write-Host '[DRY-RUN] Aucune mutation réalisée.'
     exit 0
 }
@@ -88,9 +98,16 @@ if (-not $SkipGatewayService) {
     if ($LASTEXITCODE -ne 0) {
         throw 'Démarrage du service Gateway OpenClaw en échec.'
     }
-    & $OpenClaw gateway status --require-rpc --json
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Gateway OpenClaw installé mais non joignable.'
+
+    $Readiness = Wait-OpenClawGatewayReady -OpenClaw $OpenClaw `
+        -TimeoutSeconds $GatewayReadyTimeoutSeconds `
+        -PollIntervalMilliseconds $GatewayPollIntervalMilliseconds
+    if (-not $Readiness.ready) {
+        $DiagnosticPath = Write-OpenClawGatewayDiagnostic -OpenClaw $OpenClaw `
+            -PlatformRoot $PlatformRoot -Readiness $Readiness
+        Write-Host "GATEWAY_FAILURE_CLASS=$($Readiness.failure_class)"
+        Write-Host "GATEWAY_DIAGNOSTIC=$DiagnosticPath"
+        throw "Gateway OpenClaw non prêt après $($Readiness.elapsed_seconds) s. Classification=$($Readiness.failure_class). Diagnostic=$DiagnosticPath"
     }
 }
 
