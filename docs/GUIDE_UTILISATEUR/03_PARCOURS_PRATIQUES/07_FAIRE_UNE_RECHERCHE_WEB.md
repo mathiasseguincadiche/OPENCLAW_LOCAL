@@ -157,7 +157,7 @@ jusqu'à résolution par une meilleure source, une preuve runtime ou une décisi
 Pour un fichier de preuve :
 
 ```powershell
-python .\scripts\46_validate_web_evidence.py `
+python .\scripts\47_validate_web_evidence.py `
   --file .\evidence\<task-id>\web_evidence.json `
   --task-id <task-id>
 ```
@@ -165,7 +165,7 @@ python .\scripts\46_validate_web_evidence.py `
 Pour tout un projet :
 
 ```powershell
-python .\scripts\46_validate_web_evidence.py --project <racine-projet>
+python .\scripts\47_validate_web_evidence.py --project <racine-projet>
 ```
 
 Résultat attendu :
