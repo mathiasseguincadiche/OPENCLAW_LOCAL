@@ -34,9 +34,60 @@ E:\AI\OpenClawLocal\
 ├── workspaces\
 ├── state\
 └── proofs\
+    └── logs\
 ```
 
 `projects/` est la source de vérité des projets. `workspaces/` contient des snapshots gérés et reconstruisibles.
+
+## Logs opérationnels automatiques
+
+Toute action **réelle** lancée via `menu.ps1` est journalisée automatiquement dans :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\proofs\logs\
+```
+
+Le nom est horodaté et inclut l'action :
+
+```text
+20260828_142530123_install-full.log
+20260828_151004772_audit.log
+20260828_151115904_verify.log
+20260828_153812441_qualification.log
+```
+
+Au démarrage, le menu affiche `LOG=<chemin>`. À la fin il inscrit `ACTION_RESULT=PASS` ou `ACTION_RESULT=FAIL`, arrête le transcript puis affiche `LOG_SAVED=<chemin>`.
+
+Lister les derniers transcripts et les emplacements des preuves structurées :
+
+```powershell
+.\menu.ps1 -Action logs
+```
+
+Afficher les 100 dernières lignes du dernier transcript :
+
+```powershell
+$latest = Get-ChildItem "$env:OPENCLAW_LOCAL_ROOT\proofs\logs\*.log" |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+Get-Content -LiteralPath $latest.FullName -Tail 100
+```
+
+Suivre ce transcript depuis une seconde console :
+
+```powershell
+Get-Content -LiteralPath $latest.FullName -Tail 50 -Wait
+```
+
+Les `-DryRun` ne créent pas de transcript afin de conserver le contrat sans mutation. `-NoLog` permet de désactiver explicitement la journalisation automatique d'une action réelle.
+
+Les transcripts complètent les preuves structurées ; ils ne les remplacent pas :
+
+- E2E : `<OPENCLAW_LOCAL_ROOT>\proofs\openclaw_e2e_*.json` ;
+- inventaire/benchmark : `<REPO>\benchmarks\results\*.json` ;
+- console de l'action : `<OPENCLAW_LOCAL_ROOT>\proofs\logs\*.log`.
+
+Avant partage, relire le transcript et ne jamais transmettre clé API, token Gateway, `.env` ou document privé.
 
 ## Prendre en charge un projet
 
@@ -190,17 +241,18 @@ Ne pas modifier un snapshot agent comme source de vérité. Mettre à jour le pr
 
 ## Diagnostic ordonné
 
-1. `runtime_versions.json` et versions observées ;
-2. `OPENCLAW_LOCAL_ROOT`, `OLLAMA_MODELS`, `OPENCLAW_STATE_DIR` ;
-3. `model_catalog.yaml` et `ollama list` ;
-4. endpoint Ollama loopback ;
-5. `openclaw config validate --json` ;
-6. `openclaw agents list --json` ;
-7. Gateway ;
-8. `verify` puis `e2e` ;
-9. dernier benchmark ;
-10. preuves projet/Web ;
-11. seulement ensuite, si la politique le permet, envisager le cloud.
+1. dernier transcript sous `proofs\logs` ;
+2. `runtime_versions.json` et versions observées ;
+3. `OPENCLAW_LOCAL_ROOT`, `OLLAMA_MODELS`, `OPENCLAW_STATE_DIR` ;
+4. `model_catalog.yaml` et `ollama list` ;
+5. endpoint Ollama loopback ;
+6. `openclaw config validate --json` ;
+7. `openclaw agents list --json` ;
+8. Gateway ;
+9. `verify` puis `e2e` ;
+10. dernier benchmark ;
+11. preuves projet/Web ;
+12. seulement ensuite, si la politique le permet, envisager le cloud.
 
 Ne jamais masquer un défaut local par un fallback cloud automatique.
 
