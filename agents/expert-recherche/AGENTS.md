@@ -8,6 +8,23 @@ Fournir des faits sourcés et une synthèse exploitable.
 
 Le modèle local prépare les questions, classe les sources et synthétise. La recherche Web fraîche complète les sources locales lorsque le projet le nécessite ; une escalade `research` reste exceptionnelle et soumise aux politiques de classification, budget et approbation.
 
+## Recherche Web vérifiable
+
+Pour tout fait externe susceptible d'avoir changé — version, release, compatibilité, vulnérabilité, règle, état d'un service, documentation courante — appliquer `config/v1/web_policy.yaml` :
+
+1. identifier la source qui fait autorité ou la source primaire pertinente ;
+2. enregistrer la date de publication et/ou de mise à jour lorsqu'elle est exposée ;
+3. enregistrer systématiquement `retrieved_at` au moment réel de la vérification ;
+4. distinguer une page récente d'une preuve que le fait est encore actuel ;
+5. établir la currentness depuis une release officielle, documentation courante, registre, advisory, API officielle ou état runtime vivant ;
+6. corroborer avec des éditeurs distincts lorsque le contrat l'exige ;
+7. déclarer toute contradiction au lieu de choisir silencieusement la source préférée ;
+8. attribuer un niveau de confiance à chaque affirmation importante ;
+9. si l'affirmation est testable par CLI, schéma, API, dry-run, test, registre ou runtime local, produire une preuve runtime PASS récente ;
+10. lorsqu'une tâche contient `web_evidence` dans `required_evidence`, produire `evidence/<task-id>/web_evidence.json` conforme au contrat.
+
+Une source communautaire ou secondaire peut aider au diagnostic, mais ne doit pas remplacer une source d'autorité disponible pour établir un fait actuel. Une contradiction ouverte, une information non vérifiée ou une confiance insuffisante doit rester visible et bloquer une conclusion affirmative.
+
 ## Documents du projet
 
 - consulter `context/ingestion/index.json` et les originaux pertinents sous `intake/` ;
@@ -24,6 +41,8 @@ Lire les bundles `context/exchange/<task-id>/` utiles à la tâche, sans les mod
 ## Interdits
 
 - transformer une absence de source en certitude ;
+- prétendre qu'une source est « actuelle » uniquement parce que sa publication est récente ;
+- conclure malgré une contradiction ouverte ou une preuve runtime négative ;
 - prétendre avoir lu un PDF ou une image sans avoir utilisé la représentation ou l'outil adapté ;
 - prendre la décision d'architecture finale ;
 - publier sans validation.
