@@ -292,15 +292,16 @@ openclaw agent `
 
 La sortie est volontairement en JSON afin de rester contrôlable et exploitable par les scripts.
 
-Pour n'afficher que la réponse finale dans PowerShell :
+Pour n'afficher que la réponse finale dans PowerShell, utilisez la même méthode de parsing que le test E2E du projet :
 
 ```powershell
-$result = openclaw agent `
+$json = openclaw agent `
   --agent chef-operations `
   --message "Explique en quelques lignes ton rôle dans OPENCLAW_LOCAL." `
   --timeout 180 `
-  --json | ConvertFrom-Json
+  --json | Out-String
 
+$result = $json.Trim() | ConvertFrom-Json
 $result.final
 ```
 
@@ -999,12 +1000,13 @@ Pour un diagnostic approfondi, utiliser [Opérations](OPERATIONS.md) puis [Troub
 ### Exercice 1 — vérifier un agent
 
 ```powershell
-$result = openclaw agent `
+$json = openclaw agent `
   --agent chef-operations `
   --message "Réponds en cinq lignes : quel est ton rôle et quelles tâches dois-tu déléguer ?" `
   --timeout 180 `
-  --json | ConvertFrom-Json
+  --json | Out-String
 
+$result = $json.Trim() | ConvertFrom-Json
 $result.final
 ```
 
