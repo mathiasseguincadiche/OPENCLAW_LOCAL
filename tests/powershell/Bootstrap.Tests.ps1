@@ -60,7 +60,7 @@ Describe 'Contrat interne du bootstrap Windows' {
         $OpenClawHelperPath = Join-Path $RepoRoot 'scripts\windows\lib\bootstrap_openclaw.ps1'
         $Content = (Get-Content -Raw -LiteralPath $OpenClawHelperPath) -replace "`r`n", "`n"
 
-        $PathMutation = $Content.IndexOf('$env:PATH = "$NodeHome;$env:PATH"')
+        $PathMutation = $Content.IndexOf('$env:PATH = "$NodeHome;$env:PATH"'.Replace('\"', '"'))
         $NodeResolution = $Content.IndexOf('Get-Command node.exe -ErrorAction SilentlyContinue')
         $NpmInstall = $Content.IndexOf('Invoke-NativeChecked -Command $Npm -Arguments @(')
 
