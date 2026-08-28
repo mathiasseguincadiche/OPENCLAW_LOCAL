@@ -22,14 +22,15 @@
     },
   },
   agents: {
-    ownership: "explicit",
     defaults: {
       skipBootstrap: true,
       model: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
       imageModel: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
       pdfModel: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
     },
-    entries: {},
+    // Le générateur remplit cette liste avec les 8 rôles et marque
+    // chef-operations comme agent par défaut.
+    list: [],
   },
   tools: {
     profile: "coding",
