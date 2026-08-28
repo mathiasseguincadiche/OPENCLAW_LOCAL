@@ -43,8 +43,31 @@ def current_status(project: Path) -> str:
     return str(load_project_manifest(project)["status"])
 
 
+def _pedagogy_phase_context(phase: str) -> str:
+    context = (
+        " Applique le contrat pédagogique transversal du workspace. Lis "
+        "context/learning/LEARNING_CONTRACT.json, context/learning/learning_profile.json et "
+        "context/documentation_profile.json lorsqu'ils existent. Pour les champs textuels et "
+        "tout artefact destiné à un humain, reste techniquement exact, précis et accessible à un "
+        "débutant sans fausse simplification ni ton infantilisant; conserve la profondeur expert "
+        "utile. Explicite proportionnellement but, vocabulaire, prérequis, résultat attendu, "
+        "validation, risques, limites et rollback. Utilise les profondeurs Comprendre, Utiliser, "
+        "Approfondir et Diagnostiquer lorsque cela améliore réellement la compréhension."
+    )
+    if phase in {"validate", "review"}:
+        context += (
+            " Audite aussi la qualité pédagogique et l'accessibilité: objectif compréhensible, "
+            "prérequis explicites, jargon défini, étapes actionnables, résultat et validation "
+            "visibles, risques/rollback présents quand nécessaires, profondeur expert préservée. "
+            "Un livrable techniquement correct mais inutilisable ou trompeusement simplifié doit "
+            "être signalé comme finding."
+        )
+    return context
+
+
 def build_phase_prompt(project_id: str, phase: str, *, task_id: str | None = None) -> str:
     prompt = base.build_phase_prompt(project_id, phase, task_id=task_id)
+    prompt += _pedagogy_phase_context(phase)
     if phase == "analyze":
         return prompt + (
             " Lis aussi context/ingestion/index.json avant de conclure. Pour chaque document "
