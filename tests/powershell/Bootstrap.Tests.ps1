@@ -2,12 +2,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 Describe 'Contrat interne du bootstrap Windows' {
-    BeforeAll {
+    It 'définit tous les helpers critiques avant installation' {
         $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $BootstrapPath = Join-Path $RepoRoot 'scripts\windows\00_bootstrap.ps1'
-    }
-
-    It 'définit tous les helpers critiques avant installation' {
         $Tokens = $null
         $ParseErrors = $null
         $Ast = [System.Management.Automation.Language.Parser]::ParseFile(
@@ -48,6 +45,8 @@ Describe 'Contrat interne du bootstrap Windows' {
     }
 
     It 'exécute le contrat interne avant le dry-run et avant toute installation' {
+        $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $BootstrapPath = Join-Path $RepoRoot 'scripts\windows\00_bootstrap.ps1'
         $Content = (Get-Content -Raw -LiteralPath $BootstrapPath) -replace "`r`n", "`n"
         $ContractCall = $Content.IndexOf("Test-BootstrapFunctionContract`n`nif (-not `$IsWindows)")
         $DryRunBlock = $Content.IndexOf('if ($DryRun)')
