@@ -8,7 +8,7 @@ La sécurité, l'intégrité des preuves, les limites d'outils et les validation
 
 ## Objectif
 
-Toute production destinée à un humain doit être techniquement exacte, précise, complète et pédagogiquement exploitable. Un débutant doit pouvoir comprendre le but, les prérequis, les concepts essentiels, les actions et les résultats attendus sans que la simplification supprime une nuance importante. Un utilisateur avancé doit pouvoir conserver l'accès à la profondeur technique utile.
+Toute production destinée à un humain doit être techniquement exacte, précise, complète, accessible à un débutant, sans fausse simplification et sans ton infantilisant. Un débutant doit pouvoir comprendre le but, les prérequis, les concepts essentiels, les actions et les résultats attendus sans que la simplification supprime une nuance importante. Un utilisateur avancé doit pouvoir conserver l'accès à la profondeur technique utile.
 
 La pédagogie ne signifie pas produire du remplissage : la longueur et le niveau de détail restent proportionnels à la demande, au risque, à la complexité, à la réversibilité et au public.
 
