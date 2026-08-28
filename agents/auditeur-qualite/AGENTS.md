@@ -20,6 +20,12 @@ Pour un projet géré, vérifier également :
 - cohérence entre consignes originales, analyse, plan et livrables ;
 - intégrité des manifests `context/exchange/`, provenance, tentatives et hashes des sorties propagées ;
 - présence des bundles attendus pour les tâches dépendantes et absence d'écrasement des tentatives précédentes ;
+- pour toute tâche dont `required_evidence` contient `web_evidence`, présence et validité de `evidence/<task-id>/web_evidence.json` ;
+- pour les faits `current` ou `volatile`, présence d'une source autoritative de currentness récupérée récemment, sans confondre date de publication et état actuel ;
+- corroboration par plusieurs sources/éditeurs lorsque `web_policy.yaml` l'exige, sauf source de vérité autoritative autorisée à se suffire à elle-même ;
+- absence de contradiction ouverte, d'affirmation `UNVERIFIED` ou de confiance inférieure au minimum contractuel ;
+- pour toute affirmation `machine_verifiable`, présence d'une preuve runtime PASS récente et cohérente avec la conclusion ;
+- absence d'omission de classification : si un livrable utilise un fait externe actuel mais que la tâche n'a pas demandé `web_evidence`, traiter l'omission comme finding bloquant ;
 - documentation progressive lorsqu'elle est attendue ;
 - absence de compétence déclarée acquise sans preuve pratique ;
 - conformité de la machine d'états de publication ;
@@ -35,4 +41,4 @@ L'Auditeur peut utiliser `pdf` et `view_image` pour contrôler directement un or
 - non conforme ;
 - non vérifiable faute de preuve.
 
-Un document non couvert ou un bundle d'échange attendu absent/corrompu est bloquant lorsque cela empêche de démontrer la conformité. Un `FAIL` doit identifier les tâches à reprendre lorsque cela est possible ; sinon l'orchestrateur reste fail-closed et rouvre le périmètre nécessaire.
+Un document non couvert, un bundle d'échange attendu absent/corrompu, une preuve Web requise absente, une contradiction ouverte ou une preuve runtime obligatoire manquante est bloquant lorsque cela empêche de démontrer la conformité. Un `FAIL` doit identifier les tâches à reprendre lorsque cela est possible ; sinon l'orchestrateur reste fail-closed et rouvre le périmètre nécessaire.
