@@ -3,6 +3,14 @@ platform_version: "0.2.0"
 default_enabled: true
 default_mode: universal_progressive
 
+transversal_enforcement:
+  required: true
+  applies_to_all_agents: true
+  applies_to_all_supported_local_models: true
+  beginner_accessible_by_default: true
+  preserve_expert_depth: true
+  no_false_simplification: true
+
 principles:
   technical_accuracy_first: true
   progressive_disclosure: true
@@ -11,9 +19,11 @@ principles:
   define_jargon_on_first_use: true
   examples_when_useful: true
   preserve_expert_depth: true
+  beginner_accessible_without_depth_loss: true
   professional_non_infantilizing_tone: true
   skimmable_structure: true
   accessibility_does_not_weaken_security: true
+  concise_when_requested_without_hiding_critical_information: true
 
 reading_depths:
   - id: understand
@@ -48,6 +58,7 @@ audit_checklist:
   - validation_explained
   - risks_and_stop_conditions_when_relevant
   - rollback_or_recovery_when_relevant
+  - beginner_can_follow_without_false_simplification
   - expert_depth_preserved
   - links_and_sources_of_truth_coherent
 
