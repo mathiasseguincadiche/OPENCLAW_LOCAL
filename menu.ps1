@@ -3,11 +3,12 @@ param(
     [ValidateSet(
         'menu', 'install-core', 'install-full', 'audit', 'configure-local', 'models',
         'configure-openclaw', 'deploy-agents', 'verify', 'benchmark', 'inventory',
-        'e2e', 'qualification', 'team', 'docs'
+        'e2e', 'qualification', 'team', 'docs', 'logs'
     )]
     [string]$Action = 'menu',
     [switch]$DryRun,
-    [switch]$AllowRuntimeDrift
+    [switch]$AllowRuntimeDrift,
+    [switch]$NoLog
 )
 
 Set-StrictMode -Version Latest
@@ -29,6 +30,87 @@ $Scripts = @{
     qualification = Join-Path $RepoRoot 'scripts\windows\07_run_qualification.ps1'
 }
 
+function Get-PlatformRoot {
+    if ($env:OPENCLAW_LOCAL_ROOT) {
+        return $env:OPENCLAW_LOCAL_ROOT
+    }
+    if (Test-Path -LiteralPath 'E:\') {
+        return 'E:\AI\OpenClawLocal'
+    }
+    return (Join-Path $env:LOCALAPPDATA 'OpenClawLocal')
+}
+
+function Get-LogsRoot {
+    return (Join-Path (Get-PlatformRoot) 'proofs\logs')
+}
+
+function Start-ActionTranscript {
+    param([Parameter(Mandatory)][string]$Name)
+
+    try {
+        $LogsRoot = Get-LogsRoot
+        New-Item -ItemType Directory -Path $LogsRoot -Force | Out-Null
+        $Stamp = Get-Date -Format 'yyyyMMdd_HHmmssfff'
+        $SafeName = $Name -replace '[^a-zA-Z0-9._-]', '_'
+        $LogPath = Join-Path $LogsRoot "${Stamp}_${SafeName}.log"
+        Start-Transcript -Path $LogPath -UseMinimalHeader | Out-Null
+        Write-Host "LOG=$LogPath"
+        Write-Host "ACTION=$Name"
+        Write-Host "STARTED_UTC=$([DateTimeOffset]::UtcNow.ToString('o'))"
+        Write-Host "REPO_ROOT=$RepoRoot"
+        Write-Host "PLATFORM_ROOT=$(Get-PlatformRoot)"
+        return $LogPath
+    }
+    catch {
+        Write-Warning "Journalisation automatique indisponible: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function Stop-ActionTranscript {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][ValidateSet('PASS', 'FAIL')][string]$Result
+    )
+
+    Write-Host "ACTION_RESULT=$Result"
+    Write-Host "FINISHED_UTC=$([DateTimeOffset]::UtcNow.ToString('o'))"
+    try {
+        Stop-Transcript | Out-Null
+    }
+    catch {
+        Write-Warning "Impossible d'arrêter proprement le transcript: $($_.Exception.Message)"
+    }
+    Write-Host "LOG_SAVED=$Path"
+}
+
+function Show-Logs {
+    $LogsRoot = Get-LogsRoot
+    Write-Host "LOG_ROOT=$LogsRoot"
+    Write-Host "STRUCTURED_PROOFS=$(Join-Path (Get-PlatformRoot) 'proofs')"
+    Write-Host "BENCHMARK_RESULTS=$(Join-Path $RepoRoot 'benchmarks\results')"
+
+    if (-not (Test-Path -LiteralPath $LogsRoot)) {
+        Write-Host 'Aucun transcript opérationnel enregistré.'
+        return
+    }
+
+    $Logs = @(
+        Get-ChildItem -LiteralPath $LogsRoot -Filter '*.log' -File |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 10
+    )
+    if ($Logs.Count -eq 0) {
+        Write-Host 'Aucun transcript opérationnel enregistré.'
+        return
+    }
+
+    $Logs |
+        Select-Object LastWriteTime, Length, FullName |
+        Format-Table -AutoSize
+    Write-Host "LATEST_LOG=$($Logs[0].FullName)"
+}
+
 function Show-Title {
     Write-Host ''
     Write-Host '============================================================================== '
@@ -42,7 +124,8 @@ function Invoke-Action {
     param(
         [Parameter(Mandatory)][string]$Name,
         [switch]$DryRunMode,
-        [switch]$AllowRuntimeDriftMode
+        [switch]$AllowRuntimeDriftMode,
+        [switch]$NoLogMode
     )
 
     if ($Name -eq 'docs') {
@@ -57,25 +140,45 @@ function Invoke-Action {
         return
     }
 
+    if ($Name -eq 'logs') {
+        Show-Logs
+        return
+    }
+
     $Script = $Scripts[$Name]
     if (-not (Test-Path -LiteralPath $Script)) {
         throw "Script introuvable pour l'action '$Name' : $Script"
     }
 
-    if ($Name -in @('install-core', 'install-full')) {
-        & $Script -DryRun:$DryRunMode -AllowRuntimeDrift:$AllowRuntimeDriftMode
+    $LogPath = $null
+    $Result = 'FAIL'
+    if (-not $DryRunMode -and -not $NoLogMode) {
+        $LogPath = Start-ActionTranscript -Name $Name
     }
-    else {
-        & $Script -DryRun:$DryRunMode
+
+    try {
+        if ($Name -in @('install-core', 'install-full')) {
+            & $Script -DryRun:$DryRunMode -AllowRuntimeDrift:$AllowRuntimeDriftMode
+        }
+        else {
+            & $Script -DryRun:$DryRunMode
+        }
+        if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+            throw "Action '$Name' en échec (code $LASTEXITCODE)."
+        }
+        $Result = 'PASS'
     }
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-        throw "Action '$Name' en échec (code $LASTEXITCODE)."
+    finally {
+        if ($LogPath) {
+            Stop-ActionTranscript -Path $LogPath -Result $Result
+        }
     }
 }
 
 if ($Action -ne 'menu') {
     Show-Title
-    Invoke-Action -Name $Action -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift
+    Invoke-Action -Name $Action -DryRunMode:$DryRun `
+        -AllowRuntimeDriftMode:$AllowRuntimeDrift -NoLogMode:$NoLog
     exit 0
 }
 
@@ -96,24 +199,26 @@ while ($true) {
 12) Lancer la qualification matérielle complète
 13) Afficher les contrats de l'équipe IA
 14) Afficher la documentation
+15) Afficher les derniers logs et preuves
 0) Quitter
 '@ | Write-Host
 
     switch (Read-Host 'Choix') {
-        '1' { Invoke-Action -Name 'install-full' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift }
-        '2' { Invoke-Action -Name 'install-core' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift }
-        '3' { Invoke-Action -Name 'audit' -DryRunMode:$DryRun }
-        '4' { Invoke-Action -Name 'configure-local' -DryRunMode:$DryRun }
-        '5' { Invoke-Action -Name 'models' -DryRunMode:$DryRun }
-        '6' { Invoke-Action -Name 'configure-openclaw' -DryRunMode:$DryRun }
-        '7' { Invoke-Action -Name 'deploy-agents' -DryRunMode:$DryRun }
-        '8' { Invoke-Action -Name 'verify' -DryRunMode:$DryRun }
-        '9' { Invoke-Action -Name 'benchmark' -DryRunMode:$DryRun }
-        '10' { Invoke-Action -Name 'inventory' -DryRunMode:$DryRun }
-        '11' { Invoke-Action -Name 'e2e' -DryRunMode:$DryRun }
-        '12' { Invoke-Action -Name 'qualification' -DryRunMode:$DryRun }
-        '13' { Invoke-Action -Name 'team' -DryRunMode:$DryRun }
-        '14' { Invoke-Action -Name 'docs' -DryRunMode:$DryRun }
+        '1' { Invoke-Action -Name 'install-full' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift -NoLogMode:$NoLog }
+        '2' { Invoke-Action -Name 'install-core' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift -NoLogMode:$NoLog }
+        '3' { Invoke-Action -Name 'audit' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '4' { Invoke-Action -Name 'configure-local' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '5' { Invoke-Action -Name 'models' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '6' { Invoke-Action -Name 'configure-openclaw' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '7' { Invoke-Action -Name 'deploy-agents' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '8' { Invoke-Action -Name 'verify' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '9' { Invoke-Action -Name 'benchmark' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '10' { Invoke-Action -Name 'inventory' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '11' { Invoke-Action -Name 'e2e' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '12' { Invoke-Action -Name 'qualification' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '13' { Invoke-Action -Name 'team' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '14' { Invoke-Action -Name 'docs' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '15' { Invoke-Action -Name 'logs' -DryRunMode:$DryRun -NoLogMode:$NoLog }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }
