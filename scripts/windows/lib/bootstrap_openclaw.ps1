@@ -63,6 +63,6 @@ function Install-OpenClawPreferred {
         }
     }
     if (-not (Test-OpenClawPreferred -NpmPrefix $NpmPrefix)) {
-        Write-BootstrapFailure 'OpenClaw n’est pas conforme après installation.'
+        Write-BootstrapFailure "OpenClaw n'est pas conforme après installation."
     }
 }
