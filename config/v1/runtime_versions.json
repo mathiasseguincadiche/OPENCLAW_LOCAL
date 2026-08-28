@@ -46,6 +46,13 @@
     "package": "openclaw",
     "preferred": "2026.7.1-2",
     "integrity": "sha512-ycF3yPcbjN6bUPeaUx6Mh6vze1hQWoD3CT/wWcmD7a8xaHHHRUaAlaq+lFxMHf1ssEgODVAwjlzYqp2twkYZ7g==",
+    "plugins": {
+      "parallel": {
+        "package": "@openclaw/parallel-plugin",
+        "preferred": "2026.7.1",
+        "provider": "parallel-free"
+      }
+    },
     "hardware_tested": null
   },
   "ollama": {
