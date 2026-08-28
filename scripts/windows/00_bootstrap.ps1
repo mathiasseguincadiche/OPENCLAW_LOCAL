@@ -123,7 +123,7 @@ function Install-NodePreferred([string]$RuntimeHome) {
         }
     }
     if (-not (Test-NodePreferred $NodeHome)) {
-        Write-BootstrapFailure 'Node.js n’est pas conforme après installation.'
+        Write-BootstrapFailure "Node.js n'est pas conforme après installation."
     }
 }
 
@@ -186,7 +186,7 @@ function Install-OpenClawPreferred([string]$RuntimeHome) {
         }
     }
     if (-not (Test-OpenClawPreferred $NpmPrefix)) {
-        Write-BootstrapFailure 'OpenClaw n’est pas conforme après installation.'
+        Write-BootstrapFailure "OpenClaw n'est pas conforme après installation."
     }
 }
 
@@ -271,6 +271,40 @@ function Invoke-LocalEnvironmentSetup([string]$PlatformRoot, [string]$RuntimeHom
     [Environment]::SetEnvironmentVariable('Path', ($Parts -join ';'), 'User')
     $env:PATH = "$NodeHome;$NpmPrefix;$VenvScripts;$env:PATH"
 }
+
+$OpenClawHelperPath = Join-Path $PSScriptRoot 'lib\bootstrap_openclaw.ps1'
+if (-not (Test-Path -LiteralPath $OpenClawHelperPath)) {
+    Write-BootstrapFailure "Bibliothèque OpenClaw absente: $OpenClawHelperPath"
+}
+. $OpenClawHelperPath
+
+function Test-BootstrapFunctionContract {
+    $RequiredFunctions = @(
+        'Write-BootstrapFailure',
+        'Get-PlatformRoot',
+        'Invoke-NativeChecked',
+        'Test-PythonPreferred',
+        'Invoke-PreferredPython',
+        'Install-PythonPreferred',
+        'Test-NodePreferred',
+        'Install-NodePreferred',
+        'Test-OpenClawPreferred',
+        'Install-OpenClawPreferred',
+        'Get-OllamaVersion',
+        'Install-OllamaPreferred',
+        'Install-ClawLocalPackage',
+        'Invoke-LocalEnvironmentSetup'
+    )
+
+    foreach ($FunctionName in $RequiredFunctions) {
+        $Function = Get-Command -Name $FunctionName -CommandType Function -ErrorAction SilentlyContinue
+        if (-not $Function) {
+            Write-BootstrapFailure "Contrat interne invalide: fonction '$FunctionName' absente avant mutation."
+        }
+    }
+}
+
+Test-BootstrapFunctionContract
 
 if (-not $IsWindows) {
     Write-BootstrapFailure 'Windows est requis.'
