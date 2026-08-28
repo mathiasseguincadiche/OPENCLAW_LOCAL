@@ -63,12 +63,14 @@ Describe 'Contrat interne du bootstrap Windows' {
         $PathMutation = $Content.IndexOf("`$env:PATH = (@(`$NodeHome) + `$PathParts) -join ';'")
         $NodeResolution = $Content.IndexOf('Get-Command node.exe -ErrorAction SilentlyContinue')
         $NpmInstall = $Content.IndexOf('Invoke-NativeChecked -Command $Npm -Arguments @(')
-        $AllowScripts = $Content.IndexOf("'--allow-scripts', 'openclaw'")
+        $LifecycleScripts = $Content.IndexOf("'--ignore-scripts=false', `$Tarball")
+        $UnknownAllowScripts = $Content.IndexOf("'--allow-scripts'")
 
         $PathMutation | Should -BeGreaterOrEqual 0
         $NodeResolution | Should -BeGreaterThan $PathMutation
         $NpmInstall | Should -BeGreaterThan $NodeResolution
-        $AllowScripts | Should -BeGreaterThan $NpmInstall
+        $LifecycleScripts | Should -BeGreaterThan $NpmInstall
+        $UnknownAllowScripts | Should -Be -1
     }
 
     It "ne valide OpenClaw qu'après écriture du marqueur de réussite" {
@@ -84,6 +86,19 @@ Describe 'Contrat interne du bootstrap Windows' {
         $MarkerCheck | Should -BeGreaterOrEqual 0
         $MarkerWrite | Should -BeGreaterThan $NpmInstall
         $FinalValidation | Should -BeGreaterThan $MarkerWrite
+    }
+
+    It 'transmet explicitement la racine du dépôt aux scripts runtime' {
+        $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $Menu = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'menu.ps1')
+        $InstallFull = Get-Content -Raw -LiteralPath (
+            Join-Path $RepoRoot 'scripts\windows\11_install_full.ps1'
+        )
+
+        $Menu | Should -Match ([regex]::Escape('$env:OPENCLAW_LOCAL_REPO_ROOT = $RepoRoot'))
+        $InstallFull | Should -Match (
+            [regex]::Escape('$env:OPENCLAW_LOCAL_REPO_ROOT = $RepoRoot')
+        )
     }
 
     It 'interdit les guillemets typographiques dans les sources PowerShell' {
