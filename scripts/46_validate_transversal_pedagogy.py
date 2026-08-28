@@ -245,7 +245,9 @@ def main() -> int:
     catalog = _load_yaml(CONFIG / "model_catalog.yaml")
     models = catalog.get("models", {})
     if not isinstance(models, dict) or set(models) != SUPPORTED_LOCAL_MODELS:
-        failures.append("model_catalog: flotte locale supportée inattendue pour le gate pédagogique")
+        failures.append(
+            "model_catalog: flotte locale supportée inattendue pour le gate pédagogique"
+        )
 
     routing = _load_yaml(CONFIG / "model_routing.yaml")
     agents = routing.get("agents", {})
@@ -266,7 +268,9 @@ def main() -> int:
                                 f"{agent_id}: modèle local hors flotte dans {field}: {value}"
                             )
         if not SUPPORTED_LOCAL_MODELS.issubset(referenced_models):
-            failures.append("model_routing: les trois modèles locaux doivent être effectivement routés")
+            failures.append(
+                "model_routing: les trois modèles locaux doivent être effectivement routés"
+            )
 
     ci_text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     release_text = (ROOT / ".github" / "workflows" / "release.yml").read_text(
