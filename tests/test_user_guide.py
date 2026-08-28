@@ -53,8 +53,8 @@ def test_user_guide_exposes_method_agents_workflow_and_diagnostics() -> None:
 
     method = (GUIDE / "01_METHODE_DE_TRAVAIL/00_METHODE_GENERALE.md").read_text(
         encoding="utf-8"
-    )
-    for concept in ("Définir", "Préparer", "Planifier", "Valider", "Approuver"):
+    ).casefold()
+    for concept in ("définir", "préparer", "planifier", "valider", "approuver"):
         assert concept in method
 
     statuses = (GUIDE / "08_REFERENCE_RAPIDE/STATUTS.md").read_text(
