@@ -71,7 +71,7 @@ if ($DryRun) {
         -Description 'Dry-run OpenClaw'
     Write-Host '[DRY-RUN] Gateway service: install/start en mode réel uniquement.'
     Write-Host "[DRY-RUN] Readiness RPC bornée: timeout=${GatewayReadyTimeoutSeconds}s, intervalle=${GatewayPollIntervalMilliseconds}ms."
-    Write-Host '[DRY-RUN] En cas d’échec persistant, diagnostic local redigé sous proofs\gateway.'
+    Write-Host "[DRY-RUN] En cas d'échec persistant, diagnostic local redigé sous proofs\gateway."
     Write-Host '[DRY-RUN] Aucune mutation réalisée.'
     exit 0
 }
