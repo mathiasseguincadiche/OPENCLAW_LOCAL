@@ -54,4 +54,16 @@ Describe 'Contrat interne du bootstrap Windows' {
         $DryRunBlock | Should -BeGreaterThan $ContractCall
         $FirstInstall | Should -BeGreaterThan $DryRunBlock
     }
+
+    It 'interdit les guillemets typographiques dans les sources PowerShell' {
+        $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $Unsafe = @()
+        foreach ($Script in Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter '*.ps1' -File) {
+            $Content = Get-Content -Raw -LiteralPath $Script.FullName
+            if ($Content -match '[‘’“”]') {
+                $Unsafe += $Script.FullName
+            }
+        }
+        $Unsafe | Should -BeNullOrEmpty -Because ($Unsafe -join ', ')
+    }
 }
