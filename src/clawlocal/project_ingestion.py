@@ -7,13 +7,15 @@ import re
 import shutil
 import zipfile
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from xml.etree import ElementTree
 
 from clawlocal.config import load_contract
+from clawlocal.safe_fs import assert_no_link_like, iter_regular_files_no_links
 
 _DOC_ID_RE = re.compile(r"[^a-z0-9]+")
+_MIB = 1024 * 1024
 
 
 def _now() -> str:
@@ -46,13 +48,8 @@ def _iter_intake_files(project: Path) -> list[Path]:
     root = project / "intake"
     if not root.is_dir():
         raise FileNotFoundError(root)
-    files: list[Path] = []
-    for path in root.rglob("*"):
-        if path.is_symlink():
-            raise ValueError(f"ingestion: lien symbolique interdit: {path}")
-        if path.is_file():
-            files.append(path)
-    return sorted(files, key=lambda item: item.relative_to(root).as_posix())
+    assert_no_link_like(root, label="ingestion intake")
+    return list(iter_regular_files_no_links(root, label="ingestion intake"))
 
 
 def _extension_set(policy: dict[str, Any], kind: str) -> set[str]:
@@ -121,9 +118,59 @@ def _xml_paragraphs(data: bytes) -> list[str]:
     return paragraphs
 
 
-def _extract_docx(path: Path, limit: int) -> tuple[str, bool]:
+def _office_safety(policy: dict[str, Any]) -> dict[str, Any]:
+    safety = policy.get("extraction", {}).get("office_archive_safety", {})
+    if not isinstance(safety, dict):
+        raise ValueError("document_ingestion_policy: office_archive_safety invalide")
+    return safety
+
+
+def _validate_office_archive(
+    path: Path,
+    archive: zipfile.ZipFile,
+    policy: dict[str, Any],
+) -> None:
+    safety = _office_safety(policy)
+    max_archive = int(safety.get("max_archive_bytes_mb", 100)) * _MIB
+    max_members = int(safety.get("max_members", 10000))
+    max_total = int(safety.get("max_total_uncompressed_mb", 512)) * _MIB
+    max_member = int(safety.get("max_single_member_mb", 64)) * _MIB
+    max_ratio = float(safety.get("max_compression_ratio", 200))
+    reject_encrypted = bool(safety.get("reject_encrypted_members", True))
+
+    if path.stat().st_size > max_archive:
+        raise ValueError(f"archive Office trop volumineuse: {path.name}")
+
+    infos = archive.infolist()
+    if len(infos) > max_members:
+        raise ValueError(f"archive Office contient trop de membres: {path.name}")
+
+    total_uncompressed = 0
+    for info in infos:
+        member = PurePosixPath(info.filename)
+        if member.is_absolute() or ".." in member.parts:
+            raise ValueError(f"archive Office contient un chemin dangereux: {info.filename}")
+        if reject_encrypted and (info.flag_bits & 0x1):
+            raise ValueError(f"archive Office chiffrée non supportée: {path.name}")
+        if info.is_dir():
+            continue
+        total_uncompressed += int(info.file_size)
+        if info.file_size > max_member:
+            raise ValueError(f"membre Office trop volumineux: {info.filename}")
+        if info.file_size:
+            ratio = info.file_size / max(1, info.compress_size)
+            if ratio > max_ratio:
+                raise ValueError(
+                    f"ratio de compression Office suspect: {info.filename} ({ratio:.1f}x)"
+                )
+    if total_uncompressed > max_total:
+        raise ValueError(f"archive Office décompressée trop volumineuse: {path.name}")
+
+
+def _extract_docx(path: Path, limit: int, policy: dict[str, Any]) -> tuple[str, bool]:
     sections: list[str] = []
     with zipfile.ZipFile(path) as archive:
+        _validate_office_archive(path, archive, policy)
         names = sorted(
             name
             for name in archive.namelist()
@@ -150,9 +197,10 @@ def _slide_sort_key(name: str) -> tuple[int, str]:
     return (int(match.group(1)) if match else 10**9, name)
 
 
-def _extract_pptx(path: Path, limit: int) -> tuple[str, bool]:
+def _extract_pptx(path: Path, limit: int, policy: dict[str, Any]) -> tuple[str, bool]:
     sections: list[str] = []
     with zipfile.ZipFile(path) as archive:
+        _validate_office_archive(path, archive, policy)
         slides = sorted(
             (
                 name
@@ -194,9 +242,10 @@ def _child_text(element: ElementTree.Element, suffix: str) -> str | None:
     return None
 
 
-def _extract_xlsx(path: Path, limit: int) -> tuple[str, bool]:
+def _extract_xlsx(path: Path, limit: int, policy: dict[str, Any]) -> tuple[str, bool]:
     sections: list[str] = []
     with zipfile.ZipFile(path) as archive:
+        _validate_office_archive(path, archive, policy)
         shared = _shared_strings(archive)
         sheets = sorted(
             name
@@ -232,14 +281,21 @@ def _extract_xlsx(path: Path, limit: int) -> tuple[str, bool]:
     return _truncate("\n\n".join(sections), limit)
 
 
-def _extract_office(path: Path, kind: str, limit: int) -> tuple[str, bool]:
+def _extract_office(
+    path: Path,
+    kind: str,
+    limit: int,
+    policy: dict[str, Any],
+) -> tuple[str, bool]:
     try:
         if kind == "docx":
-            return _extract_docx(path, limit)
+            return _extract_docx(path, limit, policy)
         if kind == "pptx":
-            return _extract_pptx(path, limit)
+            return _extract_pptx(path, limit, policy)
         if kind == "xlsx":
-            return _extract_xlsx(path, limit)
+            return _extract_xlsx(path, limit, policy)
+    except ValueError:
+        raise
     except (OSError, zipfile.BadZipFile, ElementTree.ParseError) as exc:
         raise ValueError(f"document Office illisible: {path.name}") from exc
     raise ValueError(f"format Office inconnu: {kind}")
@@ -303,13 +359,16 @@ def ingest_project_documents(project: Path, *, force: bool = False) -> Path:
             entry["truncated"] = truncated
             derived.write_text(_derived_header(entry) + text, encoding="utf-8")
         elif kind in {"docx", "pptx", "xlsx"}:
-            text, truncated = _extract_office(path, kind, limit)
+            text, truncated = _extract_office(path, kind, limit, policy)
             derived = document_root / "extracted.md"
             entry["status"] = "PARTIAL_TEXT" if truncated else "READY_TEXT"
             entry["derived_path"] = derived.relative_to(project).as_posix()
             entry["truncated"] = truncated
             derived.write_text(_derived_header(entry) + text, encoding="utf-8")
         elif kind == "pdf":
+            max_bytes = int(policy["formats"]["pdf"].get("max_bytes_mb", 50)) * _MIB
+            if path.stat().st_size > max_bytes:
+                raise ValueError(f"PDF dépasse la limite locale de {max_bytes // _MIB} Mo: {path.name}")
             entry["status"] = "READY_TOOL"
             guide = document_root / "tool.md"
             entry["derived_path"] = guide.relative_to(project).as_posix()
@@ -365,7 +424,7 @@ def ingest_project_documents(project: Path, *, force: bool = False) -> Path:
         f"- Digest agrégé : `{payload['aggregate_sha256']}`\n"
         "- PDF : outil `pdf` (texte + fallback vision pour pages scannées)\n"
         "- Images : outil `view_image`\n"
-        "- DOCX/PPTX/XLSX/texte : extraction locale déterministe\n",
+        "- DOCX/PPTX/XLSX/texte : extraction locale déterministe et bornée\n",
         encoding="utf-8",
     )
     return index_path
