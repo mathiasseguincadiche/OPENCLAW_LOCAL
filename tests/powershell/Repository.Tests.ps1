@@ -110,8 +110,8 @@ Describe 'Contrats PowerShell 7' {
             $env:OPENCLAW_LOCAL_ROOT = $PlatformRoot
             $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $RepoRoot 'menu.ps1') `
                 -Action audit 2>&1
-            $LASTEXITCODE | Should -Be 0
             $Text = $Output -join "`n"
+            $LASTEXITCODE | Should -Be 0 -Because $Text
             $Text | Should -Match 'LOG='
             $Text | Should -Match 'LOG_SAVED='
 
