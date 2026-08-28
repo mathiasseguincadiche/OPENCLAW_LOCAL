@@ -1,12 +1,9 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-BeforeAll {
-    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-}
-
 Describe 'Contrat Parallel Search OpenClaw' {
     It 'verrouille le plugin officiel requis par parallel-free' {
+        $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Lock = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'config\v1\runtime_versions.json') |
             ConvertFrom-Json
         [string]$Lock.openclaw.plugins.parallel.package | Should -Be '@openclaw/parallel-plugin'
@@ -15,6 +12,7 @@ Describe 'Contrat Parallel Search OpenClaw' {
     }
 
     It 'prépare le plugin avant la validation dry-run du patch OpenClaw' {
+        $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Script = Get-Content -Raw -LiteralPath (
             Join-Path $RepoRoot 'scripts\windows\08_configure_openclaw.ps1'
         )
