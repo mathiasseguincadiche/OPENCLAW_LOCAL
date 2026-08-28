@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [int]$TimeoutSeconds = 180
+    [int]$TimeoutSeconds = 180,
+    [ValidateRange(5, 300)][int]$GatewayReadyTimeoutSeconds = 60
 )
 
 Set-StrictMode -Version Latest
@@ -9,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
+$GatewayHealth = Join-Path $PSScriptRoot 'lib\gateway_health.ps1'
 $AgentIds = @(
     'chef-operations',
     'expert-recherche',
@@ -19,6 +21,11 @@ $AgentIds = @(
     'redacteur-technique',
     'auditeur-qualite'
 )
+
+if (-not (Test-Path -LiteralPath $GatewayHealth)) {
+    throw "Bibliothèque de santé Gateway introuvable: $GatewayHealth"
+}
+. $GatewayHealth
 
 function Get-PlatformRoot {
     if ($env:OPENCLAW_LOCAL_ROOT) {
@@ -73,6 +80,7 @@ function Test-OllamaProvider([object]$Payload, [string]$Description) {
 if ($DryRun) {
     Write-Host '[DRY-RUN] E2E OpenClaw'
     Write-Host '[DRY-RUN] modèle primaire lu depuis model_catalog.yaml'
+    Write-Host "[DRY-RUN] readiness Gateway RPC bornée à ${GatewayReadyTimeoutSeconds}s"
     Write-Host '[DRY-RUN] 8 agents -> Gateway -> Ollama'
     Write-Host '[DRY-RUN] agent exec -> tool write'
     Write-Host '[DRY-RUN] erreur outil contrôlée -> réparation'
@@ -110,9 +118,16 @@ $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'false'
 $null = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'config', 'validate', '--json'
 ) -Description 'Validation config'
-$null = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
-    'gateway', 'status', '--require-rpc', '--json'
-) -Description 'Gateway OpenClaw'
+
+$GatewayReadiness = Wait-OpenClawGatewayReady -OpenClaw $OpenClaw `
+    -TimeoutSeconds $GatewayReadyTimeoutSeconds
+if (-not $GatewayReadiness.ready) {
+    $DiagnosticPath = Write-OpenClawGatewayDiagnostic -OpenClaw $OpenClaw `
+        -PlatformRoot $PlatformRoot -Readiness $GatewayReadiness
+    Write-Host "GATEWAY_FAILURE_CLASS=$($GatewayReadiness.failure_class)"
+    Write-Host "GATEWAY_DIAGNOSTIC=$DiagnosticPath"
+    throw "Gateway OpenClaw indisponible avant E2E. Classification=$($GatewayReadiness.failure_class). Diagnostic=$DiagnosticPath"
+}
 
 $Evidence = [ordered]@{
     schema_version = '1.0.0'
