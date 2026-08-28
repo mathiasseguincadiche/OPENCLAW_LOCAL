@@ -34,7 +34,7 @@ Describe 'Contrat interne du bootstrap Windows' {
         $HelperFunctionNames | Should -Contain 'Install-OpenClawPreferred'
 
         $Bootstrap = Get-Content -Raw -LiteralPath $BootstrapPath
-        $Bootstrap | Should -Match [regex]::Escape("lib\bootstrap_openclaw.ps1")
+        $Bootstrap | Should -Match ([regex]::Escape("lib\bootstrap_openclaw.ps1"))
         $Bootstrap | Should -Match "'Test-OpenClawPreferred'"
         $Bootstrap | Should -Match "'Install-OpenClawPreferred'"
     }
