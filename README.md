@@ -15,6 +15,79 @@ La V0.2 fournit un vrai parcours projet : l'utilisateur dépose consignes, cahie
 
 Voir [Filiation V7 / Parity Plus](docs/V7_PARITY_PLUS.md).
 
+## Démarrer en 5 minutes
+
+### Prérequis utilisateur
+
+- Windows 11 Pro x64 ;
+- PowerShell 7+ ;
+- WinGet ;
+- Git ;
+- connexion Internet pour le bootstrap et le téléchargement des trois modèles locaux ;
+- espace disque suffisant pour trois modèles 24–27B et le runtime local. La taille réelle dépend des artefacts servis par Ollama : ne pas déduire un volume précis du nombre de paramètres.
+
+Python, Node.js, OpenClaw et Ollama sont contrôlés/installés par le bootstrap à partir du runtime lock du dépôt.
+
+### 1. Cloner et entrer dans le dépôt
+
+```powershell
+git clone https://github.com/mathiasseguincadiche/OPENCLAW_LOCAL.git
+cd OPENCLAW_LOCAL
+```
+
+### 2. Prévisualiser sans modifier la machine
+
+```powershell
+.\menu.ps1 -Action install-full -DryRun
+```
+
+Le dry-run ne télécharge rien, n'installe rien et ne modifie aucune variable persistante.
+
+### 3. Installer le parcours local complet
+
+```powershell
+.\menu.ps1 -Action install-full
+```
+
+Par défaut, le runtime géré est placé sous `E:\AI\OpenClawLocal` si `E:` existe, sinon sous `%LOCALAPPDATA%\OpenClawLocal`. `OPENCLAW_LOCAL_ROOT` permet de choisir explicitement un autre emplacement.
+
+Après une première installation, **fermer puis rouvrir PowerShell** afin que le nouveau shell récupère le PATH utilisateur.
+
+### 4. Vérifier l'installation
+
+```powershell
+.\menu.ps1 -Action audit
+.\menu.ps1 -Action verify
+.\menu.ps1 -Action e2e
+```
+
+Résultat attendu :
+
+```text
+- runtime verrouillé présent
+- Ollama accessible uniquement en local
+- exactement 3 modèles supportés présents
+- 8 agents OpenClaw configurés
+- Gateway local joignable
+- inférence locale fonctionnelle
+- vrai tool-calling E2E fonctionnel
+- réparation après erreur d'outil fonctionnelle
+- aucune escalade cloud sur le parcours nominal
+```
+
+`e2e` produit une preuve locale hors Git. Un succès E2E ne constitue pas encore une qualification de performance de la workstation.
+
+### 5. Qualifier la workstation
+
+```powershell
+.\menu.ps1 -Action qualification -DryRun
+.\menu.ps1 -Action qualification
+```
+
+La qualification benchmarke **Qwen 3.8 27B, Gemma 4 26B et Devstral Small 2 24B**. Les trois sont obligatoires ; l'échec de l'un d'eux fait échouer le gate global. La réussite automatique mène au maximum à `READY_FOR_MANUAL_QUALIFICATION` : les performances B580 et le backend final restent soumis aux preuves réelles et à la revue humaine.
+
+Pour l'exploitation et le dépannage, utiliser [Opérations](docs/OPERATIONS.md) et [Troubleshooting](docs/TROUBLESHOOTING.md).
+
 ## Architecture V0.2
 
 ```text
@@ -23,7 +96,7 @@ Projet utilisateur
            |
            v
  Project Intake durci + Document Ingestion
- secrets/symlinks/SHA-256/MIME/ACL/source_coverage
+ secrets/liens/SHA-256/MIME/ACL/source_coverage
            |
            v
    Project Orchestrator
@@ -71,14 +144,14 @@ La flotte locale est **performance-only** : exactement trois modèles sont décl
 
 - **Windows natif** : OpenClaw, Gateway, runtime IA et modèles tournent sous Windows 11 Pro ; WSL2 Ubuntu reste un environnement DevOps/Linux externe.
 - **Project-first** : le système prend en charge un projet structuré, pas seulement une conversation.
-- **Intake immuable** : archive canonique, SHA-256, MIME, refus symlink, secrets bloquants et ACL Windows.
+- **Intake immuable** : archive canonique, SHA-256, MIME, refus des symlinks/junctions/reparse points, secrets bloquants et ACL Windows.
 - **Entrées non fiables** : un document reçu ne peut jamais redéfinir la politique des agents.
 - **Orchestration fail-closed** : une phase ne progresse que si son artefact/gate existe réellement.
 - **Clarification humaine** : une ambiguïté bloquante n'est jamais résolue arbitrairement par un agent.
 - **Local-first** : aucune dépendance LLM cloud n'est requise pour le parcours nominal.
 - **Performance-only local** : seuls Qwen 3.8 27B, Gemma 4 26B et Devstral Small 2 24B sont supportés localement.
 - **Web local-first** : une donnée récente déclenche d'abord recherche/fetch Web + raisonnement local.
-- **Cloud-on-demand** : activation, motif autorisé, préconditions, budget et éventuellement validation humaine.
+- **Cloud-on-demand** : activation, motif autorisé, préconditions, réservation FinOps atomique et éventuellement validation humaine.
 - **Fail closed** : aucun fallback cloud silencieux, aucune promotion automatique de modèle/backend.
 - **Huit rôles distincts** : orchestration, recherche, architecture, DevOps, sécurité, release, documentation, audit.
 - **Séparation producteur/auditeur** lorsque cela est praticable, avec changement de famille de modèle lorsque le producteur et le reviewer seraient sinon identiques.
@@ -88,8 +161,8 @@ La flotte locale est **performance-only** : exactement trois modèles sont décl
 - **Documentation progressive** : Comprendre, Utiliser, Approfondir, Diagnostiquer.
 - **Publication gouvernée** : GitHub/GitLab avec checks, preuves distantes, clone propre et gates humains.
 - **Télémétrie locale** : métriques observées sans prompts, réponses, secrets ni documents privés.
-- **Workspaces confinés** : filesystem limité au workspace ; exec soumis à approbation ; elevated désactivé.
-- **FinOps** : limites quotidiennes, mensuelles et par projet ; ledger hors Git.
+- **Workspaces confinés** : filesystem limité au workspace ; symlinks/junctions/reparse points refusés sur les frontières gérées ; exec soumis à approbation ; elevated désactivé.
+- **FinOps** : limites quotidiennes, mensuelles et par projet ; réservation atomique avant appel cloud ; ledger hors Git.
 - **Diagram-as-code** : D2, PlantUML et Graphviz pour les schémas techniques locaux.
 - **Preuves avant promesses** : les performances Intel Arc B580 restent à mesurer sur la machine réelle.
 - **Approbation finale humaine** : un projet ne peut pas s'auto-déclarer `COMPLETE`.
@@ -142,13 +215,11 @@ La V0.2 prépare une qualification comparative sur Intel Arc B580 :
 
 Le vainqueur ne sera déterminé qu'après mesures réelles : TTFT, tokens/s, VRAM, RAM, stabilité et tool calling.
 
-## Démarrage rapide
+## Parcours de contrôle rapide
 
-Prérequis utilisateur : **Windows 11 Pro x64, PowerShell 7 et WinGet**.
+Après une installation déjà réalisée :
 
 ```powershell
-.\menu.ps1 -Action install-full -DryRun
-.\menu.ps1 -Action install-full
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
 .\menu.ps1 -Action e2e
@@ -156,7 +227,7 @@ Prérequis utilisateur : **Windows 11 Pro x64, PowerShell 7 et WinGet**.
 .\menu.ps1 -Action qualification
 ```
 
-Pour télécharger et qualifier la flotte supportée :
+Pour télécharger et qualifier explicitement la flotte supportée :
 
 ```powershell
 .\scripts\windows\03_pull_models.ps1
@@ -181,7 +252,7 @@ python .\scripts\28_create_project.py `
   --deliverable documentation
 ```
 
-Avant `INTAKE_READY`, le système vérifie les secrets évidents et symlinks, crée une archive canonique sous `state/intake/`, calcule SHA-256/MIME, écrit les preuves d'ingestion puis rend l'intake en lecture seule.
+Avant `INTAKE_READY`, le système vérifie les secrets évidents et les symlinks/junctions/reparse points, crée une archive canonique sous `state/intake/`, calcule SHA-256/MIME, écrit les preuves d'ingestion puis rend l'intake en lecture seule.
 
 Le projet géré contient `intake/`, `sources/`, `context/`, `work/`, `deliverables/`, `evidence/` et `diagrams/`.
 
@@ -398,9 +469,11 @@ Garde-fous V0.2 :
 - 1 EUR / jour ;
 - 5 EUR / mois ;
 - 2 EUR / projet et par mois ;
-- réservation conservatrice par défaut : 0,25 EUR avant appel lorsque le coût exact est inconnu.
+- réservation conservatrice par défaut : 0,25 EUR lorsque le coût exact est inconnu ;
+- réservation écrite atomiquement sous verrou avant l'exécution cloud réelle ;
+- règlement de la réservation par le coût observé via `scripts/30_record_cloud_cost.py --reservation-id ...`.
 
-Le ledger reste sous `<OPENCLAW_LOCAL_ROOT>\state\finops\cloud-costs.jsonl` et n'est jamais commité.
+Le ledger append-only reste sous `<OPENCLAW_LOCAL_ROOT>\state\finops\cloud-costs.jsonl` et n'est jamais commité. Une réservation active est prise en compte dans les limites afin que deux agents concurrents ne puissent pas consommer le même budget disponible.
 
 Voir [FinOps](docs/FINOPS.md).
 
@@ -429,11 +502,12 @@ pytest + coverage >= 75 %
 PowerShell 7
 PSScriptAnalyzer
 Pester
+Tests de confinement Windows (symlink/junction/reparse)
 CodeQL
 Dependency Review / pip-audit fallback
 ```
 
-Les validateurs vérifient notamment Project Intake / Project Orchestrator, machine d'états, gates humains, Web local-first, FinOps, backends, tags explicites des modèles Ollama, **flotte locale performance-only de trois modèles**, qualification obligatoire des trois modèles supportés, Intake immuable, pédagogie, accessibilité, publication, télémétrie et séparation Architecte/Sécurité/Auditeur.
+Les GitHub Actions critiques sont référencées par SHA de commit immuable. Les validateurs vérifient notamment Project Intake / Project Orchestrator, machine d'états, gates humains, Web local-first, FinOps, backends, tags explicites des modèles Ollama, **flotte locale performance-only de trois modèles**, qualification obligatoire des trois modèles supportés, Intake immuable, pédagogie, accessibilité, publication, télémétrie et séparation Architecte/Sécurité/Auditeur.
 
 ## Documentation
 
