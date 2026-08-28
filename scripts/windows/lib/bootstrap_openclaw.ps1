@@ -12,6 +12,30 @@ function Test-OpenClawPreferred {
     return $Installed -eq [string]$Lock.openclaw.preferred
 }
 
+function Enable-OpenClawNodeRuntime {
+    param([Parameter(Mandatory)][string]$NodeHome)
+
+    $Node = Join-Path $NodeHome 'node.exe'
+    if (-not (Test-Path -LiteralPath $Node)) {
+        Write-BootstrapFailure "Runtime Node.js introuvable avant installation OpenClaw: $Node"
+    }
+
+    $PathParts = @($env:PATH -split ';' | Where-Object { $_ })
+    if ($PathParts -notcontains $NodeHome) {
+        $env:PATH = "$NodeHome;$env:PATH"
+    }
+
+    $ResolvedNode = Get-Command node.exe -ErrorAction SilentlyContinue
+    if (-not $ResolvedNode -or $ResolvedNode.Source -ne $Node) {
+        Write-BootstrapFailure "Le runtime Node.js local n'est pas prioritaire dans le PATH du processus: $Node"
+    }
+
+    $DetectedVersion = (& node.exe --version 2>$null).Trim()
+    if ($DetectedVersion -ne "v$($Lock.node.preferred)") {
+        Write-BootstrapFailure "Node.js $DetectedVersion détecté pour OpenClaw, attendu: v$($Lock.node.preferred)."
+    }
+}
+
 function Install-OpenClawPreferred {
     param([Parameter(Mandatory)][string]$RuntimeHome)
 
@@ -22,7 +46,13 @@ function Install-OpenClawPreferred {
         return
     }
 
+    Enable-OpenClawNodeRuntime -NodeHome $NodeHome
+
     $Npm = Join-Path $NodeHome 'npm.cmd'
+    if (-not (Test-Path -LiteralPath $Npm)) {
+        Write-BootstrapFailure "npm.cmd introuvable dans le runtime Node.js local: $Npm"
+    }
+
     $Temp = Join-Path ([IO.Path]::GetTempPath()) ("openclaw-local-npm-" + [guid]::NewGuid())
     New-Item -ItemType Directory -Path $Temp -Force | Out-Null
     try {
