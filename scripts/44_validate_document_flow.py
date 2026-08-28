@@ -155,12 +155,22 @@ def main() -> int:
         if not (ROOT / relative).is_file():
             failures.append(f"fichier document flow absent: {relative}")
 
-    openclaw_source = (ROOT / "src/clawlocal/openclaw_config.py").read_text(encoding="utf-8")
-    for marker in ("imageModel", "pdfModel", "pdfMaxBytesMb", "pdfMaxPages", "document_ingestion_policy.yaml"):
+    openclaw_source = (ROOT / "src/clawlocal/openclaw_config.py").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "imageModel",
+        "pdfModel",
+        "pdfMaxBytesMb",
+        "pdfMaxPages",
+        "document_ingestion_policy.yaml",
+    ):
         if marker not in openclaw_source:
             failures.append(f"OpenClaw document config non câblée: {marker}")
 
-    migration_source = (ROOT / "src/clawlocal/project_migrations.py").read_text(encoding="utf-8")
+    migration_source = (ROOT / "src/clawlocal/project_migrations.py").read_text(
+        encoding="utf-8"
+    )
     for marker in ("ingest_project_documents", "validate_ingestion_index"):
         if marker not in migration_source:
             failures.append(f"projets existants non bootstrapés pour ingestion: {marker}")
@@ -180,7 +190,9 @@ def main() -> int:
         if marker not in orchestrator_source:
             failures.append(f"orchestrateur document flow non câblé: {marker}")
 
-    ingestion_source = (ROOT / "src/clawlocal/project_ingestion.py").read_text(encoding="utf-8")
+    ingestion_source = (ROOT / "src/clawlocal/project_ingestion.py").read_text(
+        encoding="utf-8"
+    )
     for marker in (
         "validate_source_coverage",
         "validate_ingestion_index",
@@ -207,8 +219,14 @@ def main() -> int:
         if marker not in exchange_source:
             failures.append(f"Artifact Exchange exécutable incomplet: {marker}")
 
-    context_source = (ROOT / "src/clawlocal/project_context.py").read_text(encoding="utf-8")
-    for marker in ("copytree_no_links", "iter_regular_files_no_links", "secure_path_within"):
+    context_source = (ROOT / "src/clawlocal/project_context.py").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "copytree_no_links",
+        "iter_regular_files_no_links",
+        "secure_path_within",
+    ):
         if marker not in context_source:
             failures.append(f"confinement snapshot incomplet: {marker}")
 
