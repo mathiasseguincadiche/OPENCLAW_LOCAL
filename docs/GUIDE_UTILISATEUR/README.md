@@ -30,7 +30,7 @@ Besoin ponctuel ?
 ## Quel agent ?
 
 - je ne sais pas par où commencer → `chef-operations`
-- recherche factuelle/récente → `expert-recherche`
+- recherche factuelle/récente → `expert-recherche`, puis `03_PARCOURS_PRATIQUES/07_FAIRE_UNE_RECHERCHE_WEB.md` ; pour une tâche orchestrée, utiliser au besoin `06_RECETTES_ET_MODELES/08_MODELE_PREUVE_WEB.md`
 - conception/architecture → `architecte-solutions`
 - CI/CD, infra, scripts, code Ops → `ingenieur-devops`
 - risques/hardening → `ingenieur-securite`
