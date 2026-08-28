@@ -30,12 +30,13 @@ def _find_repository_from(anchor: Path) -> Path | None:
 def repository_root() -> Path:
     explicit = os.environ.get(_REPOSITORY_ROOT_ENV)
     if explicit:
-        root = Path(explicit).expanduser().resolve()
-        if not _is_repository_root(root):
+        explicit_root = Path(explicit).expanduser().resolve()
+        if not _is_repository_root(explicit_root):
             raise FileNotFoundError(
-                f"{_REPOSITORY_ROOT_ENV} pointe vers un dépôt OPENCLAW_LOCAL invalide: {root}"
+                f"{_REPOSITORY_ROOT_ENV} pointe vers un dépôt OPENCLAW_LOCAL invalide: "
+                f"{explicit_root}"
             )
-        return root
+        return explicit_root
 
     anchors = [Path.cwd()]
     if sys.argv and sys.argv[0]:
@@ -43,9 +44,9 @@ def repository_root() -> Path:
     anchors.append(Path(__file__))
 
     for anchor in anchors:
-        root = _find_repository_from(anchor)
-        if root is not None:
-            return root
+        discovered_root = _find_repository_from(anchor)
+        if discovered_root is not None:
+            return discovered_root
 
     raise FileNotFoundError(
         "Racine du dépôt OPENCLAW_LOCAL introuvable. "
