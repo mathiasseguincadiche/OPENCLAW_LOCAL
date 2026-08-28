@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 from clawlocal.openclaw_config import build_openclaw_patch
 
@@ -42,11 +43,8 @@ PINNED_MODEL_KEYS = {
 }
 
 
-def _entries_by_id(patch: dict[str, object]) -> dict[str, dict[str, object]]:
-    agents = patch["agents"]
-    assert isinstance(agents, dict)
-    entries = agents["list"]
-    assert isinstance(entries, list)
+def _entries_by_id(patch: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    entries = patch["agents"]["list"]
     return {str(entry["id"]): entry for entry in entries}
 
 
