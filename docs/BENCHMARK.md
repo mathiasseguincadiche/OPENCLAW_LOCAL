@@ -59,6 +59,10 @@ Le runner prend en charge :
 
 `scripts/22_validate_configs.py` refuse une suite contenant un contrôle inconnu.
 
+## API d'inférence
+
+Le runner utilise l'endpoint natif Ollama **`/api/chat`**. Ce choix correspond mieux au comportement conversationnel des modèles et permet de séparer proprement `message.thinking` de `message.content`. Les sorties de raisonnement peuvent donc être mesurées sans être confondues avec la réponse finale soumise aux contrôles.
+
 ## Sorties bornées et politique de thinking
 
 Chaque scénario déclare `max_output_tokens` dans `benchmarks/suites/devops_v2.yaml`, avec une valeur par défaut de suite. Le runner transmet une limite à Ollama via `num_predict` : aucune génération n'est laissée avec le comportement non borné du runtime.
@@ -70,7 +74,7 @@ Deux politiques sont volontairement séparées :
 
 Le mode complet reste donc la preuve de qualification de référence. Le mode Quick accélère les itérations mais ne remplace pas la passe complète.
 
-Si Ollama termine un cas pour cause de limite de longueur, ou si `eval_count` atteint le budget `num_predict`, le runner enregistre `output_truncated=true` et force le contrôle du cas à l'échec avec `output_limit:fail`. Une sortie possiblement tronquée ne peut donc jamais devenir un faux PASS.
+Si Ollama termine un cas pour cause de limite de longueur, ou si `eval_count` atteint le budget `num_predict`, le runner enregistre `output_truncated=true`, ajoute `output_limit:fail` et marque le cas en `status=error`. Avec `max_error_rate: 0`, une sortie tronquée fait donc échouer le gate au lieu d'être absorbée par la tolérance du taux de contrôles.
 
 Le contenu du raisonnement interne n'est pas persisté dans la preuve. Le runner conserve seulement `thinking_chars` et le temps avant premier token de réponse afin de mesurer le coût du thinking sans stocker sa trace brute.
 
