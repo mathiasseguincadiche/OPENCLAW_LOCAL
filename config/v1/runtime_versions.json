@@ -62,6 +62,27 @@
     "install_policy": "exact_preferred_unless_allow_runtime_drift",
     "hardware_tested": null
   },
+  "llama_cpp_sycl": {
+    "source": "ggml-org/llama.cpp",
+    "release": "b10621",
+    "release_commit": "c1d0e7a004015f23bc0233470b747b596f29b264",
+    "asset": "llama-b10621-bin-win-sycl-x64.zip",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10621/llama-b10621-bin-win-sycl-x64.zip",
+    "sha256": "9744eb81396e5b52ecb85591c1c9a5e767de5ce8aedb741bd971d89e14295004",
+    "provider_id": "intel-sycl",
+    "endpoint": "http://127.0.0.1:8080/v1",
+    "listen_host": "127.0.0.1",
+    "listen_port": 8080,
+    "device": "SYCL0",
+    "oneapi_device_selector": "level_zero:gpu",
+    "models_max": 1,
+    "context_tokens": 8192,
+    "gpu_layers": "all",
+    "offline": true,
+    "install_policy": "pinned_release_with_sha256",
+    "promotion_requires_real_b580_e2e": true,
+    "hardware_tested": null
+  },
   "powershell_modules": {
     "PSScriptAnalyzer": "1.25.0",
     "Pester": "5.9.0"

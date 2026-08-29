@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from clawlocal.openclaw_config import build_openclaw_patch
 
 EXPECTED_AGENTS = {
@@ -115,6 +117,48 @@ def test_multimodal_defaults_use_qwen38_then_gemma26() -> None:
     assert defaults["model"] == expected
     assert defaults["imageModel"] == expected
     assert defaults["pdfModel"] == expected
+
+
+def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None:
+    patch = build_openclaw_patch(
+        Path("C:/OpenClawLocal"), backend_id="llama-cpp-sycl"
+    )
+    providers = patch["models"]["providers"]
+    assert set(providers) == {"ollama", "intel-sycl"}
+
+    sycl = providers["intel-sycl"]
+    assert sycl["baseUrl"] == "http://127.0.0.1:8080/v1"
+    assert sycl["api"] == "openai-completions"
+    assert sycl["apiKey"] == "intel-sycl-local"
+    assert {model["id"] for model in sycl["models"]} == EXPECTED_MODELS
+    assert all(model["input"] == ["text"] for model in sycl["models"])
+    assert all(model["contextWindow"] == 8192 for model in sycl["models"])
+    assert all(model["compat"]["toolSchemaProfile"] == "llamacpp" for model in sycl["models"])
+
+    entries = _entries_by_id(patch)
+    for entry in entries.values():
+        assert entry["model"]["primary"].startswith("intel-sycl/")
+        assert all(
+            fallback.startswith("intel-sycl/")
+            for fallback in entry["model"]["fallbacks"]
+        )
+
+    defaults = patch["agents"]["defaults"]
+    assert defaults["model"] == {
+        "primary": "intel-sycl/qwen3.8:27b",
+        "fallbacks": ["intel-sycl/gemma4:26b"],
+    }
+    expected_multimodal = {
+        "primary": "ollama/qwen3.8:27b",
+        "fallbacks": ["ollama/gemma4:26b"],
+    }
+    assert defaults["imageModel"] == expected_multimodal
+    assert defaults["pdfModel"] == expected_multimodal
+
+
+def test_unknown_backend_is_fail_closed() -> None:
+    with pytest.raises(ValueError, match="Backend OpenClaw invalide"):
+        build_openclaw_patch(Path("C:/OpenClawLocal"), backend_id="unknown")
 
 
 def test_patch_matches_pinned_openclaw_schema_surface() -> None:

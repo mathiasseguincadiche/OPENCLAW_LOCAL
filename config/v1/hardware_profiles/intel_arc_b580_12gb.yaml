@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 profile: intel-arc-b580-12gb-reference
 gpu:
   vendor: Intel
@@ -8,6 +8,15 @@ gpu:
   memory_type: GDDR6
   memory_bandwidth_gbps: 456
   peak_int8_tops: 233
+  matrix_engines: XMX
+  acceleration_apis:
+    - level_zero
+    - sycl
+    - vulkan
+    - opencl
+  preferred_llm_acceleration_order:
+    - sycl-level-zero
+    - vulkan
 cpu_reference:
   model: AMD Ryzen 7 7700
   cores: 8
@@ -20,6 +29,16 @@ policy:
   local_deep_allowed: true
   offload_requires_benchmark: true
   context_requires_benchmark: true
+  sycl_candidate_enabled: true
+  sycl_requires_level_zero: true
+  sycl_models_max: 1
+  sycl_gpu_layers: all
+  sycl_context_tokens_initial: 8192
+  sycl_promotion_requires_openclaw_e2e: true
+  automatic_backend_promotion: false
+  rollback_backend: ollama-vulkan
 notes:
   - "Le profil décrit une cible de qualification, pas une garantie de débit."
-  - "Comparer les backends réellement disponibles sous Windows avant promotion."
+  - "SYCL/Level Zero est le chemin Intel spécialisé à comparer à Ollama/Vulkan sur la B580 réelle."
+  - "Un seul modèle 24-27B est chargé à la fois pour respecter les 12 Go de VRAM et 48 Go de RAM système."
+  - "XMX est une capacité matérielle; son bénéfice opérationnel doit être démontré par le backend SYCL et les mesures réelles."
