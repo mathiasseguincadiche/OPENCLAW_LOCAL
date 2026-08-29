@@ -33,7 +33,9 @@ Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer l
 
 Le parcours complet installe le runtime, configure le stockage local, télécharge les trois modèles, configure OpenClaw et le Gateway puis vérifie le parcours nominal.
 
-Le smoke-test Ollama utilise l'API locale `/api/generate` avec `stream=false`. Il ne passe plus par `ollama run`, afin d'éviter les spinners et séquences ANSI dans les transcripts. Pour Qwen3.8 uniquement, le thinking est désactivé pendant ce smoke-test minimal : cette étape vérifie que le runtime répond, pas sa capacité de raisonnement profond.
+Le smoke-test Ollama utilise l'API locale **`/api/chat`** avec `stream=false`. Il ne passe plus par `ollama run`, afin d'éviter les spinners et séquences ANSI dans les transcripts. `/api/chat` sépare aussi explicitement le thinking du contenu final. Pour Qwen3.8 uniquement, le thinking est désactivé pendant ce smoke-test minimal : cette étape vérifie que le runtime répond, pas sa capacité de raisonnement profond.
+
+Après le smoke-test, `/api/ps` est interrogé pour afficher la taille réellement chargée en VRAM, la taille totale du modèle et le contexte alloué par Ollama. Cette mesure est plus utile pour diagnostiquer l'offload réel que la seule capacité théorique de la carte graphique.
 
 Après la première installation, fermer puis rouvrir PowerShell.
 
@@ -96,7 +98,7 @@ Pour Qwen3.8, le thinking reste dans son mode **natif**. Le runner ne le désact
 
 Cette passe couvre **36 cas** : les mêmes 3 modèles et 12 scénarios, uniquement à 8192 tokens. Elle désactive explicitement le thinking de Qwen3.8 afin de vérifier rapidement les formats, contrôles et performances d'inférence sans payer son raisonnement interne sur chaque scénario.
 
-Le mode Quick sert au diagnostic et aux itérations courantes ; il **ne remplace pas** la passe complète pour une décision de qualification.
+Le mode Quick sert au diagnostic et aux itérations courantes ; il **ne remplace pas** la passe complète pour une décision de qualification. Un Quick réussi retourne `QUICK_DIAGNOSTIC_PASS`, jamais `READY_FOR_MANUAL_QUALIFICATION`.
 
 Ou directement :
 
@@ -113,11 +115,11 @@ Le parcours enchaîne :
 2. lecture des trois modèles `required` depuis `model_catalog.yaml` ;
 3. smoke test API de chacun ;
 4. inventaire matériel/runtime ;
-5. benchmark selon `qualification_policy.yaml` ;
+5. benchmark via `/api/chat` selon `qualification_policy.yaml` ;
 6. contextes 8K et 16K en passe complète ;
 7. évaluation des seuils versionnés.
 
-Chaque scénario possède un plafond fonctionnel `max_output_tokens`. Une génération qui atteint le budget appliqué est enregistrée comme potentiellement tronquée et ne peut pas devenir un faux PASS.
+Chaque scénario possède un plafond fonctionnel `max_output_tokens`. Une génération qui atteint le budget appliqué est enregistrée comme tronquée, marquée `status=error` et fait échouer le gate puisque la politique impose `max_error_rate: 0`.
 
 Après chaque scénario, l'opérateur voit le statut, la durée, le TTFT, les tokens/s, le nombre de tokens générés, le volume de thinking observé sans son contenu, et une estimation du temps restant.
 
@@ -129,6 +131,7 @@ Pour chaque modèle/backend pertinent :
 - tokens/s ;
 - durée murale ;
 - VRAM fiable ou explicitement inconnue ;
+- offload VRAM réellement observé via Ollama ;
 - RAM ;
 - stabilité ;
 - erreurs ;
