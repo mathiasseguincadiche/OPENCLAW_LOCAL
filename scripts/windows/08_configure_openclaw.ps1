@@ -1,5 +1,9 @@
 [CmdletBinding()]
-param([switch]$DryRun)
+param(
+    [switch]$DryRun,
+    [ValidateSet('ollama-vulkan', 'llama-cpp-sycl')]
+    [string]$Backend = 'ollama-vulkan'
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -129,27 +133,74 @@ function Initialize-ParallelSearchPlugin {
     Write-Host "OK  Plugin Parallel $Version actif pour le provider $Provider."
 }
 
+function Test-SelectedBackendReady {
+    param(
+        [Parameter(Mandatory)][string]$BackendId,
+        [Parameter(Mandatory)][string]$LockPath
+    )
+
+    if ($BackendId -eq 'ollama-vulkan') {
+        try {
+            $null = Invoke-RestMethod -Method Get -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 5
+        }
+        catch {
+            throw "Backend Ollama non prêt: $($_.Exception.Message)"
+        }
+        Write-Host 'OK  Backend texte sélectionné: ollama-vulkan.'
+        return
+    }
+
+    $Lock = Get-Content -Raw -LiteralPath $LockPath | ConvertFrom-Json
+    $Endpoint = [string]$Lock.llama_cpp_sycl.endpoint
+    try {
+        $Inventory = Invoke-RestMethod -Method Get -Uri "$Endpoint/models?reload=1" -TimeoutSec 10
+    }
+    catch {
+        throw (
+            "Backend Intel SYCL non prêt sur $Endpoint. " +
+            "Exécutez d'abord .\menu.ps1 -Action intel-sycl-setup. Détail: $($_.Exception.Message)"
+        )
+    }
+    $Ids = @($Inventory.data | ForEach-Object { [string]$_.id })
+    $Expected = @('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b')
+    foreach ($Model in $Expected) {
+        if ($Ids -notcontains $Model) {
+            throw "Backend Intel SYCL actif mais modèle requis absent du routeur: $Model"
+        }
+    }
+    Write-Host 'OK  Backend texte sélectionné: llama-cpp-sycl (provider OpenClaw intel-sycl).'
+    Write-Host 'INFO Image/PDF restent sur Ollama tant que le multimodal SYCL n''est pas qualifié.'
+}
+
 $PlatformRoot = Get-PlatformRoot
 $StateDir = Join-Path $PlatformRoot 'state'
 $SystemWorkspace = Join-Path $PlatformRoot 'workspaces\system'
 $GeneratedDir = Join-Path $PlatformRoot 'runtime\generated'
-$PatchPath = Join-Path $GeneratedDir 'openclaw.local.patch.json'
+$PatchPath = Join-Path $GeneratedDir "openclaw.$Backend.patch.json"
 $SchemaPath = Join-Path $GeneratedDir 'openclaw.schema.json'
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Configuration OpenClaw local-first'
+    Write-Host "Backend    : $Backend"
     Write-Host "State      : $StateDir"
     Write-Host "Workspaces : $(Join-Path $PlatformRoot 'workspaces')"
     Write-Host "Patch      : $PatchPath"
     Write-Host "Schema     : $SchemaPath"
-    Write-Host '[DRY-RUN] Vérifier/installer le plugin Parallel versionné, déployer 8 agents, capturer le schéma vivant, valider le patch puis l''appliquer en mode réel.'
+    if ($Backend -eq 'llama-cpp-sycl') {
+        Write-Host '[DRY-RUN] Exiger le routeur Intel SYCL prêt avec les trois modèles; texte -> intel-sycl; image/PDF -> Ollama.'
+        Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
+    }
+    Write-Host '[DRY-RUN] Vérifier/installer Parallel, déployer 8 agents, capturer le schéma vivant, valider le patch puis l''appliquer.'
     exit 0
 }
 
 $env:OPENCLAW_LOCAL_ROOT = $PlatformRoot
 $env:OPENCLAW_STATE_DIR = $StateDir
 $env:OLLAMA_API_KEY = 'ollama-local'
+$env:INTEL_SYCL_API_KEY = 'intel-sycl-local'
 $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'false'
+
+Test-SelectedBackendReady -BackendId $Backend -LockPath $RuntimeLockPath
 
 $OpenClaw = Get-OpenClawCommand $PlatformRoot
 $Python = Get-PythonCommand $PlatformRoot
@@ -186,7 +237,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Invoke-Checked -Command $Python -Arguments @(
-    $Renderer, '--platform-root', $PlatformRoot, '--output', $PatchPath
+    $Renderer, '--platform-root', $PlatformRoot, '--backend', $Backend, '--output', $PatchPath
 ) -Description 'Génération du patch OpenClaw'
 
 Invoke-Checked -Command $OpenClaw -Arguments @(
@@ -205,5 +256,8 @@ Invoke-Checked -Command $OpenClaw -Arguments @(
     'agents', 'list', '--json'
 ) -Description 'Lecture de la flotte OpenClaw'
 
-Write-Host 'OK  Configuration OpenClaw et flotte de 8 agents appliquées.'
+Write-Host "OK  Configuration OpenClaw appliquée: backend texte=$Backend, 8 agents."
+if ($Backend -eq 'llama-cpp-sycl') {
+    Write-Host 'INFO Rollback: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
+}
 exit 0
