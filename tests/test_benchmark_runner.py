@@ -34,6 +34,43 @@ def test_generation_payload_bounds_output_and_matches_nominal_keep_alive() -> No
     assert payload["keep_alive"] == "15m"
     assert payload["options"]["num_ctx"] == 8192
     assert payload["options"]["num_predict"] == 256
+    assert "think" not in payload
+
+
+def test_generation_payload_can_explicitly_disable_thinking() -> None:
+    payload = BENCHMARK.generation_payload(
+        "qwen3.8:27b",
+        "test",
+        8192,
+        0.1,
+        256,
+        False,
+    )
+    assert payload["think"] is False
+
+
+def test_qwen_quick_mode_disables_thinking_and_keeps_scenario_limit() -> None:
+    model = {"family": "qwen"}
+    limit, think, mode = BENCHMARK.resolve_generation_policy(model, 192, "off")
+    assert limit == 192
+    assert think is False
+    assert mode == "off"
+
+
+def test_qwen_native_mode_is_bounded_without_overriding_thinking() -> None:
+    model = {"family": "qwen"}
+    limit, think, mode = BENCHMARK.resolve_generation_policy(model, 192, "native")
+    assert limit == BENCHMARK.MAX_CONFIGURED_OUTPUT_TOKENS
+    assert think is None
+    assert mode == "native"
+
+
+def test_non_qwen_models_keep_scenario_limit_and_native_behavior() -> None:
+    model = {"family": "gemma"}
+    limit, think, mode = BENCHMARK.resolve_generation_policy(model, 320, "off")
+    assert limit == 320
+    assert think is None
+    assert mode == "not_applicable"
 
 
 def test_scenario_output_limit_supports_default_and_override() -> None:
