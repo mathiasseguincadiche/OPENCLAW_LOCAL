@@ -89,7 +89,12 @@ def _intel_sycl_models(
                     "cacheRead": 0,
                     "cacheWrite": 0,
                 },
-                "compat": {"toolSchemaProfile": "llamacpp"},
+                # Le candidat doit recevoir les schémas d'outils pour que le E2E
+                # puisse réellement confirmer ou invalider le tool-calling.
+                "compat": {
+                    "supportsTools": True,
+                    "toolSchemaProfile": "llamacpp",
+                },
             }
         )
     return models
