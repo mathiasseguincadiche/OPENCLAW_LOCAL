@@ -2,15 +2,16 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 Describe 'Qualification Ollama lisible et bornée' {
-    It 'utilise l API locale pour le smoke test et non ollama run' {
+    It 'utilise l API chat locale pour le smoke test et non ollama run' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Verify = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'scripts\windows\04_verify_local.ps1'
         )
-        $Verify | Should -Match '/api/generate'
+        $Verify | Should -Match '/api/chat'
         $Verify | Should -Match '/api/ps'
         $Verify | Should -Match 'stream = \$false'
         $Verify | Should -Match 'num_predict = 16'
+        $Verify | Should -Not -Match '/api/generate'
         $Verify | Should -Not -Match '& ollama run'
     }
 
