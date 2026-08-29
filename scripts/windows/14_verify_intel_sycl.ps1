@@ -55,7 +55,7 @@ foreach ($Model in $Expected) {
     $Result = Invoke-IntelSyclChatSmoke -BaseUrl ([string]$RuntimeLock.endpoint) `
         -Model $Model -TimeoutSeconds $TimeoutSeconds
     $Smoke += $Result
-    Write-Host "OK  $Model: wall=$($Result.wall_ms)ms tok/s=$($Result.tokens_per_second)"
+    Write-Host "OK  ${Model}: wall=$($Result.wall_ms)ms tok/s=$($Result.tokens_per_second)"
 }
 
 $Proof = [ordered]@{
