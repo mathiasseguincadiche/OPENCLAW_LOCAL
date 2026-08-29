@@ -8,7 +8,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 
 $PlatformRoot = Get-OpenClawLocalPlatformRoot
 $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
-$Paths = Get-IntelSyclPaths -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
+$Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
 
 if ($DryRun) {
     Write-Host "[DRY-RUN] Arrêter le serveur Intel SYCL suivi par $($Paths.ProcessState)."
