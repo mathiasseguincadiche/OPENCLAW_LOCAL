@@ -18,6 +18,11 @@ def parse_args() -> argparse.Namespace:
         description="Évalue une preuve de benchmark sans promouvoir de modèle."
     )
     parser.add_argument("path", nargs="?", type=Path)
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Évalue uniquement le contexte 8192 comme diagnostic, sans verdict de qualification.",
+    )
     return parser.parse_args()
 
 
@@ -42,13 +47,27 @@ def main() -> int:
     if not isinstance(policy, dict):
         raise ValueError("qualification_policy.yaml invalide")
 
-    report = evaluate_benchmark(payload, policy)
-    output = path.with_suffix(".evaluation.json")
+    if args.quick:
+        report = evaluate_benchmark(
+            payload,
+            policy,
+            required_contexts_override={8192},
+            pass_verdict="QUICK_DIAGNOSTIC_PASS",
+        )
+        output = path.with_name(f"{path.stem}.quick.evaluation.json")
+    else:
+        report = evaluate_benchmark(payload, policy)
+        output = path.with_suffix(".evaluation.json")
+
     output.write_text(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
+    print(
+        f"EVALUATION_MODE={report['evaluation_mode']} "
+        f"CONTEXTS={','.join(str(value) for value in report['evaluated_contexts'])}"
+    )
     for alias, model in report["models"].items():
         print(
             f"{alias}: gate={model['automated_gate']} "
