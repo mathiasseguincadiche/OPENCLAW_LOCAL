@@ -22,7 +22,7 @@ def load_benchmark_module() -> ModuleType:
 BENCHMARK = load_benchmark_module()
 
 
-def test_generation_payload_bounds_output_and_matches_nominal_keep_alive() -> None:
+def test_generation_payload_bounds_output_and_matches_chat_contract() -> None:
     payload = BENCHMARK.generation_payload(
         "qwen3.8:27b",
         "test",
@@ -32,6 +32,8 @@ def test_generation_payload_bounds_output_and_matches_nominal_keep_alive() -> No
     )
     assert payload["stream"] is True
     assert payload["keep_alive"] == "15m"
+    assert payload["messages"] == [{"role": "user", "content": "test"}]
+    assert "prompt" not in payload
     assert payload["options"]["num_ctx"] == 8192
     assert payload["options"]["num_predict"] == 256
     assert "think" not in payload
