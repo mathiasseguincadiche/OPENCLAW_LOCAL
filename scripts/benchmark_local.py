@@ -172,7 +172,7 @@ def generation_payload(
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": runtime_id,
-        "prompt": prompt,
+        "messages": [{"role": "user", "content": prompt}],
         "stream": True,
         "keep_alive": "15m",
         "options": {
@@ -208,7 +208,7 @@ def run_generation(
         )
     ).encode("utf-8")
     request = urllib.request.Request(
-        f"{endpoint}/api/generate",
+        f"{endpoint}/api/chat",
         data=body,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -226,8 +226,11 @@ def run_generation(
             if not line:
                 continue
             event = json.loads(line)
-            thinking_chunk = str(event.get("thinking", ""))
-            response_chunk = str(event.get("response", ""))
+            message = event.get("message")
+            if not isinstance(message, dict):
+                message = {}
+            thinking_chunk = str(message.get("thinking", ""))
+            response_chunk = str(message.get("content", ""))
             if (thinking_chunk or response_chunk) and first_generated_at is None:
                 first_generated_at = time.perf_counter()
             if response_chunk and first_response_at is None:
@@ -287,7 +290,7 @@ def _metric(value: object, *, digits: int = 1) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Benchmark local reproductible via API native Ollama."
+        description="Benchmark local reproductible via API chat native Ollama."
     )
     parser.add_argument("--endpoint", default="http://127.0.0.1:11434")
     parser.add_argument(
@@ -438,14 +441,16 @@ def main() -> int:
                         result["output"],
                         list(scenario.get("checks", [])),
                     )
+                    case_status = "ok"
                     if result["output_truncated"]:
                         passed = False
+                        case_status = "error"
                         details.append("output_limit:fail")
                     cases.append(
                         {
                             **base,
                             **result,
-                            "status": "ok",
+                            "status": case_status,
                             "check_passed": passed,
                             "check_details": details,
                         }
