@@ -52,6 +52,7 @@ Ces documents sont les références d'architecture, de contrats et d'exploitatio
 | comprendre la flotte OpenClaw et le routage | [Intégration OpenClaw](OPENCLAW_INTEGRATION.md) |
 | utiliser Internet en local-first | [Recherche Web Local-First](WEB_LOCAL_FIRST.md) |
 | comprendre Ollama/Vulkan et llama.cpp | [Backends locaux](RUNTIME_BACKENDS.md) |
+| exploiter et qualifier l'Intel Arc B580 via SYCL/Level Zero | [Intel Arc B580](INTEL_ARC_B580.md) |
 | comprendre/qualifier les modèles | [Modèles locaux](MODELES_LOCAUX.md) |
 | comprendre l'escalade | [Routage hybride](ROUTAGE_HYBRIDE.md) |
 | contrôler les dépenses cloud | [FinOps](FINOPS.md) |
@@ -70,7 +71,7 @@ Ces documents sont les références d'architecture, de contrats et d'exploitatio
 DÉFINIR le résultat
 → PRÉPARER les entrées
 → CHOISIR agent direct ou projet
-→ ANALYZER
+→ ANALYSER
 → CLARIFIER si nécessaire
 → PLANIFIER + ASSIGNER
 → EXÉCUTER
