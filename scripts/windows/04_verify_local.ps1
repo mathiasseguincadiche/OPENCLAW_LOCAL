@@ -28,6 +28,7 @@ if (-not $Model) {
 
 if ($DryRun) {
     Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test API sans spinner avec $Model."
+    Write-Host '[DRY-RUN] Lire ensuite /api/ps pour exposer la part réellement chargée en VRAM.'
     exit 0
 }
 
@@ -99,4 +100,34 @@ if ($EvalCount -gt 0 -and $EvalDuration -gt 0) {
 
 $Metric = if ($null -ne $TokensPerSecond) { " ($TokensPerSecond tok/s)" } else { '' }
 Write-Host "OK  Inférence locale validée avec $Model via API Ollama$Metric."
+
+try {
+    $Running = Invoke-RestMethod -Method Get `
+        -Uri "$OllamaEndpoint/api/ps" `
+        -TimeoutSec 5
+    $Loaded = $Running.models |
+        Where-Object { $_.name -eq $Model -or $_.model -eq $Model } |
+        Select-Object -First 1
+    if ($null -ne $Loaded) {
+        $SizeBytes = [double]$Loaded.size
+        $VramBytes = [double]$Loaded.size_vram
+        $SizeGiB = [math]::Round($SizeBytes / 1GB, 2)
+        $VramGiB = [math]::Round($VramBytes / 1GB, 2)
+        $GpuPercent = if ($SizeBytes -gt 0) {
+            [math]::Round(($VramBytes / $SizeBytes) * 100, 1)
+        }
+        else {
+            0
+        }
+        $ContextLength = $Loaded.context_length
+        Write-Host (
+            "INFO Ollama mémoire $Model : VRAM=$VramGiB/$SizeGiB GiB " +
+            "(~$GpuPercent% GPU), contexte alloué=$ContextLength."
+        )
+    }
+}
+catch {
+    Write-Host "INFO Ollama mémoire $Model : métrique /api/ps indisponible."
+}
+
 exit 0
