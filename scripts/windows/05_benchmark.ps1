@@ -11,7 +11,10 @@ $Benchmark = Join-Path $RepoRoot 'scripts\benchmark_local.py'
 
 $BenchmarkArgs = @($Benchmark)
 if ($Quick) {
-    $BenchmarkArgs += @('--context', '8192')
+    $BenchmarkArgs += @('--context', '8192', '--qwen-thinking', 'off')
+}
+else {
+    $BenchmarkArgs += @('--qwen-thinking', 'native')
 }
 
 if ($DryRun) {
@@ -20,10 +23,10 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] Chaque scénario borne sa sortie avec max_output_tokens.'
     Write-Host '[DRY-RUN] Le runner affiche durée, TTFT, tokens/s, tokens générés et progression.'
     if ($Quick) {
-        Write-Host '[DRY-RUN] Mode QUICK: contexte 8192 uniquement, soit 36 cas avec devops-v2.'
+        Write-Host '[DRY-RUN] Mode QUICK: contexte 8192, 36 cas, thinking Qwen désactivé.'
     }
     else {
-        Write-Host '[DRY-RUN] Mode COMPLET: contextes 8192 + 16384, soit 72 cas avec devops-v2.'
+        Write-Host '[DRY-RUN] Mode COMPLET: contextes 8192 + 16384, 72 cas, thinking Qwen natif et borné.'
     }
     exit 0
 }
