@@ -76,7 +76,7 @@ Les preuves sont écrites sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
 
 ## 4. Qualification automatique des trois modèles
 
-Passe complète :
+### Passe complète de référence
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
@@ -85,14 +85,18 @@ Passe complète :
 
 Cette passe couvre **72 cas** : 3 modèles × 2 contextes (8192 et 16384) × 12 scénarios.
 
-Passe rapide 8K uniquement :
+Pour Qwen3.8, le thinking reste dans son mode **natif**. Le runner ne le désactive pas artificiellement dans la preuve complète. Comme le raisonnement peut consommer une part importante du budget de génération, Qwen reçoit un plafond de 2048 tokens par cas ; la génération reste donc bornée sans être coupée par les petits plafonds fonctionnels de la suite.
+
+### Passe rapide d'itération
 
 ```powershell
 .\menu.ps1 -Action qualification -Quick -DryRun
 .\menu.ps1 -Action qualification -Quick
 ```
 
-Cette passe couvre **36 cas** : les mêmes 3 modèles et 12 scénarios, uniquement à 8192 tokens. Elle sert au diagnostic et aux itérations courantes ; elle ne remplace pas la passe complète pour une décision de qualification.
+Cette passe couvre **36 cas** : les mêmes 3 modèles et 12 scénarios, uniquement à 8192 tokens. Elle désactive explicitement le thinking de Qwen3.8 afin de vérifier rapidement les formats, contrôles et performances d'inférence sans payer son raisonnement interne sur chaque scénario.
+
+Le mode Quick sert au diagnostic et aux itérations courantes ; il **ne remplace pas** la passe complète pour une décision de qualification.
 
 Ou directement :
 
@@ -101,7 +105,7 @@ Ou directement :
 .\scripts\windows\07_run_qualification.ps1 -Quick
 ```
 
-Le runner accepte uniquement `-DryRun` et `-Quick`. Les anciens switches de sélection de classes ou de candidats ne font plus partie du contrat.
+Le runner PowerShell accepte uniquement `-DryRun` et `-Quick`. Les anciens switches de sélection de classes ou de candidats ne font plus partie du contrat.
 
 Le parcours enchaîne :
 
@@ -113,9 +117,9 @@ Le parcours enchaîne :
 6. contextes 8K et 16K en passe complète ;
 7. évaluation des seuils versionnés.
 
-Chaque scénario possède une limite `max_output_tokens`, transmise à Ollama via `num_predict`. Une génération arrêtée par cette limite est enregistrée comme tronquée et ne peut pas devenir un faux PASS. Le benchmark complet ne désactive pas le raisonnement natif des modèles.
+Chaque scénario possède un plafond fonctionnel `max_output_tokens`. Une génération qui atteint le budget appliqué est enregistrée comme potentiellement tronquée et ne peut pas devenir un faux PASS.
 
-Après chaque scénario, l'opérateur voit le statut, la durée, le TTFT, les tokens/s, le nombre de tokens générés et une estimation du temps restant.
+Après chaque scénario, l'opérateur voit le statut, la durée, le TTFT, les tokens/s, le nombre de tokens générés, le volume de thinking observé sans son contenu, et une estimation du temps restant.
 
 ## 5. Mesures à collecter
 
@@ -129,11 +133,12 @@ Pour chaque modèle/backend pertinent :
 - stabilité ;
 - erreurs ;
 - contexte 8K/16K ;
+- politique de thinking ;
 - tool-calling ;
 - réparation après retour d'outil ;
 - comportement multimodal PDF/image lorsqu'il s'applique.
 
-Les mesures absentes restent absentes : elles ne sont jamais inventées.
+Les mesures absentes restent absentes : elles ne sont jamais inventées. La trace brute du thinking n'est pas conservée par le benchmark ; seul son volume est comptabilisé.
 
 ## 6. Comparaison des backends Intel Arc
 
@@ -192,6 +197,7 @@ Les gates automatiques sont passés. Ce verdict **ne signifie pas V1 qualifiée*
 - pilote GPU ;
 - inventaire matériel ;
 - résultats des trois modèles ;
+- politique de thinking réellement utilisée ;
 - E2E OpenClaw ;
 - comparaison backend ;
 - test multimodal ;
