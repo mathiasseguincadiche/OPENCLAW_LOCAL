@@ -19,6 +19,7 @@ Describe 'Qualification Ollama lisible et bornée' {
         $LASTEXITCODE | Should -Be 0
         $Text = $Output -join "`n"
         $Text | Should -Match '--context 8192'
+        $Text | Should -Match '--qwen-thinking off'
         $Text | Should -Match '36 cas'
     }
 
@@ -28,6 +29,7 @@ Describe 'Qualification Ollama lisible et bornée' {
         $LASTEXITCODE | Should -Be 0
         $Text = $Output -join "`n"
         $Text | Should -Match 'mode QUICK'
+        $Text | Should -Match 'thinking Qwen désactivé'
         $Text | Should -Match '36 cas'
     }
 }
