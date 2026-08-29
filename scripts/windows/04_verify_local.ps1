@@ -1,13 +1,16 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [string]$Model
+    [string]$Model,
+    [ValidateRange(10, 600)]
+    [int]$TimeoutSeconds = 300
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
+$OllamaEndpoint = 'http://127.0.0.1:11434'
 
 if (-not $Model) {
     $RequiredModels = @(
@@ -24,22 +27,76 @@ if (-not $Model) {
 }
 
 if ($DryRun) {
-    Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test avec $Model."
+    Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test API sans spinner avec $Model."
     exit 0
 }
 
-$null = Invoke-RestMethod -Method Get `
-    -Uri 'http://127.0.0.1:11434/api/tags' `
-    -TimeoutSec 5
+try {
+    $Tags = Invoke-RestMethod -Method Get `
+        -Uri "$OllamaEndpoint/api/tags" `
+        -TimeoutSec 5
+}
+catch {
+    throw "API Ollama inaccessible sur loopback: $($_.Exception.Message)"
+}
+
+$AvailableModels = @(
+    $Tags.models |
+        ForEach-Object { [string]$_.name } |
+        Where-Object { $_ -and $_.Trim() }
+)
+if ($AvailableModels -notcontains $Model) {
+    throw "Modèle Ollama absent localement: $Model. Aucun téléchargement implicite n'est autorisé."
+}
+
 $Prompt = 'Réponds uniquement avec le texte LOCAL_OK, sans ponctuation ni explication.'
-$Output = (& ollama run $Model $Prompt | Out-String).Trim()
+$RequestBody = [ordered]@{
+    model = $Model
+    prompt = $Prompt
+    stream = $false
+    keep_alive = '15m'
+    options = [ordered]@{
+        num_ctx = 2048
+        temperature = 0
+        num_predict = 16
+    }
+}
+if ($Model -like 'qwen3.8:*') {
+    # Le smoke test vérifie le runtime, pas le raisonnement profond.
+    # Qwen3.8 active le thinking par défaut; on le coupe ici pour un test court et déterministe.
+    $RequestBody.think = $false
+}
+$Body = $RequestBody | ConvertTo-Json -Depth 5 -Compress
 
-if ($LASTEXITCODE -ne 0) {
-    throw "Inférence Ollama en échec (code $LASTEXITCODE)."
+try {
+    $Response = Invoke-RestMethod -Method Post `
+        -Uri "$OllamaEndpoint/api/generate" `
+        -ContentType 'application/json' `
+        -Body $Body `
+        -TimeoutSec $TimeoutSeconds
+}
+catch {
+    throw "Inférence Ollama API en échec pour $Model : $($_.Exception.Message)"
 }
 
+$Output = ([string]$Response.response).Trim()
 if ($Output -notmatch 'LOCAL_OK') {
-    throw "Smoke test inattendu. Réponse reçue: $Output"
+    throw "Smoke test inattendu pour $Model. Réponse reçue: $Output"
 }
 
-Write-Host "OK  Inférence locale validée avec $Model."
+$EvalCount = 0
+if ($Response.PSObject.Properties['eval_count']) {
+    $EvalCount = [int]$Response.eval_count
+}
+$EvalDuration = 0L
+if ($Response.PSObject.Properties['eval_duration']) {
+    $EvalDuration = [long]$Response.eval_duration
+}
+$TokensPerSecond = $null
+if ($EvalCount -gt 0 -and $EvalDuration -gt 0) {
+    $TokensPerSecond = [math]::Round($EvalCount / $EvalDuration * 1000000000, 2)
+}
+
+$Metric = if ($null -ne $TokensPerSecond) { " ($TokensPerSecond tok/s)" } else { '' }
+Write-Host "OK  Inférence locale validée avec $Model via API Ollama$Metric."
+exit 0
