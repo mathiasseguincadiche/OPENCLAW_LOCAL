@@ -44,6 +44,8 @@ La suite couvre notamment :
 - réparation après retour d'outil ;
 - contexte synthétique long.
 
+La passe complète représente **72 cas** : 3 modèles × 2 contextes × 12 scénarios. Le mode `-Quick` représente **36 cas** : les mêmes 3 modèles et 12 scénarios, mais uniquement à 8192 tokens de contexte.
+
 ## Contrôles exécutables
 
 Le runner prend en charge :
@@ -57,6 +59,16 @@ Le runner prend en charge :
 
 `scripts/22_validate_configs.py` refuse une suite contenant un contrôle inconnu.
 
+## Sorties bornées
+
+Chaque scénario déclare `max_output_tokens` dans `benchmarks/suites/devops_v2.yaml`, avec une valeur par défaut de suite. Le runner transmet cette limite à Ollama via `num_predict`.
+
+Le but n'est pas de raccourcir artificiellement une réponse correcte : les plafonds sont dimensionnés selon le format attendu. Ils empêchent surtout une génération anormalement longue ou sans fin de monopoliser la qualification.
+
+Si Ollama termine un cas pour cause de limite de longueur, le runner enregistre `output_truncated=true` et force le contrôle du cas à l'échec avec `output_limit:fail`. Une sortie tronquée ne peut donc jamais devenir un faux PASS.
+
+Le benchmark complet conserve le comportement de raisonnement natif des modèles. Les plafonds bornent la génération mais ne désactivent pas le thinking d'un modèle qui l'active par défaut.
+
 ## Exécution
 
 Qualification complète :
@@ -66,15 +78,17 @@ Qualification complète :
 .\menu.ps1 -Action qualification
 ```
 
+Passe rapide 8K uniquement via le même centre de contrôle :
+
+```powershell
+.\menu.ps1 -Action qualification -Quick -DryRun
+.\menu.ps1 -Action qualification -Quick
+```
+
 Runner direct :
 
 ```powershell
 .\scripts\windows\07_run_qualification.ps1
-```
-
-Passe rapide 8K uniquement :
-
-```powershell
 .\scripts\windows\07_run_qualification.ps1 -Quick
 ```
 
@@ -84,17 +98,30 @@ La sélection individuelle de candidats n'existe plus : les trois modèles sont 
 
 Les scripts PowerShell obtiennent les modèles via `scripts/20_list_models.py`, alimenté par `config/v1/model_catalog.yaml`. Une qualification ne peut donc pas utiliser une flotte différente du routage sans modifier explicitement les contrats.
 
-## Mesures
+## Mesures et progression
 
-Le runner Ollama enregistre notamment :
+Après chaque cas, le runner affiche une ligne opérateur avec :
+
+- `PASS`, `CHECK_FAIL` ou `ERROR` ;
+- durée murale du cas ;
+- TTFT ;
+- tokens/s ;
+- nombre de tokens générés ;
+- estimation du temps restant fondée sur la moyenne des cas déjà terminés.
+
+Le JSON de preuve enregistre notamment :
 
 - `ttft_ms` ;
 - `wall_ms` ;
 - `eval_count` ;
 - `eval_duration_ns` ;
 - `tokens_per_second` ;
+- `done_reason` ;
+- `output_truncated` ;
+- `max_output_tokens` ;
 - contexte demandé ;
 - résultat de chaque contrôle ;
+- durée murale totale ;
 - sortie brute dans les preuves locales hors Git.
 
 La comparaison B580 complète ces données avec VRAM, RAM, stabilité, erreurs et tool-calling lorsqu'ils sont réellement observés.
