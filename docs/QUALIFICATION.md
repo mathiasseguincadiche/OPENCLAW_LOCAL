@@ -33,6 +33,8 @@ Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer l
 
 Le parcours complet installe le runtime, configure le stockage local, télécharge les trois modèles, configure OpenClaw et le Gateway puis vérifie le parcours nominal.
 
+Le smoke-test Ollama utilise l'API locale `/api/generate` avec `stream=false`. Il ne passe plus par `ollama run`, afin d'éviter les spinners et séquences ANSI dans les transcripts. Pour Qwen3.8 uniquement, le thinking est désactivé pendant ce smoke-test minimal : cette étape vérifie que le runtime répond, pas sa capacité de raisonnement profond.
+
 Après la première installation, fermer puis rouvrir PowerShell.
 
 ## 2. Vérification du runtime
@@ -49,6 +51,10 @@ Avant de poursuivre, vérifier notamment :
 - trois modèles présents ;
 - huit agents configurés ;
 - aucun cloud requis.
+
+### VRAM Windows
+
+`Win32_VideoController.AdapterRAM` est conservé comme information secondaire uniquement : ce champ CIM peut tronquer ou mal représenter la mémoire des GPU modernes. L'audit tente d'abord de lire `HardwareInformation.MemorySize` dans le registre Windows et n'affiche une valeur de VRAM comme fiable que si cette source est disponible. Sinon la VRAM est explicitement marquée comme non déterminée de façon fiable.
 
 ## 3. Gate OpenClaw E2E
 
@@ -77,15 +83,21 @@ Passe complète :
 .\menu.ps1 -Action qualification
 ```
 
-Ou directement :
-
-```powershell
-.\scripts\windows\07_run_qualification.ps1
-```
+Cette passe couvre **72 cas** : 3 modèles × 2 contextes (8192 et 16384) × 12 scénarios.
 
 Passe rapide 8K uniquement :
 
 ```powershell
+.\menu.ps1 -Action qualification -Quick -DryRun
+.\menu.ps1 -Action qualification -Quick
+```
+
+Cette passe couvre **36 cas** : les mêmes 3 modèles et 12 scénarios, uniquement à 8192 tokens. Elle sert au diagnostic et aux itérations courantes ; elle ne remplace pas la passe complète pour une décision de qualification.
+
+Ou directement :
+
+```powershell
+.\scripts\windows\07_run_qualification.ps1
 .\scripts\windows\07_run_qualification.ps1 -Quick
 ```
 
@@ -95,11 +107,15 @@ Le parcours enchaîne :
 
 1. audit host/runtime ;
 2. lecture des trois modèles `required` depuis `model_catalog.yaml` ;
-3. smoke test de chacun ;
+3. smoke test API de chacun ;
 4. inventaire matériel/runtime ;
 5. benchmark selon `qualification_policy.yaml` ;
 6. contextes 8K et 16K en passe complète ;
 7. évaluation des seuils versionnés.
+
+Chaque scénario possède une limite `max_output_tokens`, transmise à Ollama via `num_predict`. Une génération arrêtée par cette limite est enregistrée comme tronquée et ne peut pas devenir un faux PASS. Le benchmark complet ne désactive pas le raisonnement natif des modèles.
+
+Après chaque scénario, l'opérateur voit le statut, la durée, le TTFT, les tokens/s, le nombre de tokens générés et une estimation du temps restant.
 
 ## 5. Mesures à collecter
 
@@ -108,7 +124,7 @@ Pour chaque modèle/backend pertinent :
 - TTFT ;
 - tokens/s ;
 - durée murale ;
-- VRAM ;
+- VRAM fiable ou explicitement inconnue ;
 - RAM ;
 - stabilité ;
 - erreurs ;
