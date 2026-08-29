@@ -127,17 +127,17 @@ function Install-IntelSyclRuntime {
                 )
                 return $Existing
             }
-            Write-Warning 'Dérive d’intégrité du runtime Intel SYCL; réextraction depuis l’archive vérifiée.'
+            Write-Warning "Dérive d'intégrité du runtime Intel SYCL; réextraction depuis l'archive vérifiée."
         }
         catch {
             Write-Warning (
                 'Manifeste Intel SYCL illisible ou incohérent; ' +
-                'réextraction depuis l’archive vérifiée.'
+                "réextraction depuis l'archive vérifiée."
             )
         }
     }
     elseif ($Existing) {
-        Write-Warning 'Runtime Intel SYCL sans manifeste d’intégrité; réextraction propre.'
+        Write-Warning "Runtime Intel SYCL sans manifeste d'intégrité; réextraction propre."
     }
 
     if (Test-Path -LiteralPath $Paths.VersionRoot) {
