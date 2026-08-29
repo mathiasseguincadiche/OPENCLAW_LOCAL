@@ -5,18 +5,17 @@ from typing import Any
 
 from clawlocal.config import load_contract
 
+SUPPORTED_BACKENDS = ("ollama-vulkan", "llama-cpp-sycl")
+INTEL_SYCL_PROVIDER_ID = "intel-sycl"
 
-def _local_ref(alias: str, catalog: dict[str, Any]) -> str:
+
+def _backend_ref(alias: str, catalog: dict[str, Any], backend_id: str) -> str:
     model = catalog["models"][alias]
-    provider = model["provider"]
-    if provider == "ollama":
+    if backend_id == "ollama-vulkan":
         return f"ollama/{model['runtime_id']}"
-    if provider == "llama_cpp":
-        return f"llamacpp/{model['runtime_id']}"
-    raise ValueError(
-        f"Le modèle {alias} utilise {provider}; "
-        "import/backend et qualification explicites requis"
-    )
+    if backend_id == "llama-cpp-sycl":
+        return f"{INTEL_SYCL_PROVIDER_ID}/{model['runtime_id']}"
+    raise ValueError(f"Backend local non supporté pour OpenClaw: {backend_id}")
 
 
 def _agent_tools(
@@ -65,22 +64,98 @@ def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
     return models
 
 
-def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
-    """Build the deterministic OpenClaw patch for the performance-only fleet."""
+def _intel_sycl_models(
+    catalog: dict[str, Any],
+    context_tokens: int,
+) -> list[dict[str, Any]]:
+    models: list[dict[str, Any]] = []
+    for model in catalog["models"].values():
+        if not model.get("required"):
+            continue
+        runtime_id = str(model["runtime_id"])
+        models.append(
+            {
+                "id": runtime_id,
+                "name": runtime_id,
+                # Le premier parcours SYCL est volontairement texte uniquement.
+                # Image/PDF restent sur Ollama jusqu'à qualification mmproj dédiée.
+                "input": ["text"],
+                "contextWindow": context_tokens,
+                "contextTokens": context_tokens,
+                "maxTokens": 2048,
+                "cost": {
+                    "input": 0,
+                    "output": 0,
+                    "cacheRead": 0,
+                    "cacheWrite": 0,
+                },
+                "compat": {"toolSchemaProfile": "llamacpp"},
+            }
+        )
+    return models
+
+
+def _ollama_provider(catalog: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "baseUrl": "http://127.0.0.1:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama",
+        "timeoutSeconds": 300,
+        "models": _ollama_models(catalog),
+    }
+
+
+def _model_providers(
+    catalog: dict[str, Any],
+    backends: dict[str, Any],
+    backend_id: str,
+) -> dict[str, Any]:
+    providers: dict[str, Any] = {"ollama": _ollama_provider(catalog)}
+    if backend_id == "ollama-vulkan":
+        return providers
+
+    backend = backends["backends"][backend_id]
+    context_tokens = int(backend["router"]["context_tokens"])
+    providers[INTEL_SYCL_PROVIDER_ID] = {
+        "baseUrl": str(backend["endpoint"]),
+        "apiKey": "intel-sycl-local",
+        "api": "openai-completions",
+        "timeoutSeconds": 300,
+        "models": _intel_sycl_models(catalog, context_tokens),
+    }
+    return providers
+
+
+def build_openclaw_patch(
+    platform_root: Path,
+    backend_id: str = "ollama-vulkan",
+) -> dict[str, Any]:
+    """Build the deterministic OpenClaw patch for one explicit local backend."""
+    if backend_id not in SUPPORTED_BACKENDS:
+        raise ValueError(
+            f"Backend OpenClaw invalide: {backend_id}; "
+            f"attendus: {', '.join(SUPPORTED_BACKENDS)}"
+        )
+
     catalog = load_contract("model_catalog.yaml")
     routing = load_contract("model_routing.yaml")
     tool_policy = load_contract("tool_policy.yaml")
     web_policy = load_contract("web_policy.yaml")
     ingestion_policy = load_contract("document_ingestion_policy.yaml")
+    backends = load_contract("runtime_backends.yaml")
+
+    configured_backends = backends.get("backends", {})
+    if backend_id not in configured_backends:
+        raise ValueError(f"Backend absent de runtime_backends.yaml: {backend_id}")
 
     workspaces_root = platform_root / "workspaces"
     agent_list: list[dict[str, Any]] = []
     for agent_id, route in routing["agents"].items():
-        primary = _local_ref(route["local_primary"], catalog)
+        primary = _backend_ref(route["local_primary"], catalog, backend_id)
         fallbacks: list[str] = []
         fallback_alias = route.get("local_fallback")
         if fallback_alias:
-            fallbacks.append(_local_ref(fallback_alias, catalog))
+            fallbacks.append(_backend_ref(fallback_alias, catalog, backend_id))
         agent_list.append(
             {
                 "id": agent_id,
@@ -96,10 +171,15 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
             }
         )
 
-    qwen = catalog["models"]["qwen-max"]["runtime_id"]
-    gemma = catalog["models"]["gemma-deep"]["runtime_id"]
-    qwen_ref = f"ollama/{qwen}"
-    gemma_ref = f"ollama/{gemma}"
+    qwen = str(catalog["models"]["qwen-max"]["runtime_id"])
+    gemma = str(catalog["models"]["gemma-deep"]["runtime_id"])
+    qwen_text_ref = _backend_ref("qwen-max", catalog, backend_id)
+    gemma_text_ref = _backend_ref("gemma-deep", catalog, backend_id)
+    # Le multimodal reste sciemment sur le backend déjà validé. Les blobs GGUF
+    # texte ne suffisent pas à prouver la présence/compatibilité des projecteurs.
+    qwen_multimodal_ref = f"ollama/{qwen}"
+    gemma_multimodal_ref = f"ollama/{gemma}"
+
     web = web_policy["nominal_path"]
     pdf_policy = ingestion_policy.get("formats", {}).get("pdf", {})
     return {
@@ -108,30 +188,22 @@ def build_openclaw_patch(platform_root: Path) -> dict[str, Any]:
             "bind": "loopback",
         },
         "models": {
-            "providers": {
-                "ollama": {
-                    "baseUrl": "http://127.0.0.1:11434",
-                    "apiKey": "ollama-local",
-                    "api": "ollama",
-                    "timeoutSeconds": 300,
-                    "models": _ollama_models(catalog),
-                }
-            }
+            "providers": _model_providers(catalog, backends, backend_id),
         },
         "agents": {
             "defaults": {
                 "skipBootstrap": True,
                 "model": {
-                    "primary": qwen_ref,
-                    "fallbacks": [gemma_ref],
+                    "primary": qwen_text_ref,
+                    "fallbacks": [gemma_text_ref],
                 },
                 "imageModel": {
-                    "primary": qwen_ref,
-                    "fallbacks": [gemma_ref],
+                    "primary": qwen_multimodal_ref,
+                    "fallbacks": [gemma_multimodal_ref],
                 },
                 "pdfModel": {
-                    "primary": qwen_ref,
-                    "fallbacks": [gemma_ref],
+                    "primary": qwen_multimodal_ref,
+                    "fallbacks": [gemma_multimodal_ref],
                 },
                 "pdfMaxBytesMb": int(pdf_policy.get("max_bytes_mb", 50)),
                 "pdfMaxPages": int(pdf_policy.get("max_pages_per_tool_call", 20)),
