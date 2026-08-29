@@ -26,7 +26,7 @@ Describe 'Backend Intel Arc B580 SYCL' {
         $Helper | Should -Match 'server_sha256'
         $Helper | Should -Match 'runtime-manifest\.json'
         $Helper | Should -Match 'ONEAPI_DEVICE_SELECTOR'
-        $Helper | Should -Match 'level_zero'
+        $Helper | Should -Match 'oneapi_device_selector'
         $Helper | Should -Match '--list-devices'
         $Helper | Should -Match 'Arc.*B580'
         $Helper | Should -Match 'DriverVersion'
