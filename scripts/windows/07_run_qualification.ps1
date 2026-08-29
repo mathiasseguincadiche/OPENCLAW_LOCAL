@@ -22,12 +22,18 @@ function Assert-ExitCode([string]$Step) {
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Qualification locale stricte, sans appel cloud :'
-    Write-Host '  1. audit host'
-    Write-Host '  2. smoke tests des trois modèles required du catalogue'
+    Write-Host '  1. audit host avec VRAM fiable si disponible dans le registre Windows'
+    Write-Host '  2. smoke tests API sans spinner des trois modèles required du catalogue'
     Write-Host '  3. inventaire matériel/runtime'
-    Write-Host '  4. benchmark des trois modèles selon qualification_policy.yaml'
-    Write-Host '  5. évaluation des seuils; aucune promotion automatique'
-    if ($Quick) { Write-Host '  mode QUICK: contexte 8192 uniquement' }
+    Write-Host '  4. benchmark borné des trois modèles selon qualification_policy.yaml'
+    Write-Host '  5. progression avec durée, TTFT, tokens/s et estimation du restant'
+    Write-Host '  6. évaluation des seuils; aucune promotion automatique'
+    if ($Quick) {
+        Write-Host '  mode QUICK: contexte 8192 uniquement, 36 cas avec devops-v2'
+    }
+    else {
+        Write-Host '  mode COMPLET: contextes 8192 + 16384, 72 cas avec devops-v2'
+    }
     exit 0
 }
 
