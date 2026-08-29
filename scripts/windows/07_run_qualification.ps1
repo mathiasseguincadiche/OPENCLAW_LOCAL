@@ -27,11 +27,12 @@ if ($DryRun) {
     Write-Host '  3. inventaire matériel/runtime'
     Write-Host '  4. benchmark borné des trois modèles selon qualification_policy.yaml'
     Write-Host '  5. progression avec durée, TTFT, tokens/s et estimation du restant'
-    Write-Host '  6. évaluation des seuils; aucune promotion automatique'
     if ($Quick) {
+        Write-Host '  6. diagnostic automatique 8K uniquement; aucune qualification/promotion'
         Write-Host '  mode QUICK: contexte 8192, 36 cas, thinking Qwen désactivé'
     }
     else {
+        Write-Host '  6. évaluation complète des seuils; aucune promotion automatique'
         Write-Host '  mode COMPLET: contextes 8192 + 16384, 72 cas, thinking Qwen natif et borné'
     }
     exit 0
@@ -60,8 +61,15 @@ Assert-ExitCode 'Inventaire'
 & $Benchmark -Quick:$Quick
 Assert-ExitCode 'Benchmark local'
 
+if ($Quick) {
+    & python $Evaluate --quick
+    Assert-ExitCode 'Évaluation diagnostic rapide 8K'
+    Write-Host 'VERDICT: QUICK_DIAGNOSTIC_PASS; PASSE COMPLETE 8K+16K ENCORE REQUISE POUR QUALIFICATION.'
+    exit 0
+}
+
 & python $Evaluate
-Assert-ExitCode 'Évaluation automatique'
+Assert-ExitCode 'Évaluation automatique complète'
 
 Write-Host 'VERDICT: GATE AUTOMATIQUE PASSÉ POUR LES TROIS MODÈLES; QUALIFICATION MANUELLE ENCORE REQUISE.'
 exit 0
