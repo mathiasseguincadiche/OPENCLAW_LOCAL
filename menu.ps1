@@ -3,12 +3,15 @@ param(
     [ValidateSet(
         'menu', 'install-core', 'install-full', 'audit', 'configure-local', 'models',
         'configure-openclaw', 'deploy-agents', 'verify', 'benchmark', 'inventory',
-        'e2e', 'qualification', 'team', 'docs', 'logs'
+        'e2e', 'qualification', 'intel-sycl-setup', 'intel-sycl-stop',
+        'intel-sycl-verify', 'intel-sycl-compare', 'team', 'docs', 'logs'
     )]
     [string]$Action = 'menu',
     [switch]$DryRun,
     [switch]$Quick,
     [switch]$AllowRuntimeDrift,
+    [ValidateSet('ollama-vulkan', 'llama-cpp-sycl')]
+    [string]$Backend = 'ollama-vulkan',
     [switch]$NoLog
 )
 
@@ -30,6 +33,10 @@ $Scripts = @{
     inventory = Join-Path $RepoRoot 'scripts\windows\06_collect_inventory.ps1'
     e2e = Join-Path $RepoRoot 'scripts\windows\10_test_openclaw_e2e.ps1'
     qualification = Join-Path $RepoRoot 'scripts\windows\07_run_qualification.ps1'
+    'intel-sycl-setup' = Join-Path $RepoRoot 'scripts\windows\12_setup_intel_sycl.ps1'
+    'intel-sycl-stop' = Join-Path $RepoRoot 'scripts\windows\13_stop_intel_sycl.ps1'
+    'intel-sycl-verify' = Join-Path $RepoRoot 'scripts\windows\14_verify_intel_sycl.ps1'
+    'intel-sycl-compare' = Join-Path $RepoRoot 'scripts\windows\15_compare_intel_backends.ps1'
 }
 
 function Get-PlatformRoot {
@@ -118,7 +125,8 @@ function Show-Title {
     Write-Host '============================================================================== '
     Write-Host ' OPENCLAW_LOCAL — CENTRE DE CONTRÔLE LOCAL-FIRST WINDOWS 11 PRO'
     Write-Host '============================================================================== '
-    Write-Host ' Nominal : OpenClaw + Ollama natifs Windows'
+    Write-Host ' Nominal : OpenClaw + Ollama/Vulkan natifs Windows'
+    Write-Host ' Intel   : llama.cpp/SYCL/Level Zero candidat B580, promotion explicite uniquement'
     Write-Host ' Cloud   : escalade explicite uniquement, jamais fallback silencieux'
 }
 
@@ -128,6 +136,8 @@ function Invoke-Action {
         [switch]$DryRunMode,
         [switch]$QuickMode,
         [switch]$AllowRuntimeDriftMode,
+        [ValidateSet('ollama-vulkan', 'llama-cpp-sycl')]
+        [string]$BackendMode = 'ollama-vulkan',
         [switch]$NoLogMode
     )
 
@@ -160,15 +170,15 @@ function Invoke-Action {
     }
 
     try {
-        # $LASTEXITCODE peut conserver l'état d'une commande native antérieure,
-        # y compris une commande utilisée par l'infrastructure de transcript.
-        # Une action PowerShell pure comme audit ne doit pas hériter de cet état.
         $global:LASTEXITCODE = 0
         if ($Name -in @('install-core', 'install-full')) {
             & $Script -DryRun:$DryRunMode -AllowRuntimeDrift:$AllowRuntimeDriftMode
         }
-        elseif ($Name -in @('benchmark', 'qualification')) {
+        elseif ($Name -in @('benchmark', 'qualification', 'intel-sycl-compare')) {
             & $Script -DryRun:$DryRunMode -Quick:$QuickMode
+        }
+        elseif ($Name -eq 'configure-openclaw') {
+            & $Script -DryRun:$DryRunMode -Backend $BackendMode
         }
         else {
             & $Script -DryRun:$DryRunMode
@@ -188,7 +198,7 @@ function Invoke-Action {
 if ($Action -ne 'menu') {
     Show-Title
     Invoke-Action -Name $Action -DryRunMode:$DryRun -QuickMode:$Quick `
-        -AllowRuntimeDriftMode:$AllowRuntimeDrift -NoLogMode:$NoLog
+        -AllowRuntimeDriftMode:$AllowRuntimeDrift -BackendMode $Backend -NoLogMode:$NoLog
     exit 0
 }
 
@@ -200,7 +210,7 @@ while ($true) {
 3) Audit sans mutation
 4) Configurer/vérifier Ollama local
 5) Télécharger les modèles locaux de référence
-6) Générer/appliquer la configuration OpenClaw
+6) Générer/appliquer la configuration OpenClaw (paramètre -Backend pour SYCL)
 7) Déployer les 8 workspaces agents
 8) Vérifier l'inférence locale Ollama
 9) Lancer le benchmark (utiliser -Quick pour 8K uniquement)
@@ -210,25 +220,33 @@ while ($true) {
 13) Afficher les contrats de l'équipe IA
 14) Afficher la documentation
 15) Afficher les derniers logs et preuves
+16) Installer/démarrer Intel B580 llama.cpp SYCL/Level Zero
+17) Vérifier Intel B580 SYCL + trois modèles
+18) Comparer Ollama/Vulkan vs Intel SYCL (utiliser -Quick pour diagnostic court)
+19) Arrêter le serveur Intel SYCL
 0) Quitter
 '@ | Write-Host
 
     switch (Read-Host 'Choix') {
-        '1' { Invoke-Action -Name 'install-full' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift -NoLogMode:$NoLog }
-        '2' { Invoke-Action -Name 'install-core' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift -NoLogMode:$NoLog }
-        '3' { Invoke-Action -Name 'audit' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '4' { Invoke-Action -Name 'configure-local' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '5' { Invoke-Action -Name 'models' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '6' { Invoke-Action -Name 'configure-openclaw' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '7' { Invoke-Action -Name 'deploy-agents' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '8' { Invoke-Action -Name 'verify' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '9' { Invoke-Action -Name 'benchmark' -DryRunMode:$DryRun -QuickMode:$Quick -NoLogMode:$NoLog }
-        '10' { Invoke-Action -Name 'inventory' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '11' { Invoke-Action -Name 'e2e' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '12' { Invoke-Action -Name 'qualification' -DryRunMode:$DryRun -QuickMode:$Quick -NoLogMode:$NoLog }
-        '13' { Invoke-Action -Name 'team' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '14' { Invoke-Action -Name 'docs' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '15' { Invoke-Action -Name 'logs' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '1' { Invoke-Action -Name 'install-full' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift -BackendMode $Backend -NoLogMode:$NoLog }
+        '2' { Invoke-Action -Name 'install-core' -DryRunMode:$DryRun -AllowRuntimeDriftMode:$AllowRuntimeDrift -BackendMode $Backend -NoLogMode:$NoLog }
+        '3' { Invoke-Action -Name 'audit' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '4' { Invoke-Action -Name 'configure-local' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '5' { Invoke-Action -Name 'models' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '6' { Invoke-Action -Name 'configure-openclaw' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '7' { Invoke-Action -Name 'deploy-agents' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '8' { Invoke-Action -Name 'verify' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '9' { Invoke-Action -Name 'benchmark' -DryRunMode:$DryRun -QuickMode:$Quick -BackendMode $Backend -NoLogMode:$NoLog }
+        '10' { Invoke-Action -Name 'inventory' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '11' { Invoke-Action -Name 'e2e' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '12' { Invoke-Action -Name 'qualification' -DryRunMode:$DryRun -QuickMode:$Quick -BackendMode $Backend -NoLogMode:$NoLog }
+        '13' { Invoke-Action -Name 'team' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '14' { Invoke-Action -Name 'docs' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '15' { Invoke-Action -Name 'logs' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '16' { Invoke-Action -Name 'intel-sycl-setup' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '17' { Invoke-Action -Name 'intel-sycl-verify' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '18' { Invoke-Action -Name 'intel-sycl-compare' -DryRunMode:$DryRun -QuickMode:$Quick -BackendMode $Backend -NoLogMode:$NoLog }
+        '19' { Invoke-Action -Name 'intel-sycl-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }
