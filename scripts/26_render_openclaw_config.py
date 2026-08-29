@@ -8,13 +8,18 @@ from clawlocal.openclaw_config import SUPPORTED_BACKENDS, build_openclaw_patch
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Génère le patch OpenClaw local-first versionné.")
+    parser = argparse.ArgumentParser(
+        description="Génère le patch OpenClaw local-first versionné."
+    )
     parser.add_argument("--platform-root", required=True, type=Path)
     parser.add_argument(
         "--backend",
         choices=SUPPORTED_BACKENDS,
         default="ollama-vulkan",
-        help="Backend texte local explicite; le multimodal reste sur Ollama tant que SYCL n'est pas qualifié.",
+        help=(
+            "Backend texte local explicite; le multimodal reste sur Ollama "
+            "tant que SYCL n'est pas qualifié."
+        ),
     )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
