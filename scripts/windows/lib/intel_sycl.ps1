@@ -25,7 +25,7 @@ function Get-IntelSyclRuntimeLock {
     return $Lock.llama_cpp_sycl
 }
 
-function Get-IntelSyclPaths {
+function Get-IntelSyclPathSet {
     param(
         [Parameter(Mandatory)][string]$PlatformRoot,
         [Parameter(Mandatory)]$RuntimeLock
@@ -41,6 +41,7 @@ function Get-IntelSyclPaths {
         StateRoot = $StateRoot
         ProofRoot = $ProofRoot
         Archive = Join-Path $Root ([string]$RuntimeLock.asset)
+        Manifest = Join-Path $StateRoot 'runtime-manifest.json'
         Preset = Join-Path $StateRoot 'models.ini'
         ProcessState = Join-Path $StateRoot 'server.json'
         StdoutLog = Join-Path $ProofRoot 'llama-server.stdout.log'
@@ -62,6 +63,20 @@ function Get-IntelSyclServerBinary {
     return $null
 }
 
+function Get-IntelArcB580DriverInfo {
+    $Adapter = Get-CimInstance Win32_VideoController -ErrorAction Stop |
+        Where-Object { [string]$_.Name -match '(?i)Intel.*Arc.*B580|Arc.*B580.*Intel' } |
+        Select-Object -First 1
+    if (-not $Adapter) {
+        throw 'Intel Arc B580 absente de Win32_VideoController.'
+    }
+    return [pscustomobject]@{
+        name = [string]$Adapter.Name
+        driver_version = [string]$Adapter.DriverVersion
+        pnp_device_id = [string]$Adapter.PNPDeviceID
+    }
+}
+
 function Install-IntelSyclRuntime {
     param(
         [Parameter(Mandatory)][string]$RepoRoot,
@@ -69,29 +84,61 @@ function Install-IntelSyclRuntime {
     )
 
     $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
-    $Paths = Get-IntelSyclPaths -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
+    $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
     New-Item -ItemType Directory -Path $Paths.Root -Force | Out-Null
     New-Item -ItemType Directory -Path $Paths.StateRoot -Force | Out-Null
     New-Item -ItemType Directory -Path $Paths.ProofRoot -Force | Out-Null
-
-    $Existing = Get-IntelSyclServerBinary -VersionRoot $Paths.VersionRoot
-    if ($Existing) {
-        Write-Host "OK  llama.cpp SYCL $($RuntimeLock.release) déjà installé: $Existing"
-        return $Existing
-    }
 
     if (-not (Test-Path -LiteralPath $Paths.Archive)) {
         Write-Host "Téléchargement llama.cpp SYCL $($RuntimeLock.release)..."
         Invoke-WebRequest -Uri ([string]$RuntimeLock.url) -OutFile $Paths.Archive -UseBasicParsing
     }
 
-    $ActualHash = (Get-FileHash -LiteralPath $Paths.Archive -Algorithm SHA256).Hash.ToLowerInvariant()
-    $ExpectedHash = ([string]$RuntimeLock.sha256).ToLowerInvariant()
-    if ($ActualHash -ne $ExpectedHash) {
+    $ActualArchiveHash = (
+        Get-FileHash -LiteralPath $Paths.Archive -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+    $ExpectedArchiveHash = ([string]$RuntimeLock.sha256).ToLowerInvariant()
+    if ($ActualArchiveHash -ne $ExpectedArchiveHash) {
         Remove-Item -LiteralPath $Paths.Archive -Force -ErrorAction SilentlyContinue
-        throw "SHA-256 llama.cpp SYCL invalide. Attendu=$ExpectedHash Reçu=$ActualHash"
+        throw (
+            'SHA-256 llama.cpp SYCL invalide. ' +
+            "Attendu=$ExpectedArchiveHash Reçu=$ActualArchiveHash"
+        )
     }
-    Write-Host "OK  SHA-256 llama.cpp SYCL vérifié: $ActualHash"
+    Write-Host "OK  SHA-256 archive llama.cpp SYCL vérifié: $ActualArchiveHash"
+
+    $Existing = Get-IntelSyclServerBinary -VersionRoot $Paths.VersionRoot
+    if ($Existing -and (Test-Path -LiteralPath $Paths.Manifest)) {
+        try {
+            $Manifest = Get-Content -Raw -LiteralPath $Paths.Manifest | ConvertFrom-Json
+            $CurrentServerHash = (
+                Get-FileHash -LiteralPath $Existing -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            $ManifestServerHash = ([string]$Manifest.server_sha256).ToLowerInvariant()
+            $ManifestArchiveHash = ([string]$Manifest.archive_sha256).ToLowerInvariant()
+            if (
+                [string]$Manifest.release -eq [string]$RuntimeLock.release -and
+                $ManifestArchiveHash -eq $ExpectedArchiveHash -and
+                $CurrentServerHash -eq $ManifestServerHash
+            ) {
+                Write-Host (
+                    "OK  Runtime Intel SYCL $($RuntimeLock.release) intact: " +
+                    "$Existing (SHA-256=$CurrentServerHash)"
+                )
+                return $Existing
+            }
+            Write-Warning 'Dérive d’intégrité du runtime Intel SYCL; réextraction depuis l’archive vérifiée.'
+        }
+        catch {
+            Write-Warning (
+                'Manifeste Intel SYCL illisible ou incohérent; ' +
+                'réextraction depuis l’archive vérifiée.'
+            )
+        }
+    }
+    elseif ($Existing) {
+        Write-Warning 'Runtime Intel SYCL sans manifeste d’intégrité; réextraction propre.'
+    }
 
     if (Test-Path -LiteralPath $Paths.VersionRoot) {
         Remove-Item -LiteralPath $Paths.VersionRoot -Recurse -Force
@@ -103,11 +150,27 @@ function Install-IntelSyclRuntime {
     if (-not $Binary) {
         throw "llama-server.exe absent après extraction de $($RuntimeLock.asset)."
     }
-    Write-Host "OK  Runtime Intel SYCL installé: $Binary"
+    $ServerHash = (
+        Get-FileHash -LiteralPath $Binary -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+    $InstallManifest = [ordered]@{
+        schema_version = '1.0.0'
+        release = [string]$RuntimeLock.release
+        release_commit = [string]$RuntimeLock.release_commit
+        archive = [string]$RuntimeLock.asset
+        archive_sha256 = $ExpectedArchiveHash
+        server_sha256 = $ServerHash
+        binary = $Binary
+        installed_at = [DateTimeOffset]::UtcNow.ToString('o')
+    }
+    $InstallManifest | ConvertTo-Json -Depth 5 |
+        Set-Content -LiteralPath $Paths.Manifest -Encoding utf8
+    Write-Host "OK  Runtime Intel SYCL installé et manifesté: $Binary"
+    Write-Host "OK  SHA-256 llama-server.exe: $ServerHash"
     return $Binary
 }
 
-function Get-RequiredOllamaModels {
+function Get-RequiredOllamaModelList {
     param([Parameter(Mandatory)][string]$RepoRoot)
 
     $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
@@ -115,7 +178,11 @@ function Get-RequiredOllamaModels {
     if ($LASTEXITCODE -ne 0) {
         throw 'Impossible de lire les modèles required depuis model_catalog.yaml.'
     }
-    $Models = @($Models | Where-Object { $_ -and $_.Trim() } | ForEach-Object { $_.Trim() })
+    $Models = @(
+        $Models |
+            Where-Object { $_ -and $_.Trim() } |
+            ForEach-Object { $_.Trim() }
+    )
     if ($Models.Count -ne 3) {
         throw "La flotte Intel SYCL exige exactement 3 modèles; détectés: $($Models.Count)."
     }
@@ -129,13 +196,18 @@ function Resolve-OllamaGgufPath {
     if ($LASTEXITCODE -ne 0) {
         throw "Impossible de lire le Modelfile Ollama pour $Model."
     }
-    $FromLine = $Output | Where-Object { [string]$_ -match '^\s*FROM\s+' } | Select-Object -First 1
+    $FromLine = $Output |
+        Where-Object { [string]$_ -match '^\s*FROM\s+' } |
+        Select-Object -First 1
     if (-not $FromLine) {
         throw "Ligne FROM absente du Modelfile Ollama pour $Model."
     }
     $Raw = ([string]$FromLine -replace '^\s*FROM\s+', '').Trim().Trim('"')
     if (-not (Test-Path -LiteralPath $Raw)) {
-        throw "Le modèle Ollama $Model ne référence pas un blob GGUF local exploitable: $Raw"
+        throw (
+            "Le modèle Ollama $Model ne référence pas un blob GGUF local " +
+            "exploitable: $Raw"
+        )
     }
     return (Resolve-Path -LiteralPath $Raw).Path
 }
@@ -146,7 +218,7 @@ function New-IntelSyclModelPreset {
         [Parameter(Mandatory)][string]$PresetPath
     )
 
-    $Models = Get-RequiredOllamaModels -RepoRoot $RepoRoot
+    $Models = Get-RequiredOllamaModelList -RepoRoot $RepoRoot
     $Lines = @(
         'version = 1',
         '',
@@ -185,12 +257,21 @@ function Test-IntelArcB580SyclDevice {
         }
         $Text = $Output -join "`n"
         if ($Text -notmatch '(?im)\bSYCL0\b') {
-            throw "Aucun device SYCL0 détecté sous ONEAPI_DEVICE_SELECTOR=$($RuntimeLock.oneapi_device_selector)."
+            throw (
+                'Aucun device SYCL0 détecté sous ' +
+                "ONEAPI_DEVICE_SELECTOR=$($RuntimeLock.oneapi_device_selector)."
+            )
         }
         if ($Text -notmatch '(?im)Intel.*Arc.*B580|Arc.*B580.*Intel') {
-            throw "SYCL est présent mais la B580 n'est pas identifiée dans la liste des devices.`n$Text"
+            throw (
+                "SYCL est présent mais la B580 n'est pas identifiée dans " +
+                "la liste des devices.`n$Text"
+            )
         }
-        Write-Host "OK  Intel Arc B580 détectée via SYCL/Level Zero ($($RuntimeLock.oneapi_device_selector))."
+        Write-Host (
+            'OK  Intel Arc B580 détectée via SYCL/Level Zero ' +
+            "($($RuntimeLock.oneapi_device_selector))."
+        )
         Write-Host $Text
         return $Text
     }
@@ -233,7 +314,8 @@ function Wait-IntelSyclApi {
     $Deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
         try {
-            $Response = Invoke-RestMethod -Method Get -Uri "$BaseUrl/models?reload=1" -TimeoutSec 5
+            $Response = Invoke-RestMethod -Method Get `
+                -Uri "$BaseUrl/models?reload=1" -TimeoutSec 5
             if ($Response.data) {
                 return $Response
             }
@@ -253,17 +335,37 @@ function Start-IntelSyclServer {
     )
 
     $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
-    $Paths = Get-IntelSyclPaths -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
+    $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
     $Binary = Get-IntelSyclServerBinary -VersionRoot $Paths.VersionRoot
     if (-not $Binary) {
         throw 'Runtime llama.cpp SYCL absent. Exécutez intel-sycl-setup.'
     }
+    $Driver = Get-IntelArcB580DriverInfo
+    Write-Host "OK  Pilote Intel B580 détecté: $($Driver.driver_version)"
     $null = Test-IntelArcB580SyclDevice -ServerBinary $Binary -RuntimeLock $RuntimeLock
     $Models = New-IntelSyclModelPreset -RepoRoot $RepoRoot -PresetPath $Paths.Preset
     Stop-IntelSyclServer -StatePath $Paths.ProcessState
 
+    $Listeners = @(
+        Get-NetTCPConnection -LocalPort ([int]$RuntimeLock.listen_port) `
+            -State Listen -ErrorAction SilentlyContinue
+    )
+    if ($Listeners.Count -gt 0) {
+        $OwnerIds = @(
+            $Listeners |
+                ForEach-Object { [int]$_.OwningProcess } |
+                Sort-Object -Unique
+        )
+        throw (
+            "Port $($RuntimeLock.listen_port) déjà occupé par PID=" +
+            ($OwnerIds -join ',') +
+            '. Aucun processus non suivi ne sera réutilisé ni arrêté.'
+        )
+    }
+
     New-Item -ItemType Directory -Path $Paths.ProofRoot -Force | Out-Null
-    Remove-Item -LiteralPath $Paths.StdoutLog, $Paths.StderrLog -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Paths.StdoutLog, $Paths.StderrLog `
+        -Force -ErrorAction SilentlyContinue
 
     $Arguments = @(
         '--models-preset', $Paths.Preset,
@@ -306,20 +408,28 @@ function Start-IntelSyclServer {
         oneapi_device_selector = [string]$RuntimeLock.oneapi_device_selector
         models_max = [int]$RuntimeLock.models_max
         models = @($Models)
+        driver = $Driver
         stdout = $Paths.StdoutLog
         stderr = $Paths.StderrLog
     }
-    $State | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $Paths.ProcessState -Encoding utf8
+    $State | ConvertTo-Json -Depth 5 |
+        Set-Content -LiteralPath $Paths.ProcessState -Encoding utf8
 
     try {
-        $Api = Wait-IntelSyclApi -BaseUrl ([string]$RuntimeLock.endpoint) -TimeoutSeconds $TimeoutSeconds
+        $Api = Wait-IntelSyclApi -BaseUrl ([string]$RuntimeLock.endpoint) `
+            -TimeoutSeconds $TimeoutSeconds
+        if ($Process.HasExited) {
+            throw "llama-server Intel SYCL a quitté prématurément (code $($Process.ExitCode))."
+        }
     }
     catch {
         Stop-IntelSyclServer -StatePath $Paths.ProcessState
         $Tail = if (Test-Path -LiteralPath $Paths.StderrLog) {
             (Get-Content -LiteralPath $Paths.StderrLog -Tail 80) -join "`n"
         }
-        else { '<aucun stderr>' }
+        else {
+            '<aucun stderr>'
+        }
         throw "$($_.Exception.Message)`nDernières lignes llama-server:`n$Tail"
     }
 
@@ -330,12 +440,16 @@ function Start-IntelSyclServer {
             throw "Le routeur Intel SYCL n'annonce pas le modèle requis: $Model"
         }
     }
-    Write-Host "OK  Routeur llama.cpp Intel SYCL prêt PID=$($Process.Id) endpoint=$($RuntimeLock.endpoint)."
+    Write-Host (
+        "OK  Routeur llama.cpp Intel SYCL prêt PID=$($Process.Id) " +
+        "endpoint=$($RuntimeLock.endpoint)."
+    )
     return [pscustomobject]@{
         Process = $Process
         RuntimeLock = $RuntimeLock
         Paths = $Paths
         Models = $Models
+        Driver = $Driver
         Api = $Api
     }
 }
@@ -349,14 +463,22 @@ function Invoke-IntelSyclChatSmoke {
 
     $Body = @{
         model = $Model
-        messages = @(@{ role = 'user'; content = 'Réponds uniquement LOCAL_OK.' })
+        messages = @(
+            @{
+                role = 'user'
+                content = 'Réponds uniquement LOCAL_OK.'
+            }
+        )
         temperature = 0
         max_tokens = 16
         stream = $false
     } | ConvertTo-Json -Depth 8 -Compress
     $Started = [DateTimeOffset]::UtcNow
-    $Response = Invoke-RestMethod -Method Post -Uri "$BaseUrl/chat/completions" `
-        -ContentType 'application/json' -Body $Body -TimeoutSec $TimeoutSeconds
+    $Response = Invoke-RestMethod -Method Post `
+        -Uri "$BaseUrl/chat/completions" `
+        -ContentType 'application/json' `
+        -Body $Body `
+        -TimeoutSec $TimeoutSeconds
     $ElapsedMs = ([DateTimeOffset]::UtcNow - $Started).TotalMilliseconds
     $Content = [string]$Response.choices[0].message.content
     if ($Content -notmatch 'LOCAL_OK') {
@@ -366,9 +488,24 @@ function Invoke-IntelSyclChatSmoke {
     return [pscustomobject]@{
         model = $Model
         wall_ms = [math]::Round($ElapsedMs, 1)
-        prompt_tokens_per_second = if ($Timings) { $Timings.prompt_per_second } else { $null }
-        tokens_per_second = if ($Timings) { $Timings.predicted_per_second } else { $null }
-        predicted_tokens = if ($Timings) { $Timings.predicted_n } else { $null }
+        prompt_tokens_per_second = if ($Timings) {
+            $Timings.prompt_per_second
+        }
+        else {
+            $null
+        }
+        tokens_per_second = if ($Timings) {
+            $Timings.predicted_per_second
+        }
+        else {
+            $null
+        }
+        predicted_tokens = if ($Timings) {
+            $Timings.predicted_n
+        }
+        else {
+            $null
+        }
         finish_reason = [string]$Response.choices[0].finish_reason
         ok = $true
     }
