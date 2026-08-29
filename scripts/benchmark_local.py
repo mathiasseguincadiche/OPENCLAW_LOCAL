@@ -14,6 +14,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "config" / "v1"
 RESULTS = ROOT / "benchmarks" / "results"
+DEFAULT_MAX_OUTPUT_TOKENS = 512
+MAX_CONFIGURED_OUTPUT_TOKENS = 2048
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -125,21 +127,65 @@ def add_synthetic_context(prompt: str, target_chars: int) -> str:
     return "INVENTAIRE SYNTHÉTIQUE:\n" + "\n".join(rows) + "\n\nCONSIGNE:\n" + prompt
 
 
+def scenario_output_limit(
+    scenario: dict[str, Any],
+    suite: dict[str, Any],
+) -> int:
+    raw = scenario.get(
+        "max_output_tokens",
+        suite.get("default_max_output_tokens", DEFAULT_MAX_OUTPUT_TOKENS),
+    )
+    try:
+        limit = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"max_output_tokens invalide pour {scenario.get('id', '<inconnu>')}: {raw!r}"
+        ) from exc
+    if limit <= 0 or limit > MAX_CONFIGURED_OUTPUT_TOKENS:
+        raise ValueError(
+            f"max_output_tokens hors plage pour {scenario.get('id', '<inconnu>')}: "
+            f"{limit} (attendu 1..{MAX_CONFIGURED_OUTPUT_TOKENS})"
+        )
+    return limit
+
+
+def generation_payload(
+    runtime_id: str,
+    prompt: str,
+    context: int,
+    temperature: float,
+    num_predict: int,
+) -> dict[str, Any]:
+    return {
+        "model": runtime_id,
+        "prompt": prompt,
+        "stream": True,
+        "keep_alive": "15m",
+        "options": {
+            "num_ctx": context,
+            "temperature": temperature,
+            "num_predict": num_predict,
+        },
+    }
+
+
 def run_generation(
     endpoint: str,
     runtime_id: str,
     prompt: str,
     context: int,
     temperature: float,
+    num_predict: int,
     timeout: float,
 ) -> dict[str, Any]:
     body = json.dumps(
-        {
-            "model": runtime_id,
-            "prompt": prompt,
-            "stream": True,
-            "options": {"num_ctx": context, "temperature": temperature},
-        }
+        generation_payload(
+            runtime_id,
+            prompt,
+            context,
+            temperature,
+            num_predict,
+        )
     ).encode("utf-8")
     request = urllib.request.Request(
         f"{endpoint}/api/generate",
@@ -171,6 +217,8 @@ def run_generation(
     tokens_per_second = (
         eval_count / eval_duration * 1_000_000_000 if eval_duration else None
     )
+    done_reason = str(final.get("done_reason") or "") or None
+    output_truncated = bool(done_reason and done_reason.casefold() in {"length", "max_tokens"})
     return {
         "output": "".join(chunks).strip(),
         "ttft_ms": (first_token_at - started) * 1000 if first_token_at else None,
@@ -180,7 +228,26 @@ def run_generation(
         "tokens_per_second": tokens_per_second,
         "load_duration_ns": int(final.get("load_duration") or 0),
         "prompt_eval_count": int(final.get("prompt_eval_count") or 0),
+        "done_reason": done_reason,
+        "output_truncated": output_truncated,
     }
+
+
+def format_duration(seconds: float) -> str:
+    total = max(0, int(round(seconds)))
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:d}h{minutes:02d}m{secs:02d}s"
+    if minutes:
+        return f"{minutes:d}m{secs:02d}s"
+    return f"{secs:d}s"
+
+
+def _metric(value: object, *, digits: int = 1) -> str:
+    if value is None:
+        return "n/a"
+    return f"{float(value):.{digits}f}"
 
 
 def parse_args() -> argparse.Namespace:
@@ -256,29 +323,47 @@ def main() -> int:
         print("KO  modèles absents dans Ollama: " + ", ".join(missing))
         return 2
 
+    scenarios = list(suite["scenarios"])
+    try:
+        limits = {str(item["id"]): scenario_output_limit(item, suite) for item in scenarios}
+    except ValueError as exc:
+        print(f"KO  configuration benchmark: {exc}")
+        return 2
+
     started_at = datetime.now(UTC)
+    run_started = time.perf_counter()
     cases: list[dict[str, Any]] = []
-    total = len(selected_models) * len(contexts) * len(suite["scenarios"])
+    total = len(selected_models) * len(contexts) * len(scenarios)
     current = 0
+    print(
+        "BENCHMARK_PLAN "
+        f"modeles={len(selected_models)} contextes={len(contexts)} "
+        f"scenarios={len(scenarios)} cas={total}"
+    )
 
     for model in selected_models:
         for context in contexts:
-            for scenario in suite["scenarios"]:
+            for scenario in scenarios:
                 current += 1
                 alias = str(model["alias"])
                 runtime_id = str(model["runtime_id"])
                 scenario_id = str(scenario["id"])
+                max_output_tokens = limits[scenario_id]
                 prompt = add_synthetic_context(
                     str(scenario["prompt"]),
                     int(scenario.get("synthetic_context_chars") or 0),
                 )
-                print(f"[{current}/{total}] {alias} ctx={context} scenario={scenario_id}")
+                print(
+                    f"[{current}/{total}] {alias} ctx={context} "
+                    f"scenario={scenario_id} max_out={max_output_tokens}"
+                )
                 base = {
                     "model_alias": alias,
                     "runtime_id": runtime_id,
                     "context": context,
                     "scenario_id": scenario_id,
                     "category": scenario.get("category"),
+                    "max_output_tokens": max_output_tokens,
                     "check_required": True,
                 }
                 try:
@@ -293,12 +378,16 @@ def main() -> int:
                                 suite["default_temperature"],
                             )
                         ),
+                        max_output_tokens,
                         args.timeout,
                     )
                     passed, details = run_checks(
                         result["output"],
                         list(scenario.get("checks", [])),
                     )
+                    if result["output_truncated"]:
+                        passed = False
+                        details.append("output_limit:fail")
                     cases.append(
                         {
                             **base,
@@ -307,6 +396,19 @@ def main() -> int:
                             "check_passed": passed,
                             "check_details": details,
                         }
+                    )
+                    elapsed = time.perf_counter() - run_started
+                    average = elapsed / current
+                    eta = average * (total - current)
+                    verdict = "PASS" if passed else "CHECK_FAIL"
+                    limit_flag = " LIMIT" if result["output_truncated"] else ""
+                    print(
+                        f"    {verdict}{limit_flag} "
+                        f"wall={result['wall_ms'] / 1000:.1f}s "
+                        f"ttft={_metric(result['ttft_ms'], digits=0)}ms "
+                        f"tok/s={_metric(result['tokens_per_second'])} "
+                        f"out={result['eval_count']} "
+                        f"reste~{format_duration(eta)}"
                     )
                 except (
                     OSError,
@@ -322,9 +424,17 @@ def main() -> int:
                             "check_passed": False,
                         }
                     )
+                    elapsed = time.perf_counter() - run_started
+                    average = elapsed / current
+                    eta = average * (total - current)
+                    print(
+                        f"    ERROR {type(exc).__name__}: {exc} "
+                        f"reste~{format_duration(eta)}"
+                    )
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     finished_at = datetime.now(UTC)
+    total_wall_ms = (time.perf_counter() - run_started) * 1000
     payload = {
         "schema_version": "1.1.0",
         "suite": suite["id"],
@@ -333,6 +443,7 @@ def main() -> int:
         "endpoint": args.endpoint,
         "ollama_version": version.get("version"),
         "contexts": contexts,
+        "total_wall_ms": total_wall_ms,
         "models": [
             {
                 "alias": model["alias"],
@@ -353,7 +464,10 @@ def main() -> int:
     errors = sum(case["status"] != "ok" for case in cases)
     checks = sum(case.get("check_passed") is True for case in cases)
     print(f"EVIDENCE={path}")
-    print(f"CAS={len(cases)} CHECKS_OK={checks} ERREURS={errors}")
+    print(
+        f"CAS={len(cases)} CHECKS_OK={checks} ERREURS={errors} "
+        f"DUREE={format_duration(total_wall_ms / 1000)}"
+    )
     return 0 if errors == 0 else 2
 
 
