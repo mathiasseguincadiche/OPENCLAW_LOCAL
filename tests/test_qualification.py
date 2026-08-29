@@ -53,6 +53,8 @@ def test_passing_performance_fleet_requires_manual_qualification() -> None:
     report = evaluate_benchmark(passing_payload(), policy())
     assert report["automated_gate"] == "pass"
     assert report["verdict"] == "READY_FOR_MANUAL_QUALIFICATION"
+    assert report["evaluation_mode"] == "qualification"
+    assert report["evaluated_contexts"] == [8192, 16384]
     assert report["automatic_promotion"] is False
     assert set(report["required_models"]) == set(REQUIRED_MODELS)
     assert all(report["models"][alias]["required"] for alias in REQUIRED_MODELS)
@@ -68,6 +70,26 @@ def test_missing_required_context_fails_all_three_models() -> None:
     assert report["verdict"] == "NOT_READY"
     assert all(
         report["models"][alias]["automated_gate"] == "fail"
+        for alias in REQUIRED_MODELS
+    )
+
+
+def test_quick_8k_diagnostic_does_not_require_16k_or_claim_qualification() -> None:
+    payload = passing_payload()
+    payload["cases"] = [case for case in payload["cases"] if case["context"] == 8192]
+    report = evaluate_benchmark(
+        payload,
+        policy(),
+        required_contexts_override={8192},
+        pass_verdict="QUICK_DIAGNOSTIC_PASS",
+    )
+    assert report["automated_gate"] == "pass"
+    assert report["verdict"] == "QUICK_DIAGNOSTIC_PASS"
+    assert report["evaluation_mode"] == "diagnostic"
+    assert report["evaluated_contexts"] == [8192]
+    assert report["automatic_promotion"] is False
+    assert all(
+        report["models"][alias]["observed_contexts"] == [8192]
         for alias in REQUIRED_MODELS
     )
 
