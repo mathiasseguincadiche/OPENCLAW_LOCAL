@@ -1,9 +1,6 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-BeforeAll {
-    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-}
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 
 Describe 'Qualification Ollama lisible et bornée' {
     It 'utilise l API locale pour le smoke test et non ollama run' {
