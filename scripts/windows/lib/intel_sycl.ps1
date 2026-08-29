@@ -148,6 +148,8 @@ function New-IntelSyclModelPreset {
 
     $Models = Get-RequiredOllamaModels -RepoRoot $RepoRoot
     $Lines = @(
+        'version = 1',
+        '',
         '; Généré par OPENCLAW_LOCAL. Ne pas éditer à la main.',
         '; Les poids restent ceux déjà présents dans le cache Ollama.',
         ''
@@ -266,6 +268,7 @@ function Start-IntelSyclServer {
     $Arguments = @(
         '--models-preset', $Paths.Preset,
         '--models-max', [string]$RuntimeLock.models_max,
+        '--models-autoload',
         '--host', [string]$RuntimeLock.listen_host,
         '--port', [string]$RuntimeLock.listen_port,
         '--ctx-size', [string]$RuntimeLock.context_tokens,
