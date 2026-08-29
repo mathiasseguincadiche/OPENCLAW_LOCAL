@@ -32,7 +32,8 @@ SCENARIOS = (
         "id": "tool-intent",
         "prompt": (
             "Réponds en JSON compact avec exactement les clés tool, target, reason. "
-            "Tu dois inspecter les logs du service api dans le namespace prod sans modifier le cluster."
+            "Tu dois inspecter les logs du service api dans le namespace prod "
+            "sans modifier le cluster."
         ),
         "max_tokens": 96,
     },
@@ -54,7 +55,9 @@ def required_models() -> list[str]:
         if model.get("required") is True
     ]
     if len(models) != 3:
-        raise ValueError(f"La comparaison exige exactement 3 modèles required, reçus: {models}")
+        raise ValueError(
+            f"La comparaison exige exactement 3 modèles required, reçus: {models}"
+        )
     return models
 
 
@@ -357,7 +360,9 @@ def main() -> int:
         "cases": cases,
         "summary": summary,
     }
-    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    output.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     print(f"RESULT={output}")
     for model, report in summary["models"].items():
