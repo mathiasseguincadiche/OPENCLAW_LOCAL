@@ -8,6 +8,7 @@ Describe 'Qualification Ollama lisible et bornée' {
             Join-Path $RepoRoot 'scripts\windows\04_verify_local.ps1'
         )
         $Verify | Should -Match '/api/generate'
+        $Verify | Should -Match '/api/ps'
         $Verify | Should -Match 'stream = \$false'
         $Verify | Should -Match 'num_predict = 16'
         $Verify | Should -Not -Match '& ollama run'
