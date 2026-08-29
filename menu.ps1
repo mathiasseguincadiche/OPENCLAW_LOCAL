@@ -177,7 +177,7 @@ function Invoke-Action {
         elseif ($Name -in @('benchmark', 'qualification', 'intel-sycl-compare')) {
             & $Script -DryRun:$DryRunMode -Quick:$QuickMode
         }
-        elseif ($Name -eq 'configure-openclaw') {
+        elseif ($Name -in @('configure-openclaw', 'e2e')) {
             & $Script -DryRun:$DryRunMode -Backend $BackendMode
         }
         else {
@@ -215,7 +215,7 @@ while ($true) {
 8) Vérifier l'inférence locale Ollama
 9) Lancer le benchmark (utiliser -Quick pour 8K uniquement)
 10) Collecter l'inventaire de qualification
-11) Tester OpenClaw E2E + tool-calling + réparation
+11) Tester OpenClaw E2E + tool-calling + réparation (paramètre -Backend pour SYCL)
 12) Lancer la qualification matérielle (utiliser -Quick pour 36 cas au lieu de 72)
 13) Afficher les contrats de l'équipe IA
 14) Afficher la documentation
