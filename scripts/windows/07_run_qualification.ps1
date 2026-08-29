@@ -29,10 +29,10 @@ if ($DryRun) {
     Write-Host '  5. progression avec durée, TTFT, tokens/s et estimation du restant'
     Write-Host '  6. évaluation des seuils; aucune promotion automatique'
     if ($Quick) {
-        Write-Host '  mode QUICK: contexte 8192 uniquement, 36 cas avec devops-v2'
+        Write-Host '  mode QUICK: contexte 8192, 36 cas, thinking Qwen désactivé'
     }
     else {
-        Write-Host '  mode COMPLET: contextes 8192 + 16384, 72 cas avec devops-v2'
+        Write-Host '  mode COMPLET: contextes 8192 + 16384, 72 cas, thinking Qwen natif et borné'
     }
     exit 0
 }
