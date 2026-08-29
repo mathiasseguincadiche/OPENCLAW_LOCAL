@@ -149,14 +149,28 @@ def scenario_output_limit(
     return limit
 
 
+def resolve_generation_policy(
+    model: dict[str, Any],
+    scenario_limit: int,
+    qwen_thinking: str,
+) -> tuple[int, bool | None, str]:
+    family = str(model.get("family") or "").casefold()
+    if family != "qwen":
+        return scenario_limit, None, "not_applicable"
+    if qwen_thinking == "off":
+        return scenario_limit, False, "off"
+    return MAX_CONFIGURED_OUTPUT_TOKENS, None, "native"
+
+
 def generation_payload(
     runtime_id: str,
     prompt: str,
     context: int,
     temperature: float,
     num_predict: int,
+    think: bool | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "model": runtime_id,
         "prompt": prompt,
         "stream": True,
@@ -167,6 +181,9 @@ def generation_payload(
             "num_predict": num_predict,
         },
     }
+    if think is not None:
+        payload["think"] = think
+    return payload
 
 
 def run_generation(
@@ -177,6 +194,8 @@ def run_generation(
     temperature: float,
     num_predict: int,
     timeout: float,
+    *,
+    think: bool | None,
 ) -> dict[str, Any]:
     body = json.dumps(
         generation_payload(
@@ -185,6 +204,7 @@ def run_generation(
             context,
             temperature,
             num_predict,
+            think,
         )
     ).encode("utf-8")
     request = urllib.request.Request(
@@ -194,8 +214,10 @@ def run_generation(
         method="POST",
     )
     started = time.perf_counter()
-    first_token_at: float | None = None
+    first_generated_at: float | None = None
+    first_response_at: float | None = None
     chunks: list[str] = []
+    thinking_chars = 0
     final: dict[str, Any] = {}
 
     with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
@@ -204,10 +226,14 @@ def run_generation(
             if not line:
                 continue
             event = json.loads(line)
-            chunk = str(event.get("response", ""))
-            if chunk and first_token_at is None:
-                first_token_at = time.perf_counter()
-            chunks.append(chunk)
+            thinking_chunk = str(event.get("thinking", ""))
+            response_chunk = str(event.get("response", ""))
+            if (thinking_chunk or response_chunk) and first_generated_at is None:
+                first_generated_at = time.perf_counter()
+            if response_chunk and first_response_at is None:
+                first_response_at = time.perf_counter()
+            thinking_chars += len(thinking_chunk)
+            chunks.append(response_chunk)
             if event.get("done"):
                 final = event
 
@@ -218,16 +244,25 @@ def run_generation(
         eval_count / eval_duration * 1_000_000_000 if eval_duration else None
     )
     done_reason = str(final.get("done_reason") or "") or None
-    output_truncated = bool(done_reason and done_reason.casefold() in {"length", "max_tokens"})
+    limit_reason = bool(
+        done_reason and done_reason.casefold() in {"length", "max_tokens", "limit"}
+    )
+    output_truncated = limit_reason or eval_count >= num_predict
     return {
         "output": "".join(chunks).strip(),
-        "ttft_ms": (first_token_at - started) * 1000 if first_token_at else None,
+        "first_generation_ms": (
+            (first_generated_at - started) * 1000 if first_generated_at else None
+        ),
+        "ttft_ms": (
+            (first_response_at - started) * 1000 if first_response_at else None
+        ),
         "wall_ms": (ended - started) * 1000,
         "eval_count": eval_count,
         "eval_duration_ns": eval_duration,
         "tokens_per_second": tokens_per_second,
         "load_duration_ns": int(final.get("load_duration") or 0),
         "prompt_eval_count": int(final.get("prompt_eval_count") or 0),
+        "thinking_chars": thinking_chars,
         "done_reason": done_reason,
         "output_truncated": output_truncated,
     }
@@ -263,6 +298,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--context", action="append", type=int, dest="contexts")
     parser.add_argument("--timeout", type=float, default=300.0)
+    parser.add_argument(
+        "--qwen-thinking",
+        choices=("native", "off"),
+        default="native",
+        help=(
+            "Politique Qwen: native conserve le thinking du modèle; "
+            "off le désactive pour les passes rapides."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -338,7 +382,7 @@ def main() -> int:
     print(
         "BENCHMARK_PLAN "
         f"modeles={len(selected_models)} contextes={len(contexts)} "
-        f"scenarios={len(scenarios)} cas={total}"
+        f"scenarios={len(scenarios)} cas={total} qwen_thinking={args.qwen_thinking}"
     )
 
     for model in selected_models:
@@ -348,14 +392,20 @@ def main() -> int:
                 alias = str(model["alias"])
                 runtime_id = str(model["runtime_id"])
                 scenario_id = str(scenario["id"])
-                max_output_tokens = limits[scenario_id]
+                scenario_limit = limits[scenario_id]
+                max_output_tokens, think, thinking_mode = resolve_generation_policy(
+                    model,
+                    scenario_limit,
+                    args.qwen_thinking,
+                )
                 prompt = add_synthetic_context(
                     str(scenario["prompt"]),
                     int(scenario.get("synthetic_context_chars") or 0),
                 )
                 print(
                     f"[{current}/{total}] {alias} ctx={context} "
-                    f"scenario={scenario_id} max_out={max_output_tokens}"
+                    f"scenario={scenario_id} max_out={max_output_tokens} "
+                    f"thinking={thinking_mode}"
                 )
                 base = {
                     "model_alias": alias,
@@ -363,7 +413,9 @@ def main() -> int:
                     "context": context,
                     "scenario_id": scenario_id,
                     "category": scenario.get("category"),
+                    "scenario_max_output_tokens": scenario_limit,
                     "max_output_tokens": max_output_tokens,
+                    "thinking_mode": thinking_mode,
                     "check_required": True,
                 }
                 try:
@@ -380,6 +432,7 @@ def main() -> int:
                         ),
                         max_output_tokens,
                         args.timeout,
+                        think=think,
                     )
                     passed, details = run_checks(
                         result["output"],
@@ -408,6 +461,7 @@ def main() -> int:
                         f"ttft={_metric(result['ttft_ms'], digits=0)}ms "
                         f"tok/s={_metric(result['tokens_per_second'])} "
                         f"out={result['eval_count']} "
+                        f"think_chars={result['thinking_chars']} "
                         f"reste~{format_duration(eta)}"
                     )
                 except (
@@ -443,6 +497,7 @@ def main() -> int:
         "endpoint": args.endpoint,
         "ollama_version": version.get("version"),
         "contexts": contexts,
+        "qwen_thinking": args.qwen_thinking,
         "total_wall_ms": total_wall_ms,
         "models": [
             {
