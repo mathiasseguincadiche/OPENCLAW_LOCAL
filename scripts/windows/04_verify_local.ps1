@@ -27,7 +27,7 @@ if (-not $Model) {
 }
 
 if ($DryRun) {
-    Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test API sans spinner avec $Model."
+    Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test /api/chat sans spinner avec $Model."
     Write-Host '[DRY-RUN] Lire ensuite /api/ps pour exposer la part réellement chargée en VRAM.'
     exit 0
 }
@@ -53,7 +53,12 @@ if ($AvailableModels -notcontains $Model) {
 $Prompt = 'Réponds uniquement avec le texte LOCAL_OK, sans ponctuation ni explication.'
 $RequestBody = [ordered]@{
     model = $Model
-    prompt = $Prompt
+    messages = @(
+        [ordered]@{
+            role = 'user'
+            content = $Prompt
+        }
+    )
     stream = $false
     keep_alive = '15m'
     options = [ordered]@{
@@ -64,14 +69,14 @@ $RequestBody = [ordered]@{
 }
 if ($Model -like 'qwen3.8:*') {
     # Le smoke test vérifie le runtime, pas le raisonnement profond.
-    # Qwen3.8 active le thinking par défaut; on le coupe ici pour un test court et déterministe.
+    # /api/chat sépare explicitement thinking et contenu final.
     $RequestBody.think = $false
 }
-$Body = $RequestBody | ConvertTo-Json -Depth 5 -Compress
+$Body = $RequestBody | ConvertTo-Json -Depth 6 -Compress
 
 try {
     $Response = Invoke-RestMethod -Method Post `
-        -Uri "$OllamaEndpoint/api/generate" `
+        -Uri "$OllamaEndpoint/api/chat" `
         -ContentType 'application/json' `
         -Body $Body `
         -TimeoutSec $TimeoutSeconds
@@ -80,7 +85,7 @@ catch {
     throw "Inférence Ollama API en échec pour $Model : $($_.Exception.Message)"
 }
 
-$Output = ([string]$Response.response).Trim()
+$Output = ([string]$Response.message.content).Trim()
 if ($Output -notmatch 'LOCAL_OK') {
     throw "Smoke test inattendu pour $Model. Réponse reçue: $Output"
 }
