@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
+    [ValidateSet('ollama-vulkan', 'llama-cpp-sycl')]
+    [string]$Backend = 'ollama-vulkan',
     [int]$TimeoutSeconds = 180,
     [ValidateRange(5, 300)][int]$GatewayReadyTimeoutSeconds = 60
 )
@@ -69,23 +71,35 @@ function Invoke-OpenClawJson {
     }
 }
 
-function Test-OllamaProvider([object]$Payload, [string]$Description) {
+function Test-ExpectedProvider {
+    param(
+        [Parameter(Mandatory)][object]$Payload,
+        [Parameter(Mandatory)][string]$ExpectedProvider,
+        [Parameter(Mandatory)][string]$Description
+    )
     $Json = $Payload | ConvertTo-Json -Depth 50 -Compress
-    if ($Json -notmatch '"provider"\s*:\s*"ollama"') {
-        throw "$Description n'apporte pas de preuve provider=ollama. Aucun fallback cloud n'est accepté."
+    $Pattern = '"provider"\s*:\s*"' + [regex]::Escape($ExpectedProvider) + '"'
+    if ($Json -notmatch $Pattern) {
+        throw (
+            "$Description n'apporte pas de preuve provider=$ExpectedProvider. " +
+            'Aucun fallback de backend ou cloud silencieux n''est accepté.'
+        )
     }
     return $true
 }
 
+$ExpectedProvider = if ($Backend -eq 'llama-cpp-sycl') { 'intel-sycl' } else { 'ollama' }
+
 if ($DryRun) {
     Write-Host '[DRY-RUN] E2E OpenClaw'
+    Write-Host "[DRY-RUN] backend texte=$Backend provider attendu=$ExpectedProvider"
     Write-Host '[DRY-RUN] modèle primaire lu depuis model_catalog.yaml'
     Write-Host "[DRY-RUN] readiness Gateway RPC bornée à ${GatewayReadyTimeoutSeconds}s"
-    Write-Host '[DRY-RUN] 8 agents -> Gateway -> Ollama'
+    Write-Host "[DRY-RUN] 8 agents -> Gateway -> $ExpectedProvider"
     Write-Host '[DRY-RUN] agent exec -> tool write'
     Write-Host '[DRY-RUN] erreur outil contrôlée -> réparation'
     Write-Host '[DRY-RUN] 3 runs de stabilité'
-    Write-Host '[DRY-RUN] aucune escalade cloud'
+    Write-Host '[DRY-RUN] aucune escalade cloud ni fallback de provider'
     exit 0
 }
 
@@ -97,9 +111,31 @@ if ($LASTEXITCODE -ne 0) {
 }
 $RequiredModels = @($RequiredModels | Where-Object { $_ -and $_.Trim() })
 if ($RequiredModels.Count -eq 0) {
-    throw 'Aucun modèle required Ollama dans model_catalog.yaml.'
+    throw 'Aucun modèle required local dans model_catalog.yaml.'
 }
 $PrimaryModel = $RequiredModels[0]
+$ModelRef = if ($Backend -eq 'llama-cpp-sycl') {
+    "intel-sycl/$PrimaryModel"
+}
+else {
+    "ollama/$PrimaryModel"
+}
+
+if ($Backend -eq 'llama-cpp-sycl') {
+    try {
+        $SyclModels = Invoke-RestMethod -Method Get `
+            -Uri 'http://127.0.0.1:8080/v1/models?reload=1' -TimeoutSec 10
+    }
+    catch {
+        throw "Backend Intel SYCL non prêt avant E2E: $($_.Exception.Message)"
+    }
+    $SyclIds = @($SyclModels.data | ForEach-Object { [string]$_.id })
+    foreach ($RequiredModel in $RequiredModels) {
+        if ($SyclIds -notcontains $RequiredModel) {
+            throw "Backend Intel SYCL incomplet avant E2E: modèle absent $RequiredModel"
+        }
+    }
+}
 
 $PlatformRoot = Get-PlatformRoot
 $StateDir = Join-Path $PlatformRoot 'state'
@@ -113,6 +149,7 @@ if (-not (Test-Path -LiteralPath $ConfigPath)) {
 $OpenClaw = Get-OpenClawCommand $PlatformRoot
 $env:OPENCLAW_STATE_DIR = $StateDir
 $env:OLLAMA_API_KEY = 'ollama-local'
+$env:INTEL_SYCL_API_KEY = 'intel-sycl-local'
 $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'false'
 
 $null = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
@@ -130,10 +167,13 @@ if (-not $GatewayReadiness.ready) {
 }
 
 $Evidence = [ordered]@{
-    schema_version = '1.0.0'
+    schema_version = '1.1.0'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     platform_root = $PlatformRoot
+    backend = $Backend
+    expected_provider = $ExpectedProvider
     primary_model = $PrimaryModel
+    primary_model_ref = $ModelRef
     cloud_enabled = $false
     agent_smoke = @()
     tool_call = $null
@@ -147,7 +187,8 @@ foreach ($AgentId in $AgentIds) {
         'agent', '--agent', $AgentId, '--message', $Prompt,
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Smoke agent $AgentId"
-    $null = Test-OllamaProvider -Payload $Result -Description "Smoke agent $AgentId"
+    $null = Test-ExpectedProvider -Payload $Result -ExpectedProvider $ExpectedProvider `
+        -Description "Smoke agent $AgentId"
     $Evidence.agent_smoke += [ordered]@{ agent = $AgentId; result = $Result }
 }
 
@@ -162,10 +203,11 @@ répertoire de travail avec exactement TOOL_OK. Ensuite réponds TOOL_OK.
 '@
 $ToolResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', 'exec', $ToolPrompt, '--cwd', $ScratchRoot,
-    '--model', "ollama/$PrimaryModel", '--code-mode', 'code', '--local-model-lean',
+    '--model', $ModelRef, '--code-mode', 'code', '--local-model-lean',
     '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
-) -Description 'Tool-calling OpenClaw/Ollama'
-$null = Test-OllamaProvider -Payload $ToolResult -Description 'Tool-calling OpenClaw/Ollama'
+) -Description "Tool-calling OpenClaw/$ExpectedProvider"
+$null = Test-ExpectedProvider -Payload $ToolResult -ExpectedProvider $ExpectedProvider `
+    -Description "Tool-calling OpenClaw/$ExpectedProvider"
 $ToolMarker = Join-Path $ScratchRoot 'tool-call-ok.txt'
 if (-not (Test-Path -LiteralPath $ToolMarker)) {
     throw "Le modèle n'a pas créé le marqueur tool-call-ok.txt."
@@ -184,10 +226,11 @@ REPAIRED. Ne fabrique pas le premier résultat.
 '@
 $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', 'exec', $RepairPrompt, '--cwd', $ScratchRoot,
-    '--model', "ollama/$PrimaryModel", '--code-mode', 'code', '--local-model-lean',
+    '--model', $ModelRef, '--code-mode', 'code', '--local-model-lean',
     '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description 'Réparation après erreur outil'
-$null = Test-OllamaProvider -Payload $RepairResult -Description 'Réparation après erreur outil'
+$null = Test-ExpectedProvider -Payload $RepairResult -ExpectedProvider $ExpectedProvider `
+    -Description 'Réparation après erreur outil'
 $RepairMarker = Join-Path $ScratchRoot 'repair-ok.txt'
 if (-not (Test-Path -LiteralPath $RepairMarker)) {
     throw "Le scénario de réparation n'a pas créé repair-ok.txt."
@@ -200,10 +243,11 @@ $Evidence.tool_feedback_repair = $RepairResult
 for ($Run = 1; $Run -le 3; $Run++) {
     $StableResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
         'agent', 'exec', "Réponds exactement STABLE_$Run", '--cwd', $ScratchRoot,
-        '--model', "ollama/$PrimaryModel", '--auth-env-only',
+        '--model', $ModelRef, '--auth-env-only',
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Stabilité run $Run"
-    $null = Test-OllamaProvider -Payload $StableResult -Description "Stabilité run $Run"
+    $null = Test-ExpectedProvider -Payload $StableResult -ExpectedProvider $ExpectedProvider `
+        -Description "Stabilité run $Run"
     if ([string]$StableResult.final -notmatch "STABLE_$Run") {
         throw "Stabilité run ${Run}: réponse finale inattendue."
     }
@@ -212,9 +256,10 @@ for ($Run = 1; $Run -le 3; $Run++) {
 
 New-Item -ItemType Directory -Path $ProofsRoot -Force | Out-Null
 $Stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$ProofPath = Join-Path $ProofsRoot "openclaw_e2e_$Stamp.json"
+$SafeBackend = $Backend -replace '[^a-zA-Z0-9._-]', '_'
+$ProofPath = Join-Path $ProofsRoot "openclaw_e2e_${SafeBackend}_$Stamp.json"
 $Evidence | ConvertTo-Json -Depth 50 |
     Set-Content -LiteralPath $ProofPath -Encoding utf8
-Write-Host "OK  E2E OpenClaw terminé: $ProofPath"
+Write-Host "OK  E2E OpenClaw backend=$Backend terminé: $ProofPath"
 Write-Host 'Aucune promotion automatique: revue humaine et qualification matérielle restent requises.'
 exit 0
