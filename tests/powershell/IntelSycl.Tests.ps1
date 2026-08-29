@@ -22,15 +22,31 @@ Describe 'Backend Intel Arc B580 SYCL' {
             Join-Path $TestRepoRoot 'scripts\windows\lib\intel_sycl.ps1'
         )
         $Helper | Should -Match 'Get-FileHash'
-        $Helper | Should -Match 'SHA-256 llama\.cpp SYCL invalide'
+        $Helper | Should -Match 'archive_sha256'
+        $Helper | Should -Match 'server_sha256'
+        $Helper | Should -Match 'runtime-manifest\.json'
         $Helper | Should -Match 'ONEAPI_DEVICE_SELECTOR'
         $Helper | Should -Match 'level_zero'
         $Helper | Should -Match '--list-devices'
         $Helper | Should -Match 'Arc.*B580'
+        $Helper | Should -Match 'DriverVersion'
+        $Helper | Should -Match 'Get-NetTCPConnection'
+        $Helper | Should -Match 'processus non suivi'
         $Helper | Should -Match "'--models-max'"
+        $Helper | Should -Match "'--models-autoload'"
         $Helper | Should -Match "'--offline'"
         $Helper | Should -Match "'--device'"
         $Helper | Should -Match 'Resolve-OllamaGgufPath'
+    }
+
+    It 'génère un preset routeur versionné et mono-modèle' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $Helper = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\windows\lib\intel_sycl.ps1'
+        )
+        $Helper | Should -Match "'version = 1'"
+        $Helper | Should -Match "'load-on-startup = false'"
+        $Helper | Should -Match "'stop-timeout = 30'"
     }
 
     It 'garde Ollama comme rollback et interdit la promotion automatique' {
@@ -70,6 +86,18 @@ Describe 'Backend Intel Arc B580 SYCL' {
         $Text | Should -Match 'texte -> intel-sycl'
         $Text | Should -Match 'image/PDF -> Ollama'
         $Text | Should -Match 'Rollback explicite'
+    }
+
+    It 'rend le E2E backend-aware sans accepter un fallback de provider' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $E2E = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\windows\10_test_openclaw_e2e.ps1'
+        )
+        $E2E | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl'\)"
+        $E2E | Should -Match "'intel-sycl'"
+        $E2E | Should -Match 'Test-ExpectedProvider'
+        $E2E | Should -Match 'tool-call-ok\.txt'
+        $E2E | Should -Match 'repair-ok\.txt'
     }
 
     It 'compare les backends sans jamais autoriser une promotion automatique' {
