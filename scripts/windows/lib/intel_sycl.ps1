@@ -213,6 +213,7 @@ function Resolve-OllamaGgufPath {
 }
 
 function New-IntelSyclModelPreset {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$RepoRoot,
         [Parameter(Mandatory)][string]$PresetPath
@@ -235,6 +236,9 @@ function New-IntelSyclModelPreset {
         $Lines += 'stop-timeout = 30'
         $Lines += ''
         Write-Host "OK  GGUF $Model -> $Path"
+    }
+    if (-not $PSCmdlet.ShouldProcess($PresetPath, 'Generate Intel SYCL model preset')) {
+        return $Models
     }
     $Directory = Split-Path -Parent $PresetPath
     New-Item -ItemType Directory -Path $Directory -Force | Out-Null
@@ -286,9 +290,16 @@ function Test-IntelArcB580SyclDevice {
 }
 
 function Stop-IntelSyclServer {
+    [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string]$StatePath)
 
     if (-not (Test-Path -LiteralPath $StatePath)) {
+        return
+    }
+    if (-not $PSCmdlet.ShouldProcess(
+        $StatePath,
+        'Stop tracked Intel SYCL server and remove process state'
+    )) {
         return
     }
     try {
@@ -328,6 +339,7 @@ function Wait-IntelSyclApi {
 }
 
 function Start-IntelSyclServer {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$RepoRoot,
         [Parameter(Mandatory)][string]$PlatformRoot,
@@ -343,8 +355,14 @@ function Start-IntelSyclServer {
     $Driver = Get-IntelArcB580DriverInfo
     Write-Host "OK  Pilote Intel B580 détecté: $($Driver.driver_version)"
     $null = Test-IntelArcB580SyclDevice -ServerBinary $Binary -RuntimeLock $RuntimeLock
-    $Models = New-IntelSyclModelPreset -RepoRoot $RepoRoot -PresetPath $Paths.Preset
-    Stop-IntelSyclServer -StatePath $Paths.ProcessState
+    if (-not $PSCmdlet.ShouldProcess(
+        ([string]$RuntimeLock.endpoint),
+        'Start Intel SYCL llama-server'
+    )) {
+        return $null
+    }
+    $Models = New-IntelSyclModelPreset -RepoRoot $RepoRoot -PresetPath $Paths.Preset -Confirm:$false
+    Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
 
     $Listeners = @(
         Get-NetTCPConnection -LocalPort ([int]$RuntimeLock.listen_port) `
@@ -423,7 +441,7 @@ function Start-IntelSyclServer {
         }
     }
     catch {
-        Stop-IntelSyclServer -StatePath $Paths.ProcessState
+        Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
         $Tail = if (Test-Path -LiteralPath $Paths.StderrLog) {
             (Get-Content -LiteralPath $Paths.StderrLog -Tail 80) -join "`n"
         }
@@ -436,7 +454,7 @@ function Start-IntelSyclServer {
     $Advertised = @($Api.data | ForEach-Object { [string]$_.id })
     foreach ($Model in $Models) {
         if ($Advertised -notcontains $Model) {
-            Stop-IntelSyclServer -StatePath $Paths.ProcessState
+            Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
             throw "Le routeur Intel SYCL n'annonce pas le modèle requis: $Model"
         }
     }
