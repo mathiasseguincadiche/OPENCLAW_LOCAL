@@ -7,6 +7,7 @@ param(
     )]
     [string]$Action = 'menu',
     [switch]$DryRun,
+    [switch]$Quick,
     [switch]$AllowRuntimeDrift,
     [switch]$NoLog
 )
@@ -125,6 +126,7 @@ function Invoke-Action {
     param(
         [Parameter(Mandatory)][string]$Name,
         [switch]$DryRunMode,
+        [switch]$QuickMode,
         [switch]$AllowRuntimeDriftMode,
         [switch]$NoLogMode
     )
@@ -165,6 +167,9 @@ function Invoke-Action {
         if ($Name -in @('install-core', 'install-full')) {
             & $Script -DryRun:$DryRunMode -AllowRuntimeDrift:$AllowRuntimeDriftMode
         }
+        elseif ($Name -in @('benchmark', 'qualification')) {
+            & $Script -DryRun:$DryRunMode -Quick:$QuickMode
+        }
         else {
             & $Script -DryRun:$DryRunMode
         }
@@ -182,7 +187,7 @@ function Invoke-Action {
 
 if ($Action -ne 'menu') {
     Show-Title
-    Invoke-Action -Name $Action -DryRunMode:$DryRun `
+    Invoke-Action -Name $Action -DryRunMode:$DryRun -QuickMode:$Quick `
         -AllowRuntimeDriftMode:$AllowRuntimeDrift -NoLogMode:$NoLog
     exit 0
 }
@@ -198,10 +203,10 @@ while ($true) {
 6) Générer/appliquer la configuration OpenClaw
 7) Déployer les 8 workspaces agents
 8) Vérifier l'inférence locale Ollama
-9) Lancer le benchmark simple
+9) Lancer le benchmark (utiliser -Quick pour 8K uniquement)
 10) Collecter l'inventaire de qualification
 11) Tester OpenClaw E2E + tool-calling + réparation
-12) Lancer la qualification matérielle complète
+12) Lancer la qualification matérielle (utiliser -Quick pour 36 cas au lieu de 72)
 13) Afficher les contrats de l'équipe IA
 14) Afficher la documentation
 15) Afficher les derniers logs et preuves
@@ -217,10 +222,10 @@ while ($true) {
         '6' { Invoke-Action -Name 'configure-openclaw' -DryRunMode:$DryRun -NoLogMode:$NoLog }
         '7' { Invoke-Action -Name 'deploy-agents' -DryRunMode:$DryRun -NoLogMode:$NoLog }
         '8' { Invoke-Action -Name 'verify' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '9' { Invoke-Action -Name 'benchmark' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '9' { Invoke-Action -Name 'benchmark' -DryRunMode:$DryRun -QuickMode:$Quick -NoLogMode:$NoLog }
         '10' { Invoke-Action -Name 'inventory' -DryRunMode:$DryRun -NoLogMode:$NoLog }
         '11' { Invoke-Action -Name 'e2e' -DryRunMode:$DryRun -NoLogMode:$NoLog }
-        '12' { Invoke-Action -Name 'qualification' -DryRunMode:$DryRun -NoLogMode:$NoLog }
+        '12' { Invoke-Action -Name 'qualification' -DryRunMode:$DryRun -QuickMode:$Quick -NoLogMode:$NoLog }
         '13' { Invoke-Action -Name 'team' -DryRunMode:$DryRun -NoLogMode:$NoLog }
         '14' { Invoke-Action -Name 'docs' -DryRunMode:$DryRun -NoLogMode:$NoLog }
         '15' { Invoke-Action -Name 'logs' -DryRunMode:$DryRun -NoLogMode:$NoLog }

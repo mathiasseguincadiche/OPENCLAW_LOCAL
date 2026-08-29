@@ -9,9 +9,12 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ResultsDir = Join-Path $RepoRoot 'benchmarks\results'
 $RuntimeLockPath = Join-Path $RepoRoot 'config\v1\runtime_versions.json'
 $RuntimeLock = Get-Content -Raw -LiteralPath $RuntimeLockPath | ConvertFrom-Json
+$HardwareInventory = Join-Path $PSScriptRoot 'lib\hardware_inventory.ps1'
+. $HardwareInventory
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Collecter OS, CPU, RAM, GPU/pilotes et versions runtime.'
+    Write-Host '[DRY-RUN] Résoudre la VRAM via le registre Windows; CIM reste informatif seulement.'
     Write-Host '[DRY-RUN] Comparer les versions observées au runtime lock versionné.'
     Write-Host "[DRY-RUN] Écrire l'inventaire dans $ResultsDir sans secret."
     exit 0
@@ -56,7 +59,7 @@ New-Item -ItemType Directory -Force -Path $ResultsDir | Out-Null
 $Os = Get-CimInstance Win32_OperatingSystem
 $Cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
 $Computer = Get-CimInstance Win32_ComputerSystem
-$Gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM)
+$Gpu = @(Get-OpenClawGpuInventory)
 $OllamaModels = @()
 if (Get-Command ollama -ErrorAction SilentlyContinue) {
     $OllamaModels = @((& ollama list 2>$null | Select-Object -Skip 1) -join "`n")
@@ -112,7 +115,8 @@ $Payload = [ordered]@{
     ollama_models_text = $OllamaModels
     notes = @(
         'Inventaire de qualification; aucune performance n est déduite de cet inventaire.',
-        'AdapterRAM de Win32_VideoController peut être imprécis; la VRAM contractuelle reste la référence.',
+        'La VRAM fiable utilise HardwareInformation.MemorySize du registre Windows lorsque disponible.',
+        'AdapterRAM de Win32_VideoController est conservé uniquement comme donnée informative.',
         'Une version observée différente du runtime lock impose une nouvelle qualification.'
     )
 }

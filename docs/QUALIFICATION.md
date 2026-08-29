@@ -33,6 +33,10 @@ Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer l
 
 Le parcours complet installe le runtime, configure le stockage local, télécharge les trois modèles, configure OpenClaw et le Gateway puis vérifie le parcours nominal.
 
+Le smoke-test Ollama utilise l'API locale **`/api/chat`** avec `stream=false`. Il ne passe plus par `ollama run`, afin d'éviter les spinners et séquences ANSI dans les transcripts. `/api/chat` sépare aussi explicitement le thinking du contenu final. Pour Qwen3.8 uniquement, le thinking est désactivé pendant ce smoke-test minimal : cette étape vérifie que le runtime répond, pas sa capacité de raisonnement profond.
+
+Après le smoke-test, `/api/ps` est interrogé pour afficher la taille réellement chargée en VRAM, la taille totale du modèle et le contexte alloué par Ollama. Cette mesure est plus utile pour diagnostiquer l'offload réel que la seule capacité théorique de la carte graphique.
+
 Après la première installation, fermer puis rouvrir PowerShell.
 
 ## 2. Vérification du runtime
@@ -49,6 +53,10 @@ Avant de poursuivre, vérifier notamment :
 - trois modèles présents ;
 - huit agents configurés ;
 - aucun cloud requis.
+
+### VRAM Windows
+
+`Win32_VideoController.AdapterRAM` est conservé comme information secondaire uniquement : ce champ CIM peut tronquer ou mal représenter la mémoire des GPU modernes. L'audit tente d'abord de lire `HardwareInformation.MemorySize` dans le registre Windows et n'affiche une valeur de VRAM comme fiable que si cette source est disponible. Sinon la VRAM est explicitement marquée comme non déterminée de façon fiable.
 
 ## 3. Gate OpenClaw E2E
 
@@ -70,36 +78,50 @@ Les preuves sont écrites sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
 
 ## 4. Qualification automatique des trois modèles
 
-Passe complète :
+### Passe complète de référence
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
+Cette passe couvre **72 cas** : 3 modèles × 2 contextes (8192 et 16384) × 12 scénarios.
+
+Pour Qwen3.8, le thinking reste dans son mode **natif**. Le runner ne le désactive pas artificiellement dans la preuve complète. Comme le raisonnement peut consommer une part importante du budget de génération, Qwen reçoit un plafond de 2048 tokens par cas ; la génération reste donc bornée sans être coupée par les petits plafonds fonctionnels de la suite.
+
+### Passe rapide d'itération
+
+```powershell
+.\menu.ps1 -Action qualification -Quick -DryRun
+.\menu.ps1 -Action qualification -Quick
+```
+
+Cette passe couvre **36 cas** : les mêmes 3 modèles et 12 scénarios, uniquement à 8192 tokens. Elle désactive explicitement le thinking de Qwen3.8 afin de vérifier rapidement les formats, contrôles et performances d'inférence sans payer son raisonnement interne sur chaque scénario.
+
+Le mode Quick sert au diagnostic et aux itérations courantes ; il **ne remplace pas** la passe complète pour une décision de qualification. Un Quick réussi retourne `QUICK_DIAGNOSTIC_PASS`, jamais `READY_FOR_MANUAL_QUALIFICATION`.
+
 Ou directement :
 
 ```powershell
 .\scripts\windows\07_run_qualification.ps1
-```
-
-Passe rapide 8K uniquement :
-
-```powershell
 .\scripts\windows\07_run_qualification.ps1 -Quick
 ```
 
-Le runner accepte uniquement `-DryRun` et `-Quick`. Les anciens switches de sélection de classes ou de candidats ne font plus partie du contrat.
+Le runner PowerShell accepte uniquement `-DryRun` et `-Quick`. Les anciens switches de sélection de classes ou de candidats ne font plus partie du contrat.
 
 Le parcours enchaîne :
 
 1. audit host/runtime ;
 2. lecture des trois modèles `required` depuis `model_catalog.yaml` ;
-3. smoke test de chacun ;
+3. smoke test API de chacun ;
 4. inventaire matériel/runtime ;
-5. benchmark selon `qualification_policy.yaml` ;
+5. benchmark via `/api/chat` selon `qualification_policy.yaml` ;
 6. contextes 8K et 16K en passe complète ;
 7. évaluation des seuils versionnés.
+
+Chaque scénario possède un plafond fonctionnel `max_output_tokens`. Une génération qui atteint le budget appliqué est enregistrée comme tronquée, marquée `status=error` et fait échouer le gate puisque la politique impose `max_error_rate: 0`.
+
+Après chaque scénario, l'opérateur voit le statut, la durée, le TTFT, les tokens/s, le nombre de tokens générés, le volume de thinking observé sans son contenu, et une estimation du temps restant.
 
 ## 5. Mesures à collecter
 
@@ -108,16 +130,18 @@ Pour chaque modèle/backend pertinent :
 - TTFT ;
 - tokens/s ;
 - durée murale ;
-- VRAM ;
+- VRAM fiable ou explicitement inconnue ;
+- offload VRAM réellement observé via Ollama ;
 - RAM ;
 - stabilité ;
 - erreurs ;
 - contexte 8K/16K ;
+- politique de thinking ;
 - tool-calling ;
 - réparation après retour d'outil ;
 - comportement multimodal PDF/image lorsqu'il s'applique.
 
-Les mesures absentes restent absentes : elles ne sont jamais inventées.
+Les mesures absentes restent absentes : elles ne sont jamais inventées. La trace brute du thinking n'est pas conservée par le benchmark ; seul son volume est comptabilisé.
 
 ## 6. Comparaison des backends Intel Arc
 
@@ -176,6 +200,7 @@ Les gates automatiques sont passés. Ce verdict **ne signifie pas V1 qualifiée*
 - pilote GPU ;
 - inventaire matériel ;
 - résultats des trois modèles ;
+- politique de thinking réellement utilisée ;
 - E2E OpenClaw ;
 - comparaison backend ;
 - test multimodal ;

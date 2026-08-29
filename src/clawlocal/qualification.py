@@ -39,7 +39,12 @@ def _evaluate_model(
     *,
     required: bool,
 ) -> dict[str, Any]:
-    selected = [case for case in cases if case.get("model_alias") == alias]
+    selected = [
+        case
+        for case in cases
+        if case.get("model_alias") == alias
+        and int(case.get("context", 0)) in required_contexts
+    ]
     errors = [case for case in selected if case.get("status") != "ok"]
     checked = [case for case in selected if case.get("check_required", True)]
     passed = [case for case in checked if case.get("check_passed") is True]
@@ -82,6 +87,8 @@ def _evaluate_model(
     per_context = thresholds.get("per_context_min_check_pass_rate", {})
     for context_text, minimum in per_context.items():
         context = int(context_text)
+        if context not in required_contexts:
+            continue
         context_cases = [
             case for case in checked if int(case.get("context", 0)) == context
         ]
@@ -112,6 +119,9 @@ def _evaluate_model(
 def evaluate_benchmark(
     payload: dict[str, Any],
     policy: dict[str, Any],
+    *,
+    required_contexts_override: set[int] | None = None,
+    pass_verdict: str | None = None,
 ) -> dict[str, Any]:
     expected_suite = policy.get("suite")
     observed_suite = payload.get("suite")
@@ -125,7 +135,14 @@ def evaluate_benchmark(
     thresholds = gates["thresholds"]
     required_models = [str(alias) for alias in gates["required_models"]]
     required_set = set(required_models)
-    required_contexts = {int(value) for value in policy["required_contexts"]}
+    if required_contexts_override is None:
+        required_contexts = {int(value) for value in policy["required_contexts"]}
+        evaluation_mode = "qualification"
+    else:
+        required_contexts = {int(value) for value in required_contexts_override}
+        if not required_contexts:
+            raise ValueError("required_contexts_override ne peut pas être vide")
+        evaluation_mode = "diagnostic"
     cases = [case for case in payload.get("cases", []) if isinstance(case, dict)]
 
     observed_aliases = _observed_model_aliases(payload)
@@ -161,10 +178,12 @@ def evaluate_benchmark(
         if report["automated_gate"] != "pass"
     )
 
-    ready_verdict = policy["promotion"]["ready_verdict"]
+    ready_verdict = pass_verdict or policy["promotion"]["ready_verdict"]
     return {
         "schema_version": "1.1.0",
         "suite": observed_suite,
+        "evaluation_mode": evaluation_mode,
+        "evaluated_contexts": sorted(required_contexts),
         "automated_gate": "pass" if automated_pass else "fail",
         "verdict": ready_verdict if automated_pass else "NOT_READY",
         "automatic_promotion": False,

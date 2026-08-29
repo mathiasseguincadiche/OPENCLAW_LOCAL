@@ -44,6 +44,8 @@ La suite couvre notamment :
 - réparation après retour d'outil ;
 - contexte synthétique long.
 
+La passe complète représente **72 cas** : 3 modèles × 2 contextes × 12 scénarios. Le mode `-Quick` représente **36 cas** : les mêmes 3 modèles et 12 scénarios, mais uniquement à 8192 tokens de contexte.
+
 ## Contrôles exécutables
 
 Le runner prend en charge :
@@ -57,6 +59,25 @@ Le runner prend en charge :
 
 `scripts/22_validate_configs.py` refuse une suite contenant un contrôle inconnu.
 
+## API d'inférence
+
+Le runner utilise l'endpoint natif Ollama **`/api/chat`**. Ce choix correspond mieux au comportement conversationnel des modèles et permet de séparer proprement `message.thinking` de `message.content`. Les sorties de raisonnement peuvent donc être mesurées sans être confondues avec la réponse finale soumise aux contrôles.
+
+## Sorties bornées et politique de thinking
+
+Chaque scénario déclare `max_output_tokens` dans `benchmarks/suites/devops_v2.yaml`, avec une valeur par défaut de suite. Le runner transmet une limite à Ollama via `num_predict` : aucune génération n'est laissée avec le comportement non borné du runtime.
+
+Deux politiques sont volontairement séparées :
+
+- **Quick** : contexte 8192 uniquement et `think=false` pour la famille Qwen. Cette passe sert au diagnostic rapide des formats, contrôles et performances d'inférence sans payer le coût du raisonnement interne de Qwen3.8 sur chaque cas ;
+- **Complet** : contextes 8192 et 16384, thinking Qwen laissé **natif**. Pour éviter qu'un petit plafond de scénario coupe le raisonnement avant la réponse finale, Qwen dispose alors d'un budget borné de 2048 tokens par cas. Les autres familles conservent le plafond spécifique du scénario.
+
+Le mode complet reste donc la preuve de qualification de référence. Le mode Quick accélère les itérations mais ne remplace pas la passe complète.
+
+Si Ollama termine un cas pour cause de limite de longueur, ou si `eval_count` atteint le budget `num_predict`, le runner enregistre `output_truncated=true`, ajoute `output_limit:fail` et marque le cas en `status=error`. Avec `max_error_rate: 0`, une sortie tronquée fait donc échouer le gate au lieu d'être absorbée par la tolérance du taux de contrôles.
+
+Le contenu du raisonnement interne n'est pas persisté dans la preuve. Le runner conserve seulement `thinking_chars` et le temps avant premier token de réponse afin de mesurer le coût du thinking sans stocker sa trace brute.
+
 ## Exécution
 
 Qualification complète :
@@ -66,36 +87,63 @@ Qualification complète :
 .\menu.ps1 -Action qualification
 ```
 
+Passe rapide 8K uniquement via le même centre de contrôle :
+
+```powershell
+.\menu.ps1 -Action qualification -Quick -DryRun
+.\menu.ps1 -Action qualification -Quick
+```
+
 Runner direct :
 
 ```powershell
 .\scripts\windows\07_run_qualification.ps1
-```
-
-Passe rapide 8K uniquement :
-
-```powershell
 .\scripts\windows\07_run_qualification.ps1 -Quick
 ```
 
-La sélection individuelle de candidats n'existe plus : les trois modèles sont obligatoires.
+Runner Python de diagnostic :
+
+```powershell
+python .\scripts\benchmark_local.py --qwen-thinking native
+python .\scripts\benchmark_local.py --context 8192 --qwen-thinking off
+```
+
+La sélection individuelle de candidats n'existe plus dans la qualification : les trois modèles sont obligatoires.
 
 ## Source de vérité
 
 Les scripts PowerShell obtiennent les modèles via `scripts/20_list_models.py`, alimenté par `config/v1/model_catalog.yaml`. Une qualification ne peut donc pas utiliser une flotte différente du routage sans modifier explicitement les contrats.
 
-## Mesures
+## Mesures et progression
 
-Le runner Ollama enregistre notamment :
+Après chaque cas, le runner affiche une ligne opérateur avec :
 
+- `PASS`, `CHECK_FAIL` ou `ERROR` ;
+- durée murale du cas ;
+- TTFT jusqu'au premier token de réponse finale ;
+- tokens/s ;
+- nombre de tokens générés ;
+- volume de thinking observé en caractères, sans en stocker le contenu ;
+- estimation du temps restant fondée sur la moyenne des cas déjà terminés.
+
+Le JSON de preuve enregistre notamment :
+
+- `first_generation_ms` ;
 - `ttft_ms` ;
 - `wall_ms` ;
 - `eval_count` ;
 - `eval_duration_ns` ;
 - `tokens_per_second` ;
+- `thinking_chars` ;
+- `thinking_mode` ;
+- `done_reason` ;
+- `output_truncated` ;
+- `scenario_max_output_tokens` ;
+- `max_output_tokens` réellement appliqué ;
 - contexte demandé ;
 - résultat de chaque contrôle ;
-- sortie brute dans les preuves locales hors Git.
+- durée murale totale ;
+- sortie finale brute dans les preuves locales hors Git.
 
 La comparaison B580 complète ces données avec VRAM, RAM, stabilité, erreurs et tool-calling lorsqu'ils sont réellement observés.
 
@@ -141,6 +189,7 @@ Les résultats bruts restent sous `benchmarks/results/` et hors Git. Une synthè
 - backend ;
 - versions OpenClaw/Ollama ;
 - contexte ;
+- politique de thinking appliquée ;
 - pilote GPU ;
 - protocole ;
 - date ;
