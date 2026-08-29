@@ -57,6 +57,15 @@ def test_scenario_output_limit_rejects_unsafe_values(value: object) -> None:
         )
 
 
+def test_versioned_suite_has_safe_output_limits() -> None:
+    suite = BENCHMARK.load_yaml(ROOT / "benchmarks" / "suites" / "devops_v2.yaml")
+    scenarios = list(suite["scenarios"])
+    assert len(scenarios) == 12
+    for scenario in scenarios:
+        limit = BENCHMARK.scenario_output_limit(scenario, suite)
+        assert 1 <= limit <= BENCHMARK.MAX_CONFIGURED_OUTPUT_TOKENS
+
+
 def test_format_duration_is_operator_friendly() -> None:
     assert BENCHMARK.format_duration(9.6) == "10s"
     assert BENCHMARK.format_duration(65) == "1m05s"
