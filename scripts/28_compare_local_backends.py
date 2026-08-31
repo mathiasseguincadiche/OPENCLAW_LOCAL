@@ -237,7 +237,11 @@ def summarize(cases: list[dict[str, Any]], models: list[str]) -> dict[str, Any]:
 def _resolve_sycl_models(advertised: set[str], models: list[str]) -> dict[str, str]:
     resolved: dict[str, str] = {}
     for model in models:
-        matches = [candidate for candidate in advertised if candidate.casefold() == model.casefold()]
+        matches = [
+            candidate
+            for candidate in advertised
+            if candidate.casefold() == model.casefold()
+        ]
         if len(matches) != 1:
             raise RuntimeError(
                 f"Modèle Intel SYCL non résolu: {model}; annoncés: {sorted(advertised)}"
@@ -297,7 +301,9 @@ def main() -> int:
             for repetition in range(1, args.repetitions + 1):
                 for backend in ("ollama-vulkan", "llama-cpp-sycl"):
                     current += 1
-                    runtime_model = model if backend == "ollama-vulkan" else sycl_model_ids[model]
+                    runtime_model = (
+                        model if backend == "ollama-vulkan" else sycl_model_ids[model]
+                    )
                     print(
                         f"[{current}/{plan_total}] {backend} model={model} "
                         f"runtime_model={runtime_model} "
