@@ -84,6 +84,45 @@ def get_json(url: str, timeout: float = 5.0) -> dict[str, Any]:
     return value
 
 
+def _sycl_router_base(endpoint: str) -> str:
+    normalized = endpoint.rstrip("/")
+    return normalized[:-3] if normalized.endswith("/v1") else normalized
+
+
+def unload_sycl_model(
+    endpoint: str,
+    model: str,
+    *,
+    timeout: float = 90.0,
+) -> None:
+    router = _sycl_router_base(endpoint)
+    response = post_json(
+        f"{router}/models/unload",
+        {"model": model},
+        min(timeout, 30.0),
+    )
+    if response.get("success") is False:
+        raise RuntimeError(f"Le routeur Intel SYCL a refusé l'unload de {model}")
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        inventory = get_json(f"{router}/models?reload=1", timeout=10)
+        matches = [
+            item
+            for item in inventory.get("data", [])
+            if str(item.get("id", "")).casefold() == model.casefold()
+        ]
+        if not matches:
+            return
+        status = str((matches[0].get("status") or {}).get("value") or "")
+        if status == "unloaded":
+            return
+        time.sleep(0.5)
+    raise RuntimeError(
+        f"Le modèle Intel SYCL {model} n'est pas unloaded après {timeout:.0f}s"
+    )
+
+
 def _rate(count: object, duration_ns: object) -> float | None:
     count_value = int(count or 0)
     duration_value = int(duration_ns or 0)
@@ -148,31 +187,45 @@ def run_sycl(
         "stream": False,
         "chat_template_kwargs": {"enable_thinking": False},
     }
-    started = time.perf_counter()
-    response = post_json(f"{endpoint}/chat/completions", payload, timeout)
-    wall_ms = (time.perf_counter() - started) * 1000
-    choices = response.get("choices") or []
-    if not choices:
-        raise ValueError(f"llama.cpp n'a retourné aucun choix pour {model}")
-    choice = choices[0]
-    message = choice.get("message") or {}
-    content = str(message.get("content") or "").strip()
-    reasoning_content = str(message.get("reasoning_content") or "").strip()
-    timings = response.get("timings") or {}
-    usage = response.get("usage") or {}
-    return {
-        "content": content,
-        "reasoning_content_present": bool(reasoning_content),
-        "wall_ms": wall_ms,
-        "load_ms": None,
-        "prompt_tokens": int(usage.get("prompt_tokens") or timings.get("prompt_n") or 0),
-        "output_tokens": int(
-            usage.get("completion_tokens") or timings.get("predicted_n") or 0
-        ),
-        "prompt_tokens_per_second": _optional_float(timings.get("prompt_per_second")),
-        "tokens_per_second": _optional_float(timings.get("predicted_per_second")),
-        "finish_reason": str(choice.get("finish_reason") or ""),
-    }
+    try:
+        started = time.perf_counter()
+        response = post_json(f"{endpoint}/chat/completions", payload, timeout)
+        wall_ms = (time.perf_counter() - started) * 1000
+        choices = response.get("choices") or []
+        if not choices:
+            raise ValueError(f"llama.cpp n'a retourné aucun choix pour {model}")
+        choice = choices[0]
+        message = choice.get("message") or {}
+        content = str(message.get("content") or "").strip()
+        reasoning_content = str(message.get("reasoning_content") or "").strip()
+        timings = response.get("timings") or {}
+        usage = response.get("usage") or {}
+        result = {
+            "content": content,
+            "reasoning_content_present": bool(reasoning_content),
+            "wall_ms": wall_ms,
+            "load_ms": None,
+            "prompt_tokens": int(
+                usage.get("prompt_tokens") or timings.get("prompt_n") or 0
+            ),
+            "output_tokens": int(
+                usage.get("completion_tokens") or timings.get("predicted_n") or 0
+            ),
+            "prompt_tokens_per_second": _optional_float(
+                timings.get("prompt_per_second")
+            ),
+            "tokens_per_second": _optional_float(timings.get("predicted_per_second")),
+            "finish_reason": str(choice.get("finish_reason") or ""),
+            "unloaded_after_case": True,
+        }
+    except Exception:
+        try:
+            unload_sycl_model(endpoint, model)
+        except Exception:
+            pass
+        raise
+    unload_sycl_model(endpoint, model)
+    return result
 
 
 def _optional_float(value: object) -> float | None:
@@ -352,6 +405,7 @@ def main() -> int:
                         urllib.error.URLError,
                         json.JSONDecodeError,
                         ValueError,
+                        RuntimeError,
                     ) as exc:
                         cases.append(
                             {
@@ -367,7 +421,7 @@ def main() -> int:
     stamp = started_at.strftime("%Y%m%d_%H%M%S")
     output = RESULTS / f"backend_compare_b580_{stamp}.json"
     payload = {
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "started_at": started_at.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
         "total_wall_ms": (time.perf_counter() - run_started) * 1000,
@@ -376,6 +430,7 @@ def main() -> int:
             "temperature": 0,
             "qwen_thinking": "off_for_comparability",
             "sycl_thinking": "off_for_comparability_via_chat_template_kwargs",
+            "sycl_explicit_unload_between_cases": True,
             "repetitions": args.repetitions,
             "quick": args.quick,
             "scenarios": [str(item["id"]) for item in scenarios],

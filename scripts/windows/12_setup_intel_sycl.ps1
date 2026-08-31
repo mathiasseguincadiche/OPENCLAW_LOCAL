@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
 . (Join-Path $PSScriptRoot 'lib\intel_sycl_smoke.ps1')
+. (Join-Path $PSScriptRoot 'lib\intel_sycl_model_lifecycle.ps1')
 . (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
 
 $PlatformRoot = Get-OpenClawLocalPlatformRoot
@@ -28,6 +29,7 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] Vérifier le pilote B580, l''archive officielle, le manifeste du binaire et le port 8080.'
     Write-Host '[DRY-RUN] Résoudre les IDs réellement annoncés par le routeur llama.cpp avant les smokes.'
     Write-Host '[DRY-RUN] Désactiver le thinking uniquement pour le smoke déterministe LOCAL_OK.'
+    Write-Host '[DRY-RUN] Décharger explicitement chaque modèle et attendre unloaded avant le switch suivant.'
     Write-Host '[DRY-RUN] Réutiliser les blobs GGUF déjà présents dans Ollama; aucun modèle ne sera retéléchargé.'
     Write-Host '[DRY-RUN] Le runtime binaire embarque les dépendances SYCL; pas d''installation oneAPI complète.'
     Write-Host '[DRY-RUN] Aucune promotion OpenClaw automatique; Ollama/Vulkan reste le rollback.'
@@ -38,7 +40,7 @@ $ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
 Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 $Proof = [ordered]@{
-    schema_version = '1.2.0'
+    schema_version = '1.3.0'
     started_at = [DateTimeOffset]::UtcNow.ToString('o')
     release = [string]$RuntimeLock.release
     asset = [string]$RuntimeLock.asset
@@ -47,6 +49,7 @@ $Proof = [ordered]@{
     device = [string]$RuntimeLock.device
     oneapi_device_selector = [string]$RuntimeLock.oneapi_device_selector
     models_max = [int]$RuntimeLock.models_max
+    explicit_unload_between_models = $true
     python = $ManagedPython
     runtime_manifest = $Paths.Manifest
     smoke = @()
@@ -84,7 +87,13 @@ try {
     foreach ($Model in $ResolvedModels) {
         Write-Host "SMOKE Intel SYCL: $Model"
         $Result = Invoke-IntelSyclDeterministicSmoke `
-            -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model
+            -BaseUrl ([string]$RuntimeLock.endpoint) `
+            -Model $Model `
+            -DiagnosticLogPath $Paths.StderrLog
+        Remove-IntelSyclModel `
+            -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model `
+            -TimeoutSeconds 90 -Confirm:$false
+        $Result | Add-Member -NotePropertyName unloaded_after_smoke -NotePropertyValue $true
         $Smoke += $Result
         Write-Host (
             "OK  $Model via SYCL: wall=$($Result.wall_ms)ms " +
