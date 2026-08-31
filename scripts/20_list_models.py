@@ -1,6 +1,29 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
+from pathlib import Path
+
+
+def _activate_repository_runtime() -> None:
+    platform_root = os.environ.get("OPENCLAW_LOCAL_ROOT")
+    if platform_root and os.name == "nt":
+        managed = Path(platform_root) / "runtime" / "venv" / "Scripts" / "python.exe"
+        if managed.is_file() and Path(sys.executable).resolve() != managed.resolve():
+            os.execv(
+                str(managed),
+                [str(managed), str(Path(__file__).resolve()), *sys.argv[1:]],
+            )
+
+    repo_root = Path(__file__).resolve().parents[1]
+    src = repo_root / "src"
+    src_text = str(src)
+    if src_text not in sys.path:
+        sys.path.insert(0, src_text)
+
+
+_activate_repository_runtime()
 
 from clawlocal.config import load_contract
 
