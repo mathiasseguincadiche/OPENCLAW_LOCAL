@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
+. (Join-Path $PSScriptRoot 'lib\intel_sycl_smoke.ps1')
 . (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
 
 $PlatformRoot = Get-OpenClawLocalPlatformRoot
@@ -20,6 +21,7 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] Release=$($RuntimeLock.release) Device=$($RuntimeLock.device) Selector=$($RuntimeLock.oneapi_device_selector)"
     Write-Host '[DRY-RUN] Utiliser le runtime Python géré OPENCLAW_LOCAL.'
     Write-Host '[DRY-RUN] Résoudre les IDs réellement annoncés par llama.cpp sans supposer leur casse.'
+    Write-Host '[DRY-RUN] Désactiver le thinking uniquement pour le smoke déterministe LOCAL_OK.'
     Write-Host '[DRY-RUN] Vérifier aussi pilote Intel, manifeste/hash du binaire et processus suivi.'
     Write-Host '[DRY-RUN] Produire une preuve locale sans promouvoir le backend.'
     exit 0
@@ -79,14 +81,14 @@ foreach ($Model in $Expected) {
 
 $Smoke = @()
 foreach ($Model in $Resolved) {
-    $Result = Invoke-IntelSyclChatSmoke -BaseUrl ([string]$RuntimeLock.endpoint) `
+    $Result = Invoke-IntelSyclDeterministicSmoke -BaseUrl ([string]$RuntimeLock.endpoint) `
         -Model $Model -TimeoutSeconds $TimeoutSeconds
     $Smoke += $Result
     Write-Host "OK  ${Model}: wall=$($Result.wall_ms)ms tok/s=$($Result.tokens_per_second)"
 }
 
 $Proof = [ordered]@{
-    schema_version = '1.1.0'
+    schema_version = '1.2.0'
     verified_at = [DateTimeOffset]::UtcNow.ToString('o')
     release = [string]$RuntimeLock.release
     expected_archive_sha256 = [string]$RuntimeLock.sha256
