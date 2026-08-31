@@ -79,6 +79,19 @@
     "context_tokens": 8192,
     "gpu_layers": "all",
     "offline": true,
+    "model_source_policy": "ollama_blob_unless_native_override",
+    "native_model_overrides": {
+      "devstral-small-2:24b": {
+        "reason": "published_ollama_mistral3_layout_requires_ollama_compat_layer",
+        "source": "bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF",
+        "filename": "mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
+        "url": "https://huggingface.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/main/mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf?download=true",
+        "sha256": "bfd11c8679c6b81eb43763505465d7dcfa72e460ab1c220ecc235a3efadd7f7f",
+        "quantization": "Q4_K_M",
+        "architecture": "mistral3",
+        "install_policy": "pinned_sha256_resumable_download"
+      }
+    },
     "install_policy": "pinned_release_with_sha256",
     "promotion_requires_real_b580_e2e": true,
     "hardware_tested": null

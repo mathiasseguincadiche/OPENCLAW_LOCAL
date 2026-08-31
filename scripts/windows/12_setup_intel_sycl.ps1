@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
+. (Join-Path $PSScriptRoot 'lib\intel_sycl_model_sources.ps1')
 . (Join-Path $PSScriptRoot 'lib\intel_sycl_smoke.ps1')
 . (Join-Path $PSScriptRoot 'lib\intel_sycl_model_lifecycle.ps1')
 . (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
@@ -30,7 +31,8 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] Résoudre les IDs réellement annoncés par le routeur llama.cpp avant les smokes.'
     Write-Host '[DRY-RUN] Désactiver le thinking uniquement pour le smoke déterministe LOCAL_OK.'
     Write-Host '[DRY-RUN] Décharger explicitement chaque modèle et attendre unloaded avant le switch suivant.'
-    Write-Host '[DRY-RUN] Réutiliser les blobs GGUF déjà présents dans Ollama; aucun modèle ne sera retéléchargé.'
+    Write-Host '[DRY-RUN] Qwen/Gemma réutilisent Ollama; Devstral utilise un GGUF llama.cpp natif SHA-256 verrouillé.'
+    Write-Host '[DRY-RUN] Le téléchargement Devstral est reprenable et n''est effectué que si le GGUF natif manque.'
     Write-Host '[DRY-RUN] Le runtime binaire embarque les dépendances SYCL; pas d''installation oneAPI complète.'
     Write-Host '[DRY-RUN] Aucune promotion OpenClaw automatique; Ollama/Vulkan reste le rollback.'
     exit 0
@@ -40,7 +42,7 @@ $ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
 Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 $Proof = [ordered]@{
-    schema_version = '1.3.0'
+    schema_version = '1.4.0'
     started_at = [DateTimeOffset]::UtcNow.ToString('o')
     release = [string]$RuntimeLock.release
     asset = [string]$RuntimeLock.asset
@@ -49,6 +51,7 @@ $Proof = [ordered]@{
     device = [string]$RuntimeLock.device
     oneapi_device_selector = [string]$RuntimeLock.oneapi_device_selector
     models_max = [int]$RuntimeLock.models_max
+    model_source_policy = [string]$RuntimeLock.model_source_policy
     explicit_unload_between_models = $true
     python = $ManagedPython
     runtime_manifest = $Paths.Manifest
