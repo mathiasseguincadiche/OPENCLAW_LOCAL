@@ -77,7 +77,7 @@
     "oneapi_device_selector": "level_zero:gpu",
     "models_max": 1,
     "context_tokens": 8192,
-    "gpu_layers": "all",
+    "gpu_layers": "auto",
     "offline": true,
     "model_source_policy": "ollama_blob_unless_native_override",
     "native_model_overrides": {
