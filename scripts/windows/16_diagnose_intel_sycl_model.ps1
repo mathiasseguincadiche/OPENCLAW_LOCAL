@@ -176,7 +176,7 @@ $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeL
 if ($DryRun) {
     Write-Host "[DRY-RUN] Diagnostic direct d'un modèle llama.cpp sans passer par le routeur."
     Write-Host "[DRY-RUN] Model=$Model Release=$($RuntimeLock.release) Device=$($RuntimeLock.device)"
-    Write-Host '[DRY-RUN] Matrice: SYCL/all+fit on -> SYCL/all+fit off -> CPU/0+fit off.'
+    Write-Host '[DRY-RUN] Matrice: SYCL/all+fit on -> SYCL/all+fit off -> SYCL/auto+fit on -> CPU/0+fit off.'
     Write-Host '[DRY-RUN] Chaque essai utilise un port loopback éphémère et capture stdout/stderr séparément.'
     Write-Host "[DRY-RUN] Aucun modèle n'est téléchargé et aucune configuration OpenClaw n'est modifiée."
     exit 0
@@ -219,6 +219,13 @@ if (-not [bool]$Results[-1].success) {
 if (-not [bool]$Results[-1].success) {
     $Results += Invoke-DirectIntelSyclLoadProbe `
         -ServerBinary $Binary -ModelPath $ModelPath -ModelAlias $ResolvedModel `
+        -Scenario 'gpu_auto_fit_on' -ProofDirectory $ProofDirectory -RuntimeLock $RuntimeLock `
+        -Fit 'on' -GpuLayers 'auto' -UseSyclDevice $true -TimeoutSeconds $TimeoutSeconds
+}
+
+if (-not [bool]$Results[-1].success) {
+    $Results += Invoke-DirectIntelSyclLoadProbe `
+        -ServerBinary $Binary -ModelPath $ModelPath -ModelAlias $ResolvedModel `
         -Scenario 'cpu_fit_off' -ProofDirectory $ProofDirectory -RuntimeLock $RuntimeLock `
         -Fit 'off' -GpuLayers '0' -UseSyclDevice $false -TimeoutSeconds $TimeoutSeconds
 }
@@ -238,6 +245,12 @@ elseif (
     'llama_fit_regression'
 }
 elseif (
+    $ByScenario['gpu_auto_fit_on'] -and
+    $ByScenario['gpu_auto_fit_on'].success
+) {
+    'automatic_partial_offload_required'
+}
+elseif (
     $ByScenario['cpu_fit_off'] -and
     $ByScenario['cpu_fit_off'].success
 ) {
@@ -251,7 +264,7 @@ else {
 }
 
 $Proof = [ordered]@{
-    schema_version = '1.0.0'
+    schema_version = '1.1.0'
     diagnosed_at = [DateTimeOffset]::UtcNow.ToString('o')
     model = $ResolvedModel
     model_path = $ModelPath
@@ -283,8 +296,11 @@ switch ($Diagnosis) {
     'llama_fit_regression' {
         Write-Host 'VERDICT=Le modèle charge avec --fit off; le fitter llama.cpp est la cause isolée.'
     }
+    'automatic_partial_offload_required' {
+        Write-Host 'VERDICT=Le full offload échoue mais --gpu-layers auto charge; utiliser un offload partiel calculé pour ce modèle.'
+    }
     'sycl_offload_or_device_memory' {
-        Write-Host "VERDICT=Le GGUF charge en CPU mais pas avec SYCL/all; la cause est dans l'offload SYCL ou la mémoire device."
+        Write-Host "VERDICT=Le GGUF charge en CPU mais pas avec SYCL; la cause est dans l'offload SYCL ou la mémoire device."
     }
     'gguf_or_llama_core_load' {
         Write-Host 'VERDICT=Le modèle échoue même en CPU-only avec ce build; inspecter stderr pour GGUF/tokenizer/architecture llama.cpp.'
