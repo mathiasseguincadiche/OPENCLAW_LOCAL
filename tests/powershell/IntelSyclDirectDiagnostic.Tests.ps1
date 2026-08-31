@@ -17,9 +17,11 @@ Describe 'Intel SYCL direct model diagnostic' {
         $Script | Should -Match "-GpuLayers 'all'"
         $Script | Should -Match "-GpuLayers 'auto'"
         $Script | Should -Match "-GpuLayers '0'"
-        $Script | Should -Match 'Resolve-OllamaGgufPath'
+        $Script | Should -Match 'Resolve-IntelSyclModelPath'
+        $Script | Should -Match 'intel_sycl_model_sources\.ps1'
         $Script | Should -Match 'RedirectStandardError'
         $Script | Should -Match 'RedirectStandardOutput'
+        $Script | Should -Match 'STDERR'
     }
 
     It 'classe les causes sans modifier OpenClaw' {
@@ -28,7 +30,7 @@ Describe 'Intel SYCL direct model diagnostic' {
             Join-Path $TestRepoRoot 'scripts\windows\16_diagnose_intel_sycl_model.ps1'
         )
 
-        $Script | Should -Match 'router_only_or_transient'
+        $Script | Should -Match 'nominal_direct_load'
         $Script | Should -Match 'llama_fit_regression'
         $Script | Should -Match 'automatic_partial_offload_required'
         $Script | Should -Match 'sycl_offload_or_device_memory'
@@ -53,5 +55,6 @@ Describe 'Intel SYCL direct model diagnostic' {
         $Text | Should -Match 'SYCL/all\+fit on'
         $Text | Should -Match 'SYCL/auto\+fit on'
         $Text | Should -Match 'CPU/0\+fit off'
+        $Text | Should -Match 'overrides natifs'
     }
 }
