@@ -23,11 +23,6 @@ def _activate_repository_runtime() -> None:
         sys.path.insert(0, src_text)
 
 
-_activate_repository_runtime()
-
-from clawlocal.config import load_contract
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Liste les modèles déclarés dans model_catalog.yaml."
@@ -44,6 +39,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    _activate_repository_runtime()
+    from clawlocal.config import load_contract
+
     args = parse_args()
     catalog = load_contract("model_catalog.yaml")
     models = catalog.get("models", {})
