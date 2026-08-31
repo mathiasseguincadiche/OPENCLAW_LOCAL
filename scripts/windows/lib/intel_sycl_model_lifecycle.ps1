@@ -7,7 +7,7 @@ function Get-IntelSyclRouterBaseUrl {
     return ($BaseUrl.TrimEnd('/') -replace '/v1$', '')
 }
 
-function Get-IntelSyclRouterModels {
+function Get-IntelSyclRouterModelInventory {
     param(
         [Parameter(Mandatory)][string]$BaseUrl,
         [int]$TimeoutSeconds = 10
@@ -28,7 +28,8 @@ function Wait-IntelSyclModelUnloaded {
 
     $Deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
-        $Inventory = Get-IntelSyclRouterModels -BaseUrl $BaseUrl -TimeoutSeconds 10
+        $Inventory = Get-IntelSyclRouterModelInventory `
+            -BaseUrl $BaseUrl -TimeoutSeconds 10
         $Entry = @(
             $Inventory.data |
                 Where-Object { [string]$_.id -ieq $Model }
@@ -46,13 +47,17 @@ function Wait-IntelSyclModelUnloaded {
     throw "Le modèle Intel SYCL $Model n'est pas revenu à l'état unloaded après $TimeoutSeconds s."
 }
 
-function Unload-IntelSyclModel {
+function Remove-IntelSyclModel {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$BaseUrl,
         [Parameter(Mandatory)][string]$Model,
         [int]$TimeoutSeconds = 60
     )
 
+    if (-not $PSCmdlet.ShouldProcess($Model, 'Unload Intel SYCL router model')) {
+        return
+    }
     $RouterBaseUrl = Get-IntelSyclRouterBaseUrl -BaseUrl $BaseUrl
     $Body = @{ model = $Model } | ConvertTo-Json -Compress
     $Response = Invoke-RestMethod -Method Post `
