@@ -9,12 +9,23 @@ SUPPORTED_BACKENDS = ("ollama-vulkan", "llama-cpp-sycl")
 INTEL_SYCL_PROVIDER_ID = "intel-sycl"
 
 
+def _runtime_id(model: dict[str, Any], backend_id: str) -> str:
+    if backend_id == "ollama-vulkan":
+        return str(model["runtime_id"])
+    if backend_id == "llama-cpp-sycl":
+        runtime_id = model.get("sycl_runtime_id")
+        if not runtime_id:
+            raise ValueError("sycl_runtime_id absent pour un modèle local requis")
+        return str(runtime_id)
+    raise ValueError(f"Backend local non supporté pour OpenClaw: {backend_id}")
+
+
 def _backend_ref(alias: str, catalog: dict[str, Any], backend_id: str) -> str:
     model = catalog["models"][alias]
     if backend_id == "ollama-vulkan":
-        return f"ollama/{model['runtime_id']}"
+        return f"ollama/{_runtime_id(model, backend_id)}"
     if backend_id == "llama-cpp-sycl":
-        return f"{INTEL_SYCL_PROVIDER_ID}/{model['runtime_id']}"
+        return f"{INTEL_SYCL_PROVIDER_ID}/{_runtime_id(model, backend_id)}"
     raise ValueError(f"Backend local non supporté pour OpenClaw: {backend_id}")
 
 
@@ -72,7 +83,7 @@ def _intel_sycl_models(
     for model in catalog["models"].values():
         if not model.get("required"):
             continue
-        runtime_id = str(model["runtime_id"])
+        runtime_id = _runtime_id(model, "llama-cpp-sycl")
         models.append(
             {
                 "id": runtime_id,
