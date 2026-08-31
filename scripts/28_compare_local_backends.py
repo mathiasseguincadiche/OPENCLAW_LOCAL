@@ -143,21 +143,22 @@ def run_ollama(
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "keep_alive": "15m",
+        "think": False,
         "options": {
             "temperature": 0,
             "num_ctx": 8192,
             "num_predict": max_tokens,
         },
     }
-    if model.startswith("qwen3.8:"):
-        payload["think"] = False
     started = time.perf_counter()
     response = post_json(f"{endpoint}/api/chat", payload, timeout)
     wall_ms = (time.perf_counter() - started) * 1000
     message = response.get("message") or {}
     content = str(message.get("content") or "").strip()
+    thinking = str(message.get("thinking") or "").strip()
     return {
         "content": content,
+        "thinking_present": bool(thinking),
         "wall_ms": wall_ms,
         "load_ms": float(response.get("load_duration") or 0) / 1_000_000,
         "prompt_tokens": int(response.get("prompt_eval_count") or 0),
@@ -257,7 +258,9 @@ def summarize(cases: list[dict[str, Any]], models: list[str]) -> dict[str, Any]:
             model_summary[backend] = {
                 "successful_cases": len(selected),
                 "median_wall_ms": median_metric(selected, "wall_ms"),
-                "median_tokens_per_second": median_metric(selected, "tokens_per_second"),
+                "median_tokens_per_second": median_metric(
+                    selected, "tokens_per_second"
+                ),
                 "median_prompt_tokens_per_second": median_metric(
                     selected, "prompt_tokens_per_second"
                 ),
@@ -390,7 +393,12 @@ def main() -> int:
                                 args.timeout,
                             )
                         if not result["content"]:
-                            raise ValueError("Réponse vide")
+                            thinking = bool(
+                                result.get("thinking_present")
+                                or result.get("reasoning_content_present")
+                            )
+                            suffix = " malgré un canal de raisonnement" if thinking else ""
+                            raise ValueError(f"Réponse finale vide{suffix}")
                         case = {**base, **result, "status": "ok"}
                         cases.append(case)
                         print(
@@ -421,16 +429,17 @@ def main() -> int:
     stamp = started_at.strftime("%Y%m%d_%H%M%S")
     output = RESULTS / f"backend_compare_b580_{stamp}.json"
     payload = {
-        "schema_version": "1.3.0",
+        "schema_version": "1.4.0",
         "started_at": started_at.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
         "total_wall_ms": (time.perf_counter() - run_started) * 1000,
         "protocol": {
             "context_tokens": 8192,
             "temperature": 0,
-            "qwen_thinking": "off_for_comparability",
+            "ollama_thinking": "off_for_all_models_via_think_false",
             "sycl_thinking": "off_for_comparability_via_chat_template_kwargs",
             "sycl_explicit_unload_between_cases": True,
+            "timeout_seconds": args.timeout,
             "repetitions": args.repetitions,
             "quick": args.quick,
             "scenarios": [str(item["id"]) for item in scenarios],
