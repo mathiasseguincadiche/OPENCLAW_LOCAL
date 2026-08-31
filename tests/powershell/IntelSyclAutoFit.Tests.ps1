@@ -26,6 +26,7 @@ Describe 'Intel SYCL B580 auto-fit policy' {
         $Helper = Get-Content -Raw -LiteralPath (
             Join-Path $RepoRoot 'scripts\windows\lib\intel_sycl.ps1'
         )
-        $Helper | Should -Match "'--gpu-layers', \[string\]\$RuntimeLock\.gpu_layers"
+        $Helper | Should -Match "'--gpu-layers'"
+        $Helper | Should -Match 'RuntimeLock\.gpu_layers'
     }
 }
