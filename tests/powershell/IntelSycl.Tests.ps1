@@ -39,6 +39,35 @@ Describe 'Backend Intel Arc B580 SYCL' {
         $Helper | Should -Match 'Resolve-OllamaGgufPath'
     }
 
+    It 'force le runtime Python géré au lieu du Python système' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $PythonHelper = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\windows\lib\python_runtime.ps1'
+        )
+        $PythonHelper | Should -Match 'runtime\\venv\\Scripts\\python\.exe'
+        $PythonHelper | Should -Match 'import clawlocal, yaml'
+        $PythonHelper | Should -Match 'OPENCLAW_LOCAL_PYTHON'
+        $PythonHelper | Should -Match 'install-core'
+
+        foreach ($ScriptName in @(
+            '12_setup_intel_sycl.ps1',
+            '14_verify_intel_sycl.ps1',
+            '15_compare_intel_backends.ps1'
+        )) {
+            $Script = Get-Content -Raw -LiteralPath (
+                Join-Path $TestRepoRoot "scripts\windows\$ScriptName"
+            )
+            $Script | Should -Match 'python_runtime\.ps1'
+            $Script | Should -Match 'Enable-ClawLocalManagedPython'
+        }
+
+        $ListModels = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\20_list_models.py'
+        )
+        $ListModels | Should -Match 'runtime.*venv.*Scripts.*python\.exe'
+        $ListModels | Should -Match 'os\.execv'
+    }
+
     It 'génère un preset routeur versionné et mono-modèle' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Helper = Get-Content -Raw -LiteralPath (

@@ -8,18 +8,24 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
+. (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
 
+$PlatformRoot = Get-OpenClawLocalPlatformRoot
 $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
 $CompareScript = Join-Path $RepoRoot 'scripts\28_compare_local_backends.py'
 
 if ($DryRun) {
     $Mode = if ($Quick) { 'QUICK: 1 scénario, 1 répétition' } else { 'COMPLET: 2 scénarios, 2 répétitions' }
     Write-Host "[DRY-RUN] Comparaison B580 Ollama/Vulkan vs llama.cpp/SYCL — $Mode."
+    Write-Host '[DRY-RUN] Utiliser le runtime Python géré OPENCLAW_LOCAL.'
     Write-Host '[DRY-RUN] Mêmes trois modèles, contexte 8192, température 0, Qwen thinking off pour comparabilité.'
     Write-Host '[DRY-RUN] Mesurer durée, chargement, prompt tok/s, decode tok/s et changements de modèle.'
     Write-Host '[DRY-RUN] Le résultat ne peut pas promouvoir automatiquement le backend.'
     exit 0
 }
+
+$ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
+Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 try {
     $null = Invoke-RestMethod -Method Get -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 5
@@ -42,7 +48,7 @@ else {
     $Arguments += @('--repetitions', '2')
 }
 
-& python @Arguments
+& $ManagedPython @Arguments
 if ($LASTEXITCODE -ne 0) {
     throw "Comparaison Ollama/SYCL en échec (code $LASTEXITCODE)."
 }

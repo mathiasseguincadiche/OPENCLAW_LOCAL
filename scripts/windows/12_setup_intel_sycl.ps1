@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
+. (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
 
 $PlatformRoot = Get-OpenClawLocalPlatformRoot
 $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
@@ -22,12 +23,16 @@ if ($DryRun) {
     Write-Host "Device      : $($RuntimeLock.device) via $($RuntimeLock.oneapi_device_selector)"
     Write-Host "Endpoint    : $($RuntimeLock.endpoint)"
     Write-Host "Models max  : $($RuntimeLock.models_max) (un gros modèle à la fois)"
+    Write-Host '[DRY-RUN] Utiliser le runtime Python géré OPENCLAW_LOCAL, jamais un Python système ambigu.'
     Write-Host '[DRY-RUN] Vérifier le pilote B580, l''archive officielle, le manifeste du binaire et le port 8080.'
     Write-Host '[DRY-RUN] Réutiliser les blobs GGUF déjà présents dans Ollama; aucun modèle ne sera retéléchargé.'
     Write-Host '[DRY-RUN] Le runtime binaire embarque les dépendances SYCL; pas d''installation oneAPI complète.'
     Write-Host '[DRY-RUN] Aucune promotion OpenClaw automatique; Ollama/Vulkan reste le rollback.'
     exit 0
 }
+
+$ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
+Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 $Proof = [ordered]@{
     schema_version = '1.1.0'
@@ -39,6 +44,7 @@ $Proof = [ordered]@{
     device = [string]$RuntimeLock.device
     oneapi_device_selector = [string]$RuntimeLock.oneapi_device_selector
     models_max = [int]$RuntimeLock.models_max
+    python = $ManagedPython
     runtime_manifest = $Paths.Manifest
     smoke = @()
     status = 'running'
@@ -83,7 +89,7 @@ try {
     exit 0
 }
 catch {
-    Stop-IntelSyclServer -StatePath $Paths.ProcessState
+    Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
     $Proof.status = 'failed'
     $Proof.error = $_.Exception.Message
     $Proof.finished_at = [DateTimeOffset]::UtcNow.ToString('o')
