@@ -146,6 +146,7 @@ def run_sycl(
         "temperature": 0,
         "max_tokens": max_tokens,
         "stream": False,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     started = time.perf_counter()
     response = post_json(f"{endpoint}/chat/completions", payload, timeout)
@@ -156,10 +157,12 @@ def run_sycl(
     choice = choices[0]
     message = choice.get("message") or {}
     content = str(message.get("content") or "").strip()
+    reasoning_content = str(message.get("reasoning_content") or "").strip()
     timings = response.get("timings") or {}
     usage = response.get("usage") or {}
     return {
         "content": content,
+        "reasoning_content_present": bool(reasoning_content),
         "wall_ms": wall_ms,
         "load_ms": None,
         "prompt_tokens": int(usage.get("prompt_tokens") or timings.get("prompt_n") or 0),
@@ -364,7 +367,7 @@ def main() -> int:
     stamp = started_at.strftime("%Y%m%d_%H%M%S")
     output = RESULTS / f"backend_compare_b580_{stamp}.json"
     payload = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "started_at": started_at.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
         "total_wall_ms": (time.perf_counter() - run_started) * 1000,
@@ -372,6 +375,7 @@ def main() -> int:
             "context_tokens": 8192,
             "temperature": 0,
             "qwen_thinking": "off_for_comparability",
+            "sycl_thinking": "off_for_comparability_via_chat_template_kwargs",
             "repetitions": args.repetitions,
             "quick": args.quick,
             "scenarios": [str(item["id"]) for item in scenarios],
