@@ -5,7 +5,8 @@ function Invoke-IntelSyclDeterministicSmoke {
     param(
         [Parameter(Mandatory)][string]$BaseUrl,
         [Parameter(Mandatory)][string]$Model,
-        [int]$TimeoutSeconds = 300
+        [int]$TimeoutSeconds = 300,
+        [string]$DiagnosticLogPath
     )
 
     $BodyObject = [ordered]@{
@@ -25,11 +26,29 @@ function Invoke-IntelSyclDeterministicSmoke {
     }
     $Body = $BodyObject | ConvertTo-Json -Depth 8 -Compress
     $Started = [DateTimeOffset]::UtcNow
-    $Response = Invoke-RestMethod -Method Post `
-        -Uri "$BaseUrl/chat/completions" `
-        -ContentType 'application/json' `
-        -Body $Body `
-        -TimeoutSec $TimeoutSeconds
+    try {
+        $Response = Invoke-RestMethod -Method Post `
+            -Uri "$BaseUrl/chat/completions" `
+            -ContentType 'application/json' `
+            -Body $Body `
+            -TimeoutSec $TimeoutSeconds
+    }
+    catch {
+        $Details = if ($_.ErrorDetails.Message) {
+            [string]$_.ErrorDetails.Message
+        }
+        else {
+            [string]$_.Exception.Message
+        }
+        $Tail = ''
+        if ($DiagnosticLogPath -and (Test-Path -LiteralPath $DiagnosticLogPath)) {
+            $Tail = (Get-Content -LiteralPath $DiagnosticLogPath -Tail 120) -join "`n"
+        }
+        throw (
+            "Smoke Intel SYCL HTTP échoué pour $Model. $Details" +
+            $(if ($Tail) { "`nDernières lignes llama-server:`n$Tail" } else { '' })
+        )
+    }
     $ElapsedMs = ([DateTimeOffset]::UtcNow - $Started).TotalMilliseconds
 
     $Choice = $Response.choices[0]
