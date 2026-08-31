@@ -68,6 +68,34 @@ Describe 'Backend Intel Arc B580 SYCL' {
         $ListModels | Should -Match 'os\.execv'
     }
 
+    It 'résout les IDs normalisés par llama.cpp sans casser les IDs Ollama' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $Catalog = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'config\v1\model_catalog.yaml'
+        )
+        $Catalog | Should -Match 'runtime_id:\s*qwen3\.8:27b'
+        $Catalog | Should -Match 'sycl_runtime_id:\s*qwen3\.8:27B'
+        $Catalog | Should -Match 'sycl_runtime_id:\s*gemma4:26B'
+        $Catalog | Should -Match 'sycl_runtime_id:\s*devstral-small-2:24B'
+
+        foreach ($ScriptName in @(
+            '12_setup_intel_sycl.ps1',
+            '14_verify_intel_sycl.ps1'
+        )) {
+            $Script = Get-Content -Raw -LiteralPath (
+                Join-Path $TestRepoRoot "scripts\windows\$ScriptName"
+            )
+            $Script | Should -Match '-ieq'
+            $Script | Should -Match 'Advertised'
+        }
+
+        $Compare = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\28_compare_local_backends.py'
+        )
+        $Compare | Should -Match 'casefold\(\)'
+        $Compare | Should -Match 'runtime_model'
+    }
+
     It 'génère un preset routeur versionné et mono-modèle' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Helper = Get-Content -Raw -LiteralPath (
