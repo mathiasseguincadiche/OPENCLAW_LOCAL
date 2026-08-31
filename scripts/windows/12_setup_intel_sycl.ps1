@@ -90,8 +90,9 @@ try {
             -BaseUrl ([string]$RuntimeLock.endpoint) `
             -Model $Model `
             -DiagnosticLogPath $Paths.StderrLog
-        Unload-IntelSyclModel `
-            -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model -TimeoutSeconds 90
+        Remove-IntelSyclModel `
+            -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model `
+            -TimeoutSeconds 90 -Confirm:$false
         $Result | Add-Member -NotePropertyName unloaded_after_smoke -NotePropertyValue $true
         $Smoke += $Result
         Write-Host (
