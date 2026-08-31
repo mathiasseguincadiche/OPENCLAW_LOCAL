@@ -9,9 +9,12 @@ Describe 'Intel SYCL router model lifecycle' {
         )
         $Lifecycle | Should -Match '/models/unload'
         $Lifecycle | Should -Match 'Wait-IntelSyclModelUnloaded'
+        $Lifecycle | Should -Match 'Get-IntelSyclRouterModelInventory'
         $Lifecycle | Should -Match "Status -eq 'unloaded'"
         $Lifecycle | Should -Match 'models\?reload=1'
         $Lifecycle | Should -Match "-replace '/v1\$', ''"
+        $Lifecycle | Should -Match 'Remove-IntelSyclModel'
+        $Lifecycle | Should -Match 'SupportsShouldProcess'
     }
 
     It 'décharge chaque modèle entre les smokes setup et verify' {
@@ -24,7 +27,8 @@ Describe 'Intel SYCL router model lifecycle' {
                 Join-Path $TestRepoRoot "scripts\windows\$ScriptName"
             )
             $Script | Should -Match 'intel_sycl_model_lifecycle\.ps1'
-            $Script | Should -Match 'Unload-IntelSyclModel'
+            $Script | Should -Match 'Remove-IntelSyclModel'
+            $Script | Should -Match '-Confirm:\$false'
             $Script | Should -Match 'unloaded_after_smoke'
             $Script | Should -Match 'DiagnosticLogPath'
         }
