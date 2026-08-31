@@ -1,4 +1,4 @@
-schema_version: "1.1.0"
+schema_version: "1.2.0"
 platform_version: "0.2.0"
 policy:
   local_first: true
@@ -12,6 +12,7 @@ models:
   qwen-max:
     provider: ollama
     runtime_id: qwen3.8:27b
+    sycl_runtime_id: qwen3.8:27B
     family: qwen
     class: local_max
     input: [text, image]
@@ -24,6 +25,7 @@ models:
   gemma-deep:
     provider: ollama
     runtime_id: gemma4:26b
+    sycl_runtime_id: gemma4:26B
     family: gemma
     class: local_deep
     input: [text, image]
@@ -36,6 +38,7 @@ models:
   devstral-devops:
     provider: ollama
     runtime_id: devstral-small-2:24b
+    sycl_runtime_id: devstral-small-2:24B
     family: mistral
     class: local_specialist
     input: [text, image]
