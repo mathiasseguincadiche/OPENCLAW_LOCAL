@@ -15,10 +15,10 @@ Describe 'Intel SYCL B580 auto-fit policy' {
         $Backends | Should -Match 'gpu_layers:\s*auto'
         $Backends | Should -Not -Match 'gpu_layers:\s*all'
 
-        $Profile = Get-Content -Raw -LiteralPath (
+        $HardwareProfile = Get-Content -Raw -LiteralPath (
             Join-Path $RepoRoot 'config\v1\hardware_profiles\intel_arc_b580_12gb.yaml'
         )
-        $Profile | Should -Match 'sycl_gpu_layers:\s*auto'
+        $HardwareProfile | Should -Match 'sycl_gpu_layers:\s*auto'
     }
 
     It 'transmet la politique runtime au serveur sans override caché' {
