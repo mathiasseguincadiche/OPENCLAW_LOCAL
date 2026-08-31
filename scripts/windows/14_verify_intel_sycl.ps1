@@ -19,6 +19,7 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] Vérifier sans installer: runtime verrouillé, B580 via SYCL/Level Zero, API 8080 et les trois modèles.'
     Write-Host "[DRY-RUN] Release=$($RuntimeLock.release) Device=$($RuntimeLock.device) Selector=$($RuntimeLock.oneapi_device_selector)"
     Write-Host '[DRY-RUN] Utiliser le runtime Python géré OPENCLAW_LOCAL.'
+    Write-Host '[DRY-RUN] Résoudre les IDs réellement annoncés par llama.cpp sans supposer leur casse.'
     Write-Host '[DRY-RUN] Vérifier aussi pilote Intel, manifeste/hash du binaire et processus suivi.'
     Write-Host '[DRY-RUN] Produire une preuve locale sans promouvoir le backend.'
     exit 0
@@ -64,14 +65,20 @@ if (-not $Process) {
 $Api = Wait-IntelSyclApi -BaseUrl ([string]$RuntimeLock.endpoint) -TimeoutSeconds 30
 $Advertised = @($Api.data | ForEach-Object { [string]$_.id })
 $Expected = Get-RequiredOllamaModelList -RepoRoot $RepoRoot
+$Resolved = @()
 foreach ($Model in $Expected) {
-    if ($Advertised -notcontains $Model) {
-        throw "Modèle requis non annoncé par le routeur Intel SYCL: $Model"
+    $ModelMatches = @($Advertised | Where-Object { $_ -ieq $Model })
+    if ($ModelMatches.Count -ne 1) {
+        throw (
+            "Modèle requis non résolu par le routeur Intel SYCL: $Model. " +
+            "Annoncés=$($Advertised -join ', ')"
+        )
     }
+    $Resolved += [string]$ModelMatches[0]
 }
 
 $Smoke = @()
-foreach ($Model in $Expected) {
+foreach ($Model in $Resolved) {
     $Result = Invoke-IntelSyclChatSmoke -BaseUrl ([string]$RuntimeLock.endpoint) `
         -Model $Model -TimeoutSeconds $TimeoutSeconds
     $Smoke += $Result
@@ -94,7 +101,8 @@ $Proof = [ordered]@{
     oneapi_device_selector = [string]$RuntimeLock.oneapi_device_selector
     driver = $Driver
     b580_sycl_evidence = $DeviceText
-    models = @($Advertised)
+    ollama_models = @($Expected)
+    models = @($Resolved)
     smoke = @($Smoke)
     openclaw_promoted = $false
 }

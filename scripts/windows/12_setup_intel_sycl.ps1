@@ -25,6 +25,7 @@ if ($DryRun) {
     Write-Host "Models max  : $($RuntimeLock.models_max) (un gros modèle à la fois)"
     Write-Host '[DRY-RUN] Utiliser le runtime Python géré OPENCLAW_LOCAL, jamais un Python système ambigu.'
     Write-Host '[DRY-RUN] Vérifier le pilote B580, l''archive officielle, le manifeste du binaire et le port 8080.'
+    Write-Host '[DRY-RUN] Résoudre les IDs réellement annoncés par le routeur llama.cpp avant les smokes.'
     Write-Host '[DRY-RUN] Réutiliser les blobs GGUF déjà présents dans Ollama; aucun modèle ne sera retéléchargé.'
     Write-Host '[DRY-RUN] Le runtime binaire embarque les dépendances SYCL; pas d''installation oneAPI complète.'
     Write-Host '[DRY-RUN] Aucune promotion OpenClaw automatique; Ollama/Vulkan reste le rollback.'
@@ -59,11 +60,26 @@ try {
     $Server = Start-IntelSyclServer -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot `
         -TimeoutSeconds $ReadyTimeoutSeconds
     $Proof.pid = $Server.Process.Id
-    $Proof.models = @($Server.Models)
+    $Proof.ollama_models = @($Server.Models)
     $Proof.driver = $Server.Driver
 
+    $Api = Wait-IntelSyclApi -BaseUrl ([string]$RuntimeLock.endpoint) -TimeoutSeconds 30
+    $Advertised = @($Api.data | ForEach-Object { [string]$_.id })
+    $ResolvedModels = @()
+    foreach ($ExpectedModel in $Server.Models) {
+        $ModelMatches = @($Advertised | Where-Object { $_ -ieq [string]$ExpectedModel })
+        if ($ModelMatches.Count -ne 1) {
+            throw (
+                "Impossible de résoudre l'ID llama.cpp pour $ExpectedModel. " +
+                "Annoncés=$($Advertised -join ', ')"
+            )
+        }
+        $ResolvedModels += [string]$ModelMatches[0]
+    }
+    $Proof.models = @($ResolvedModels)
+
     $Smoke = @()
-    foreach ($Model in $Server.Models) {
+    foreach ($Model in $ResolvedModels) {
         Write-Host "SMOKE Intel SYCL: $Model"
         $Result = Invoke-IntelSyclChatSmoke `
             -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model

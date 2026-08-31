@@ -234,7 +234,23 @@ def summarize(cases: list[dict[str, Any]], models: list[str]) -> dict[str, Any]:
     }
 
 
-def _check_endpoints(ollama: str, sycl: str, models: list[str]) -> None:
+def _resolve_sycl_models(advertised: set[str], models: list[str]) -> dict[str, str]:
+    resolved: dict[str, str] = {}
+    for model in models:
+        matches = [
+            candidate
+            for candidate in advertised
+            if candidate.casefold() == model.casefold()
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"Modèle Intel SYCL non résolu: {model}; annoncés: {sorted(advertised)}"
+            )
+        resolved[model] = matches[0]
+    return resolved
+
+
+def _check_endpoints(ollama: str, sycl: str, models: list[str]) -> dict[str, str]:
     tags = get_json(f"{ollama}/api/tags")
     ollama_models = {
         str(item.get("name") or item.get("model")) for item in tags.get("models", [])
@@ -245,9 +261,7 @@ def _check_endpoints(ollama: str, sycl: str, models: list[str]) -> None:
 
     inventory = get_json(f"{sycl}/models?reload=1", timeout=10)
     sycl_models = {str(item.get("id")) for item in inventory.get("data", [])}
-    missing_sycl = [model for model in models if model not in sycl_models]
-    if missing_sycl:
-        raise RuntimeError(f"Modèles Intel SYCL absents: {missing_sycl}")
+    return _resolve_sycl_models(sycl_models, models)
 
 
 def parse_args() -> argparse.Namespace:
@@ -269,7 +283,7 @@ def main() -> int:
 
     models = required_models()
     scenarios = SCENARIOS[:1] if args.quick else SCENARIOS
-    _check_endpoints(args.ollama, args.sycl, models)
+    sycl_model_ids = _check_endpoints(args.ollama, args.sycl, models)
 
     cases: list[dict[str, Any]] = []
     plan_total = len(models) * len(scenarios) * args.repetitions * 2
@@ -287,13 +301,18 @@ def main() -> int:
             for repetition in range(1, args.repetitions + 1):
                 for backend in ("ollama-vulkan", "llama-cpp-sycl"):
                     current += 1
+                    runtime_model = (
+                        model if backend == "ollama-vulkan" else sycl_model_ids[model]
+                    )
                     print(
                         f"[{current}/{plan_total}] {backend} model={model} "
+                        f"runtime_model={runtime_model} "
                         f"scenario={scenario['id']} run={repetition}"
                     )
                     base = {
                         "backend": backend,
                         "model": model,
+                        "runtime_model": runtime_model,
                         "scenario": scenario["id"],
                         "repetition": repetition,
                     }
@@ -301,7 +320,7 @@ def main() -> int:
                         if backend == "ollama-vulkan":
                             result = run_ollama(
                                 args.ollama,
-                                model,
+                                runtime_model,
                                 str(scenario["prompt"]),
                                 int(scenario["max_tokens"]),
                                 args.timeout,
@@ -309,7 +328,7 @@ def main() -> int:
                         else:
                             result = run_sycl(
                                 args.sycl,
-                                model,
+                                runtime_model,
                                 str(scenario["prompt"]),
                                 int(scenario["max_tokens"]),
                                 args.timeout,
@@ -345,7 +364,7 @@ def main() -> int:
     stamp = started_at.strftime("%Y%m%d_%H%M%S")
     output = RESULTS / f"backend_compare_b580_{stamp}.json"
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "started_at": started_at.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
         "total_wall_ms": (time.perf_counter() - run_started) * 1000,
@@ -356,6 +375,7 @@ def main() -> int:
             "repetitions": args.repetitions,
             "quick": args.quick,
             "scenarios": [str(item["id"]) for item in scenarios],
+            "sycl_model_ids": sycl_model_ids,
         },
         "cases": cases,
         "summary": summary,

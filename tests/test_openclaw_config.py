@@ -22,6 +22,11 @@ EXPECTED_MODELS = {
     "gemma4:26b",
     "devstral-small-2:24b",
 }
+EXPECTED_SYCL_MODELS = {
+    "qwen3.8:27B",
+    "gemma4:26B",
+    "devstral-small-2:24B",
+}
 
 PINNED_OPENCLAW_VERSION = "2026.7.1-2"
 PINNED_MODEL_KEYS = {
@@ -130,7 +135,7 @@ def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None
     assert sycl["baseUrl"] == "http://127.0.0.1:8080/v1"
     assert sycl["api"] == "openai-completions"
     assert sycl["apiKey"] == "intel-sycl-local"
-    assert {model["id"] for model in sycl["models"]} == EXPECTED_MODELS
+    assert {model["id"] for model in sycl["models"]} == EXPECTED_SYCL_MODELS
     assert all(model["input"] == ["text"] for model in sycl["models"])
     assert all(model["contextWindow"] == 8192 for model in sycl["models"])
     assert all(model["compat"]["toolSchemaProfile"] == "llamacpp" for model in sycl["models"])
@@ -145,8 +150,8 @@ def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None
 
     defaults = patch["agents"]["defaults"]
     assert defaults["model"] == {
-        "primary": "intel-sycl/qwen3.8:27b",
-        "fallbacks": ["intel-sycl/gemma4:26b"],
+        "primary": "intel-sycl/qwen3.8:27B",
+        "fallbacks": ["intel-sycl/gemma4:26B"],
     }
     expected_multimodal = {
         "primary": "ollama/qwen3.8:27b",
