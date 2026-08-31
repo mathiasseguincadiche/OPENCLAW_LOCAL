@@ -11,6 +11,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
+. (Join-Path $PSScriptRoot 'lib\intel_sycl_model_sources.ps1')
 . (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
 
 function Get-FreeLoopbackTcpPort {
@@ -74,12 +75,7 @@ function Invoke-DirectIntelSyclLoadProbe {
         $Arguments += @('--device', [string]$RuntimeLock.device)
     }
 
-    $DeviceLabel = if ($UseSyclDevice) {
-        [string]$RuntimeLock.device
-    }
-    else {
-        'CPU'
-    }
+    $DeviceLabel = if ($UseSyclDevice) { [string]$RuntimeLock.device } else { 'CPU' }
     Write-Host (
         "PROBE $Scenario model=$ModelAlias fit=$Fit gpu_layers=$GpuLayers " +
         "device=$DeviceLabel"
@@ -141,7 +137,10 @@ function Invoke-DirectIntelSyclLoadProbe {
         $ElapsedMs = ([DateTimeOffset]::UtcNow - $Started).TotalMilliseconds
         $ExitCode = $Process.ExitCode
         $Tail = Get-LogTailText -Path $StderrPath
-        Write-Warning "KO  ${Scenario}: llama-server exit=$ExitCode après $([math]::Round($ElapsedMs, 1)) ms."
+        Write-Warning (
+            "KO  ${Scenario}: llama-server exit=$ExitCode après " +
+            "$([math]::Round($ElapsedMs, 1)) ms.`nSTDERR ${Scenario}:`n$Tail"
+        )
         return [pscustomobject]@{
             scenario = $Scenario
             fit = $Fit
@@ -174,11 +173,13 @@ $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
 $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
 
 if ($DryRun) {
-    Write-Host "[DRY-RUN] Diagnostic direct d'un modèle llama.cpp sans passer par le routeur."
+    Write-Host '[DRY-RUN] Diagnostic direct du modèle réellement utilisé par le backend SYCL.'
     Write-Host "[DRY-RUN] Model=$Model Release=$($RuntimeLock.release) Device=$($RuntimeLock.device)"
+    Write-Host '[DRY-RUN] Les overrides natifs llama.cpp sont préférés aux blobs Ollama incompatibles.'
     Write-Host '[DRY-RUN] Matrice: SYCL/all+fit on -> SYCL/all+fit off -> SYCL/auto+fit on -> CPU/0+fit off.'
     Write-Host '[DRY-RUN] Chaque essai utilise un port loopback éphémère et capture stdout/stderr séparément.'
-    Write-Host "[DRY-RUN] Aucun modèle n'est téléchargé et aucune configuration OpenClaw n'est modifiée."
+    Write-Host '[DRY-RUN] Aucun téléchargement n''est déclenché par diagnose; lancez intel-sycl-setup si une source native manque.'
+    Write-Host '[DRY-RUN] Aucune configuration OpenClaw n''est modifiée.'
     exit 0
 }
 
@@ -189,7 +190,8 @@ if ($ModelMatches.Count -ne 1) {
     throw "Modèle $Model absent de la flotte required: $($RequiredModels -join ', ')"
 }
 $ResolvedModel = [string]$ModelMatches[0]
-$ModelPath = Resolve-OllamaGgufPath -Model $ResolvedModel
+$ModelPath = Resolve-IntelSyclModelPath `
+    -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot -Model $ResolvedModel
 $Binary = Get-IntelSyclServerBinary -VersionRoot $Paths.VersionRoot
 if (-not $Binary) {
     throw 'Runtime Intel SYCL absent. Exécutez .\menu.ps1 -Action intel-sycl-setup.'
@@ -215,14 +217,12 @@ if (-not [bool]$Results[-1].success) {
         -Scenario 'gpu_fit_off' -ProofDirectory $ProofDirectory -RuntimeLock $RuntimeLock `
         -Fit 'off' -GpuLayers 'all' -UseSyclDevice $true -TimeoutSeconds $TimeoutSeconds
 }
-
 if (-not [bool]$Results[-1].success) {
     $Results += Invoke-DirectIntelSyclLoadProbe `
         -ServerBinary $Binary -ModelPath $ModelPath -ModelAlias $ResolvedModel `
         -Scenario 'gpu_auto_fit_on' -ProofDirectory $ProofDirectory -RuntimeLock $RuntimeLock `
         -Fit 'on' -GpuLayers 'auto' -UseSyclDevice $true -TimeoutSeconds $TimeoutSeconds
 }
-
 if (-not [bool]$Results[-1].success) {
     $Results += Invoke-DirectIntelSyclLoadProbe `
         -ServerBinary $Binary -ModelPath $ModelPath -ModelAlias $ResolvedModel `
@@ -236,24 +236,15 @@ foreach ($Result in $Results) {
 }
 
 $Diagnosis = if ($ByScenario['gpu_fit_on'] -and $ByScenario['gpu_fit_on'].success) {
-    'router_only_or_transient'
+    'nominal_direct_load'
 }
-elseif (
-    $ByScenario['gpu_fit_off'] -and
-    $ByScenario['gpu_fit_off'].success
-) {
+elseif ($ByScenario['gpu_fit_off'] -and $ByScenario['gpu_fit_off'].success) {
     'llama_fit_regression'
 }
-elseif (
-    $ByScenario['gpu_auto_fit_on'] -and
-    $ByScenario['gpu_auto_fit_on'].success
-) {
+elseif ($ByScenario['gpu_auto_fit_on'] -and $ByScenario['gpu_auto_fit_on'].success) {
     'automatic_partial_offload_required'
 }
-elseif (
-    $ByScenario['cpu_fit_off'] -and
-    $ByScenario['cpu_fit_off'].success
-) {
+elseif ($ByScenario['cpu_fit_off'] -and $ByScenario['cpu_fit_off'].success) {
     'sycl_offload_or_device_memory'
 }
 elseif ($ByScenario['cpu_fit_off']) {
@@ -264,7 +255,7 @@ else {
 }
 
 $Proof = [ordered]@{
-    schema_version = '1.1.0'
+    schema_version = '1.2.0'
     diagnosed_at = [DateTimeOffset]::UtcNow.ToString('o')
     model = $ResolvedModel
     model_path = $ModelPath
@@ -280,6 +271,7 @@ $Proof = [ordered]@{
     oneapi_device_selector = [string]$RuntimeLock.oneapi_device_selector
     device_evidence = $DeviceEvidence
     context_tokens = [int]$RuntimeLock.context_tokens
+    model_source_policy = [string]$RuntimeLock.model_source_policy
     diagnosis = $Diagnosis
     probes = @($Results)
     openclaw_modified = $false
@@ -290,20 +282,20 @@ $Proof | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ProofPath -Encoding
 Write-Host "INTEL_SYCL_MODEL_DIAGNOSTIC=$ProofPath"
 Write-Host "DIAGNOSIS=$Diagnosis"
 switch ($Diagnosis) {
-    'router_only_or_transient' {
-        Write-Host 'VERDICT=Le modèle charge directement avec les paramètres nominaux; le routeur/lifecycle reste la piste principale.'
+    'nominal_direct_load' {
+        Write-Host 'VERDICT=Le modèle SYCL effectif charge directement avec les paramètres nominaux.'
     }
     'llama_fit_regression' {
         Write-Host 'VERDICT=Le modèle charge avec --fit off; le fitter llama.cpp est la cause isolée.'
     }
     'automatic_partial_offload_required' {
-        Write-Host 'VERDICT=Le full offload échoue mais --gpu-layers auto charge; utiliser un offload partiel calculé pour ce modèle.'
+        Write-Host 'VERDICT=Le full offload échoue mais --gpu-layers auto charge; utiliser un offload partiel calculé.'
     }
     'sycl_offload_or_device_memory' {
-        Write-Host "VERDICT=Le GGUF charge en CPU mais pas avec SYCL; la cause est dans l'offload SYCL ou la mémoire device."
+        Write-Host 'VERDICT=Le GGUF charge en CPU mais pas avec SYCL; cause dans l''offload SYCL ou la mémoire device.'
     }
     'gguf_or_llama_core_load' {
-        Write-Host 'VERDICT=Le modèle échoue même en CPU-only avec ce build; inspecter stderr pour GGUF/tokenizer/architecture llama.cpp.'
+        Write-Host 'VERDICT=Le modèle échoue même en CPU-only avec ce build; inspecter stderr pour GGUF/architecture llama.cpp.'
     }
     default {
         Write-Host 'VERDICT=Diagnostic incomplet; inspecter les logs de probes.'
