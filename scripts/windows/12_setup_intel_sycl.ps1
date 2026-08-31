@@ -116,7 +116,7 @@ try {
     exit 0
 }
 catch {
-    Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
+    $null = Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
     $Proof.status = 'failed'
     $Proof.error = $_.Exception.Message
     $Proof.finished_at = [DateTimeOffset]::UtcNow.ToString('o')
