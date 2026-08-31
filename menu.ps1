@@ -4,7 +4,8 @@ param(
         'menu', 'install-core', 'install-full', 'audit', 'configure-local', 'models',
         'configure-openclaw', 'deploy-agents', 'verify', 'benchmark', 'inventory',
         'e2e', 'qualification', 'intel-sycl-setup', 'intel-sycl-stop',
-        'intel-sycl-verify', 'intel-sycl-compare', 'team', 'docs', 'logs'
+        'intel-sycl-verify', 'intel-sycl-compare', 'intel-sycl-diagnose',
+        'team', 'docs', 'logs'
     )]
     [string]$Action = 'menu',
     [switch]$DryRun,
@@ -12,6 +13,8 @@ param(
     [switch]$AllowRuntimeDrift,
     [ValidateSet('ollama-vulkan', 'llama-cpp-sycl')]
     [string]$Backend = 'ollama-vulkan',
+    [ValidateSet('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b')]
+    [string]$Model = 'devstral-small-2:24b',
     [switch]$NoLog
 )
 
@@ -37,6 +40,7 @@ $Scripts = @{
     'intel-sycl-stop' = Join-Path $RepoRoot 'scripts\windows\13_stop_intel_sycl.ps1'
     'intel-sycl-verify' = Join-Path $RepoRoot 'scripts\windows\14_verify_intel_sycl.ps1'
     'intel-sycl-compare' = Join-Path $RepoRoot 'scripts\windows\15_compare_intel_backends.ps1'
+    'intel-sycl-diagnose' = Join-Path $RepoRoot 'scripts\windows\16_diagnose_intel_sycl_model.ps1'
 }
 
 function Get-PlatformRoot {
@@ -138,6 +142,8 @@ function Invoke-Action {
         [switch]$AllowRuntimeDriftMode,
         [ValidateSet('ollama-vulkan', 'llama-cpp-sycl')]
         [string]$BackendMode = 'ollama-vulkan',
+        [ValidateSet('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b')]
+        [string]$ModelMode = 'devstral-small-2:24b',
         [switch]$NoLogMode
     )
 
@@ -180,6 +186,9 @@ function Invoke-Action {
         elseif ($Name -in @('configure-openclaw', 'e2e')) {
             & $Script -DryRun:$DryRunMode -Backend $BackendMode
         }
+        elseif ($Name -eq 'intel-sycl-diagnose') {
+            & $Script -DryRun:$DryRunMode -Model $ModelMode
+        }
         else {
             & $Script -DryRun:$DryRunMode
         }
@@ -198,7 +207,8 @@ function Invoke-Action {
 if ($Action -ne 'menu') {
     Show-Title
     Invoke-Action -Name $Action -DryRunMode:$DryRun -QuickMode:$Quick `
-        -AllowRuntimeDriftMode:$AllowRuntimeDrift -BackendMode $Backend -NoLogMode:$NoLog
+        -AllowRuntimeDriftMode:$AllowRuntimeDrift -BackendMode $Backend `
+        -ModelMode $Model -NoLogMode:$NoLog
     exit 0
 }
 
@@ -224,6 +234,7 @@ while ($true) {
 17) Vérifier Intel B580 SYCL + trois modèles
 18) Comparer Ollama/Vulkan vs Intel SYCL (utiliser -Quick pour diagnostic court)
 19) Arrêter le serveur Intel SYCL
+20) Diagnostiquer directement un modèle Intel SYCL (paramètre -Model; Devstral par défaut)
 0) Quitter
 '@ | Write-Host
 
@@ -247,6 +258,7 @@ while ($true) {
         '17' { Invoke-Action -Name 'intel-sycl-verify' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '18' { Invoke-Action -Name 'intel-sycl-compare' -DryRunMode:$DryRun -QuickMode:$Quick -BackendMode $Backend -NoLogMode:$NoLog }
         '19' { Invoke-Action -Name 'intel-sycl-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '20' { Invoke-Action -Name 'intel-sycl-diagnose' -DryRunMode:$DryRun -BackendMode $Backend -ModelMode $Model -NoLogMode:$NoLog }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }
