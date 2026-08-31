@@ -184,11 +184,11 @@ if ($DryRun) {
 
 $ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
 $RequiredModels = Get-RequiredOllamaModelList -RepoRoot $RepoRoot
-$Matches = @($RequiredModels | Where-Object { $_ -ieq $Model })
-if ($Matches.Count -ne 1) {
+$ModelMatches = @($RequiredModels | Where-Object { $_ -ieq $Model })
+if ($ModelMatches.Count -ne 1) {
     throw "Modèle $Model absent de la flotte required: $($RequiredModels -join ', ')"
 }
-$ResolvedModel = [string]$Matches[0]
+$ResolvedModel = [string]$ModelMatches[0]
 $ModelPath = Resolve-OllamaGgufPath -Model $ResolvedModel
 $Binary = Get-IntelSyclServerBinary -VersionRoot $Paths.VersionRoot
 if (-not $Binary) {
