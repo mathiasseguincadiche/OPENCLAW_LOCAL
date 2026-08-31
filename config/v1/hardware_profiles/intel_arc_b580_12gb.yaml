@@ -32,7 +32,7 @@ policy:
   sycl_candidate_enabled: true
   sycl_requires_level_zero: true
   sycl_models_max: 1
-  sycl_gpu_layers: all
+  sycl_gpu_layers: auto
   sycl_context_tokens_initial: 8192
   sycl_promotion_requires_openclaw_e2e: true
   automatic_backend_promotion: false
@@ -41,4 +41,5 @@ notes:
   - "Le profil décrit une cible de qualification, pas une garantie de débit."
   - "SYCL/Level Zero est le chemin Intel spécialisé à comparer à Ollama/Vulkan sur la B580 réelle."
   - "Un seul modèle 24-27B est chargé à la fois pour respecter les 12 Go de VRAM et 48 Go de RAM système."
+  - "Les modèles dépassant la VRAM utilisent l'auto-fit llama.cpp; forcer gpu-layers=all désactive l'ajustement automatique."
   - "XMX est une capacité matérielle; son bénéfice opérationnel doit être démontré par le backend SYCL et les mesures réelles."
