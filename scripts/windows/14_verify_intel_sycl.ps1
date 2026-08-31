@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
+. (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
 
 $PlatformRoot = Get-OpenClawLocalPlatformRoot
 $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
@@ -17,10 +18,14 @@ $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeL
 if ($DryRun) {
     Write-Host '[DRY-RUN] Vérifier sans installer: runtime verrouillé, B580 via SYCL/Level Zero, API 8080 et les trois modèles.'
     Write-Host "[DRY-RUN] Release=$($RuntimeLock.release) Device=$($RuntimeLock.device) Selector=$($RuntimeLock.oneapi_device_selector)"
+    Write-Host '[DRY-RUN] Utiliser le runtime Python géré OPENCLAW_LOCAL.'
     Write-Host '[DRY-RUN] Vérifier aussi pilote Intel, manifeste/hash du binaire et processus suivi.'
     Write-Host '[DRY-RUN] Produire une preuve locale sans promouvoir le backend.'
     exit 0
 }
+
+$ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
+Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 $Binary = Get-IntelSyclServerBinary -VersionRoot $Paths.VersionRoot
 if (-not $Binary) {
@@ -81,6 +86,7 @@ $Proof = [ordered]@{
     server_sha256 = $ServerHash
     runtime_manifest = $Paths.Manifest
     binary = $Binary
+    python = $ManagedPython
     version = $VersionText
     pid = $Process.Id
     endpoint = [string]$RuntimeLock.endpoint
