@@ -74,9 +74,15 @@ function Invoke-DirectIntelSyclLoadProbe {
         $Arguments += @('--device', [string]$RuntimeLock.device)
     }
 
+    $DeviceLabel = if ($UseSyclDevice) {
+        [string]$RuntimeLock.device
+    }
+    else {
+        'CPU'
+    }
     Write-Host (
         "PROBE $Scenario model=$ModelAlias fit=$Fit gpu_layers=$GpuLayers " +
-        "device=$(if ($UseSyclDevice) { [string]$RuntimeLock.device } else { 'CPU' })"
+        "device=$DeviceLabel"
     )
 
     $PreviousSelector = $env:ONEAPI_DEVICE_SELECTOR
@@ -116,7 +122,7 @@ function Invoke-DirectIntelSyclLoadProbe {
                 scenario = $Scenario
                 fit = $Fit
                 gpu_layers = $GpuLayers
-                device = if ($UseSyclDevice) { [string]$RuntimeLock.device } else { 'CPU' }
+                device = $DeviceLabel
                 success = $true
                 exit_code = $null
                 wall_ms = [math]::Round($ElapsedMs, 1)
@@ -128,7 +134,7 @@ function Invoke-DirectIntelSyclLoadProbe {
 
         if (-not $Process.HasExited) {
             Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
-            $Process.WaitForExit(10000)
+            $null = $Process.WaitForExit(10000)
             throw "Probe $Scenario non prêt après $TimeoutSeconds s."
         }
 
@@ -140,7 +146,7 @@ function Invoke-DirectIntelSyclLoadProbe {
             scenario = $Scenario
             fit = $Fit
             gpu_layers = $GpuLayers
-            device = if ($UseSyclDevice) { [string]$RuntimeLock.device } else { 'CPU' }
+            device = $DeviceLabel
             success = $false
             exit_code = $ExitCode
             wall_ms = [math]::Round($ElapsedMs, 1)
@@ -152,7 +158,7 @@ function Invoke-DirectIntelSyclLoadProbe {
     finally {
         if ($Process -and -not $Process.HasExited) {
             Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
-            $Process.WaitForExit(10000)
+            $null = $Process.WaitForExit(10000)
         }
         if ($null -eq $PreviousSelector) {
             Remove-Item Env:ONEAPI_DEVICE_SELECTOR -ErrorAction SilentlyContinue
@@ -168,11 +174,11 @@ $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
 $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
 
 if ($DryRun) {
-    Write-Host '[DRY-RUN] Diagnostic direct d’un modèle llama.cpp sans passer par le routeur.'
+    Write-Host "[DRY-RUN] Diagnostic direct d'un modèle llama.cpp sans passer par le routeur."
     Write-Host "[DRY-RUN] Model=$Model Release=$($RuntimeLock.release) Device=$($RuntimeLock.device)"
     Write-Host '[DRY-RUN] Matrice: SYCL/all+fit on -> SYCL/all+fit off -> CPU/0+fit off.'
     Write-Host '[DRY-RUN] Chaque essai utilise un port loopback éphémère et capture stdout/stderr séparément.'
-    Write-Host '[DRY-RUN] Aucun modèle n’est téléchargé et aucune configuration OpenClaw n’est modifiée.'
+    Write-Host "[DRY-RUN] Aucun modèle n'est téléchargé et aucune configuration OpenClaw n'est modifiée."
     exit 0
 }
 
@@ -278,7 +284,7 @@ switch ($Diagnosis) {
         Write-Host 'VERDICT=Le modèle charge avec --fit off; le fitter llama.cpp est la cause isolée.'
     }
     'sycl_offload_or_device_memory' {
-        Write-Host 'VERDICT=Le GGUF charge en CPU mais pas avec SYCL/all; la cause est dans l’offload SYCL ou la mémoire device.'
+        Write-Host "VERDICT=Le GGUF charge en CPU mais pas avec SYCL/all; la cause est dans l'offload SYCL ou la mémoire device."
     }
     'gguf_or_llama_core_load' {
         Write-Host 'VERDICT=Le modèle échoue même en CPU-only avec ce build; inspecter stderr pour GGUF/tokenizer/architecture llama.cpp.'
