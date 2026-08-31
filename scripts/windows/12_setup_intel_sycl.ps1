@@ -67,14 +67,14 @@ try {
     $Advertised = @($Api.data | ForEach-Object { [string]$_.id })
     $ResolvedModels = @()
     foreach ($ExpectedModel in $Server.Models) {
-        $Matches = @($Advertised | Where-Object { $_ -ieq [string]$ExpectedModel })
-        if ($Matches.Count -ne 1) {
+        $ModelMatches = @($Advertised | Where-Object { $_ -ieq [string]$ExpectedModel })
+        if ($ModelMatches.Count -ne 1) {
             throw (
                 "Impossible de résoudre l'ID llama.cpp pour $ExpectedModel. " +
                 "Annoncés=$($Advertised -join ', ')"
             )
         }
-        $ResolvedModels += [string]$Matches[0]
+        $ResolvedModels += [string]$ModelMatches[0]
     }
     $Proof.models = @($ResolvedModels)
 
