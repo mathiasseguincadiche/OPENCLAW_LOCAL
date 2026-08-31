@@ -88,8 +88,9 @@ foreach ($Model in $Resolved) {
         -Model $Model `
         -TimeoutSeconds $TimeoutSeconds `
         -DiagnosticLogPath $Paths.StderrLog
-    Unload-IntelSyclModel `
-        -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model -TimeoutSeconds 90
+    Remove-IntelSyclModel `
+        -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model `
+        -TimeoutSeconds 90 -Confirm:$false
     $Result | Add-Member -NotePropertyName unloaded_after_smoke -NotePropertyValue $true
     $Smoke += $Result
     Write-Host "OK  ${Model}: wall=$($Result.wall_ms)ms tok/s=$($Result.tokens_per_second)"
