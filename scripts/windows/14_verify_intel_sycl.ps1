@@ -67,14 +67,14 @@ $Advertised = @($Api.data | ForEach-Object { [string]$_.id })
 $Expected = Get-RequiredOllamaModelList -RepoRoot $RepoRoot
 $Resolved = @()
 foreach ($Model in $Expected) {
-    $Matches = @($Advertised | Where-Object { $_ -ieq $Model })
-    if ($Matches.Count -ne 1) {
+    $ModelMatches = @($Advertised | Where-Object { $_ -ieq $Model })
+    if ($ModelMatches.Count -ne 1) {
         throw (
             "Modèle requis non résolu par le routeur Intel SYCL: $Model. " +
             "Annoncés=$($Advertised -join ', ')"
         )
     }
-    $Resolved += [string]$Matches[0]
+    $Resolved += [string]$ModelMatches[0]
 }
 
 $Smoke = @()
