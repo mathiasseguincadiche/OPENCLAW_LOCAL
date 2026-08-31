@@ -141,7 +141,7 @@ function Invoke-DirectIntelSyclLoadProbe {
         $ElapsedMs = ([DateTimeOffset]::UtcNow - $Started).TotalMilliseconds
         $ExitCode = $Process.ExitCode
         $Tail = Get-LogTailText -Path $StderrPath
-        Write-Warning "KO  $Scenario: llama-server exit=$ExitCode après $([math]::Round($ElapsedMs, 1)) ms."
+        Write-Warning "KO  ${Scenario}: llama-server exit=$ExitCode après $([math]::Round($ElapsedMs, 1)) ms."
         return [pscustomobject]@{
             scenario = $Scenario
             fit = $Fit
