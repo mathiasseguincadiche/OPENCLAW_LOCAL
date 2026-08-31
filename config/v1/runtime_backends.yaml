@@ -27,9 +27,9 @@ backends:
       autoload: true
       offline: true
       jinja: true
-      gpu_layers: all
+      gpu_layers: auto
       context_tokens: 8192
-    model_source: ollama_gguf_blobs
+    model_source: provider_specific_gguf
     qualification_required: true
     promotion_requires:
       - intel_arc_b580_detected
