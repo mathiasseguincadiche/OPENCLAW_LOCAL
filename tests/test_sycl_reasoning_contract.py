@@ -40,6 +40,7 @@ def test_powershell_sycl_smoke_disables_thinking_deterministically() -> None:
 def test_sycl_benchmark_disables_thinking_for_backend_comparability() -> None:
     module = _load_backend_compare()
     captured: dict[str, Any] = {}
+    unload_calls: list[tuple[str, str]] = []
 
     def fake_post_json(
         url: str, payload: dict[str, Any], timeout: float
@@ -62,7 +63,17 @@ def test_sycl_benchmark_disables_thinking_for_backend_comparability() -> None:
             },
         }
 
+    def fake_unload_sycl_model(
+        endpoint: str,
+        model: str,
+        *,
+        timeout: float = 90.0,
+    ) -> None:
+        assert timeout == 90.0
+        unload_calls.append((endpoint, model))
+
     module.post_json = fake_post_json
+    module.unload_sycl_model = fake_unload_sycl_model
     result = module.run_sycl(
         "http://127.0.0.1:8080/v1",
         "qwen3.8:27B",
@@ -75,5 +86,9 @@ def test_sycl_benchmark_disables_thinking_for_backend_comparability() -> None:
     assert captured["payload"]["chat_template_kwargs"] == {
         "enable_thinking": False
     }
+    assert unload_calls == [
+        ("http://127.0.0.1:8080/v1", "qwen3.8:27B")
+    ]
     assert result["content"] == "ok"
     assert result["reasoning_content_present"] is False
+    assert result["unloaded_after_case"] is True
