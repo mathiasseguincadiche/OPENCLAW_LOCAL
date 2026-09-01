@@ -9,7 +9,6 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
-. (Join-Path $PSScriptRoot 'lib\intel_sycl_process_contract.ps1')
 . (Join-Path $PSScriptRoot 'lib\intel_sycl_model_sources.ps1')
 . (Join-Path $PSScriptRoot 'lib\intel_sycl_smoke.ps1')
 . (Join-Path $PSScriptRoot 'lib\intel_sycl_model_lifecycle.ps1')
@@ -70,8 +69,12 @@ try {
     ).Hash.ToLowerInvariant()
     $Server = Start-IntelSyclServer -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot `
         -TimeoutSeconds $ReadyTimeoutSeconds
-    if (-not $Server -or -not $Server.PSObject.Properties['Process']) {
-        throw 'Contrat Start-IntelSyclServer invalide: objet runtime unique attendu avec propriété Process.'
+    if (
+        -not $Server -or
+        -not $Server.PSObject.Properties['Process'] -or
+        $null -eq $Server.Process
+    ) {
+        throw 'Contrat Start-IntelSyclServer invalide: objet runtime unique attendu avec Process non-null.'
     }
     $Proof.pid = $Server.Process.Id
     $Proof.ollama_models = @($Server.Models)
