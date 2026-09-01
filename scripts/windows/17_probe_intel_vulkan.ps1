@@ -314,7 +314,7 @@ function Invoke-LlamaCppVulkanCase {
             ok = $true
         }
         Write-Host (
-            "OK  Vulkan $Model: wall=$($Result.wall_ms)ms " +
+            "OK  Vulkan ${Model}: wall=$($Result.wall_ms)ms " +
             "tok/s=$($Result.tokens_per_second) " +
             "prompt_tok/s=$($Result.prompt_tokens_per_second)"
         )
@@ -339,16 +339,30 @@ function Get-LatestBackendBaseline {
     if (-not (Test-Path -LiteralPath $ResultsRoot)) {
         return $null
     }
-    $File = Get-ChildItem -LiteralPath $ResultsRoot -Filter 'backend_compare_b580_*.json' -File |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
-    if (-not $File) {
-        return $null
+    $Files = @(
+        Get-ChildItem -LiteralPath $ResultsRoot -Filter 'backend_compare_b580_*.json' -File |
+            Sort-Object LastWriteTime -Descending
+    )
+    foreach ($File in $Files) {
+        try {
+            $Data = Get-Content -Raw -LiteralPath $File.FullName | ConvertFrom-Json
+            $Protocol = $Data.protocol
+            if (
+                [string]$Data.schema_version -eq '1.5.0' -and
+                $Protocol -and
+                [bool]$Protocol.gpu_memory_isolation_between_backends
+            ) {
+                return [pscustomobject]@{
+                    path = $File.FullName
+                    data = $Data
+                }
+            }
+        }
+        catch {
+            continue
+        }
     }
-    return [pscustomobject]@{
-        path = $File.FullName
-        data = Get-Content -Raw -LiteralPath $File.FullName | ConvertFrom-Json
-    }
+    return $null
 }
 
 $PlatformRoot = Get-OpenClawLocalPlatformRoot
@@ -362,7 +376,7 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] context=$($RuntimeLock.context_tokens) gpu_layers=$($RuntimeLock.gpu_layers) parallel=$($RuntimeLock.parallel)"
     Write-Host '[DRY-RUN] Réutiliser exactement les sources GGUF effectives du backend llama.cpp/SYCL.'
     Write-Host '[DRY-RUN] Démarrer un serveur Vulkan éphémère par modèle, puis l''arrêter après une requête.'
-    Write-Host '[DRY-RUN] Comparer avec le dernier backend_compare_b580_*.json si présent.'
+    Write-Host '[DRY-RUN] Baseline acceptée uniquement si schéma 1.5.0 avec isolation mémoire GPU.'
     Write-Host '[DRY-RUN] Aucune modification OpenClaw et aucune promotion backend.'
     exit 0
 }
@@ -422,7 +436,7 @@ foreach ($Result in $Results) {
 }
 
 $Proof = [ordered]@{
-    schema_version = '1.0.0'
+    schema_version = '1.1.0'
     probed_at = [DateTimeOffset]::UtcNow.ToString('o')
     purpose = [string]$RuntimeLock.purpose
     release = [string]$RuntimeLock.release
@@ -440,6 +454,7 @@ $Proof = [ordered]@{
     prompt = $Prompt
     max_tokens = 128
     thinking = 'disabled'
+    baseline_required_schema = '1.5.0'
     baseline = if ($Baseline) { [string]$Baseline.path } else { $null }
     results = @($Results)
     comparisons = @($Comparisons)
