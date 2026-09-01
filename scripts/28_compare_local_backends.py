@@ -84,6 +84,40 @@ def get_json(url: str, timeout: float = 5.0) -> dict[str, Any]:
     return value
 
 
+def _ollama_loaded_model_names(endpoint: str) -> set[str]:
+    state = get_json(f"{endpoint}/api/ps", timeout=10)
+    return {
+        str(item.get("name") or item.get("model") or "")
+        for item in state.get("models", [])
+        if item.get("name") or item.get("model")
+    }
+
+
+def unload_ollama_model(
+    endpoint: str,
+    model: str,
+    *,
+    timeout: float = 90.0,
+) -> None:
+    post_json(
+        f"{endpoint}/api/chat",
+        {
+            "model": model,
+            "messages": [],
+            "stream": False,
+            "keep_alive": 0,
+        },
+        min(timeout, 30.0),
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        loaded = _ollama_loaded_model_names(endpoint)
+        if not any(name.casefold() == model.casefold() for name in loaded):
+            return
+        time.sleep(0.5)
+    raise RuntimeError(f"Le modèle Ollama {model} reste chargé après {timeout:.0f}s")
+
+
 def _sycl_router_base(endpoint: str) -> str:
     normalized = endpoint.rstrip("/")
     return normalized[:-3] if normalized.endswith("/v1") else normalized
@@ -138,11 +172,12 @@ def run_ollama(
     max_tokens: int,
     timeout: float,
 ) -> dict[str, Any]:
+    unload_ollama_model(endpoint, model, timeout=min(timeout, 90.0))
     payload: dict[str, Any] = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
-        "keep_alive": "15m",
+        "keep_alive": 0,
         "think": False,
         "options": {
             "temperature": 0,
@@ -150,27 +185,32 @@ def run_ollama(
             "num_predict": max_tokens,
         },
     }
-    started = time.perf_counter()
-    response = post_json(f"{endpoint}/api/chat", payload, timeout)
-    wall_ms = (time.perf_counter() - started) * 1000
-    message = response.get("message") or {}
-    content = str(message.get("content") or "").strip()
-    thinking = str(message.get("thinking") or "").strip()
-    return {
-        "content": content,
-        "thinking_present": bool(thinking),
-        "wall_ms": wall_ms,
-        "load_ms": float(response.get("load_duration") or 0) / 1_000_000,
-        "prompt_tokens": int(response.get("prompt_eval_count") or 0),
-        "output_tokens": int(response.get("eval_count") or 0),
-        "prompt_tokens_per_second": _rate(
-            response.get("prompt_eval_count"), response.get("prompt_eval_duration")
-        ),
-        "tokens_per_second": _rate(
-            response.get("eval_count"), response.get("eval_duration")
-        ),
-        "finish_reason": str(response.get("done_reason") or ""),
-    }
+    try:
+        started = time.perf_counter()
+        response = post_json(f"{endpoint}/api/chat", payload, timeout)
+        wall_ms = (time.perf_counter() - started) * 1000
+        message = response.get("message") or {}
+        content = str(message.get("content") or "").strip()
+        thinking = str(message.get("thinking") or "").strip()
+        result = {
+            "content": content,
+            "thinking_present": bool(thinking),
+            "wall_ms": wall_ms,
+            "load_ms": float(response.get("load_duration") or 0) / 1_000_000,
+            "prompt_tokens": int(response.get("prompt_eval_count") or 0),
+            "output_tokens": int(response.get("eval_count") or 0),
+            "prompt_tokens_per_second": _rate(
+                response.get("prompt_eval_count"), response.get("prompt_eval_duration")
+            ),
+            "tokens_per_second": _rate(
+                response.get("eval_count"), response.get("eval_duration")
+            ),
+            "finish_reason": str(response.get("done_reason") or ""),
+            "unloaded_after_case": True,
+        }
+    finally:
+        unload_ollama_model(endpoint, model, timeout=min(timeout, 90.0))
+    return result
 
 
 def run_sycl(
@@ -429,7 +469,7 @@ def main() -> int:
     stamp = started_at.strftime("%Y%m%d_%H%M%S")
     output = RESULTS / f"backend_compare_b580_{stamp}.json"
     payload = {
-        "schema_version": "1.4.0",
+        "schema_version": "1.5.0",
         "started_at": started_at.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
         "total_wall_ms": (time.perf_counter() - run_started) * 1000,
@@ -437,8 +477,11 @@ def main() -> int:
             "context_tokens": 8192,
             "temperature": 0,
             "ollama_thinking": "off_for_all_models_via_think_false",
+            "ollama_keep_alive": 0,
+            "ollama_explicit_unload_before_and_after_cases": True,
             "sycl_thinking": "off_for_comparability_via_chat_template_kwargs",
             "sycl_explicit_unload_between_cases": True,
+            "gpu_memory_isolation_between_backends": True,
             "timeout_seconds": args.timeout,
             "repetitions": args.repetitions,
             "quick": args.quick,
@@ -457,6 +500,7 @@ def main() -> int:
         speedup = report["sycl_decode_speedup_vs_ollama"]
         speedup_text = f"{speedup:.2f}x" if speedup is not None else "n/a"
         print(f"SUMMARY {model} sycl_decode_speedup_vs_ollama={speedup_text}")
+    print("GPU_MEMORY_ISOLATION=true")
     print("PROMOTION_ALLOWED=false")
     return 0 if summary["complete"] else 2
 
