@@ -2,19 +2,43 @@
 
 ## Objectif
 
-La plateforme ne lie pas définitivement les trois modèles supportés à un seul backend GPU. Le backend est un axe d'exploitation distinct du choix du modèle et du rôle.
+La plateforme ne lie pas les trois modèles supportés à un backend GPU unique. Le backend est un axe d'exploitation distinct du choix du modèle et du rôle.
 
-Le chemin quotidien reste **Ollama/Vulkan** tant qu'une preuve réelle sur la workstation ne justifie pas une promotion. Le chemin **llama.cpp/SYCL/Level Zero** est désormais implémenté comme candidat géré pour exploiter plus directement l'Intel Arc B580.
+Le chemin installé par défaut reste **Ollama/Vulkan**. Les mesures réelles effectuées sur l'Intel Arc B580 ont toutefois montré qu'un backend global unique est sous-optimal. Le dépôt expose donc un profil candidat explicite **`b580-hybrid`** :
+
+- Qwen 3.8 27B → Ollama/Vulkan ;
+- Gemma 4 26B → llama.cpp/Vulkan ;
+- Devstral Small 2 24B → llama.cpp/Vulkan ;
+- image/PDF → Ollama ;
+- aucun fallback cloud silencieux ;
+- rollback explicite vers Ollama.
+
+Le profil hybride reste candidat tant que son E2E OpenClaw réel n'est pas validé. Il n'est jamais activé automatiquement.
 
 ## Backends déclarés
 
-| ID | Provider OpenClaw | Accélération | Statut |
-|---|---|---|---|
-| `ollama-vulkan` | `ollama` | Vulkan | nominal |
-| `llama-cpp-sycl` | `intel-sycl` | SYCL → Level Zero | candidat géré B580 |
-| `llama-cpp-vulkan` | non promu | Vulkan | candidat opérateur |
+| ID | Provider OpenClaw | Accélération | Endpoint | Statut |
+|---|---|---|---|---|
+| `ollama-vulkan` | `ollama` | Vulkan | `127.0.0.1:11434` | nominal / rollback |
+| `llama-cpp-sycl` | `intel-sycl` | SYCL → Level Zero | `127.0.0.1:8080/v1` | qualification B580 |
+| `llama-cpp-vulkan` | `intel-vulkan` | Vulkan | `127.0.0.1:8081/v1` | candidat géré Gemma/Devstral |
+| `b580-hybrid` | mixte local | par modèle | Ollama + `8081/v1` | profil candidat mesuré |
 
-Le mot **nominal** signifie « chemin d'installation et d'intégration actuel », pas « vainqueur de performance ».
+Le mot **nominal** signifie « chemin d'installation et rollback sûr », pas « vainqueur de performance pour tous les modèles ».
+
+## Résultat du benchmark B580 isolé
+
+Le protocole de comparaison décharge explicitement Ollama avant le cas llama.cpp et vérifie `/api/ps`; les résultats exploitables portent `GPU_MEMORY_ISOLATION=true`.
+
+Mesures observées sur le scénario DevOps structuré :
+
+| Modèle | Ollama/Vulkan | llama.cpp/SYCL | llama.cpp/Vulkan | Backend mesuré le plus rapide |
+|---|---:|---:|---:|---|
+| Qwen 3.8 27B | 8.27 tok/s | 5.00 tok/s | 6.29 tok/s | Ollama/Vulkan |
+| Gemma 4 26B | 14.03 tok/s | 34.94 tok/s | 36.08 tok/s | llama.cpp/Vulkan |
+| Devstral Small 2 24B | 7.77 tok/s | 7.51 tok/s | 8.96 tok/s | llama.cpp/Vulkan |
+
+Ces chiffres constituent une preuve locale pour cette workstation et ce protocole, pas une promesse générale de performance sur toutes les machines.
 
 ## Flotte indépendante du backend
 
@@ -24,149 +48,182 @@ Modèles supportés
   +-- LOCAL_DEEP       -> gemma-deep      -> gemma4:26b
   +-- LOCAL_SPECIALIST -> devstral-devops -> devstral-small-2:24b
 
-Backends texte
-  +-- Ollama / Vulkan
-  +-- llama.cpp / SYCL / Level Zero / Intel Arc B580
+Profil B580 hybride texte
+  +-- qwen-max        -> Ollama / Vulkan
+  +-- gemma-deep      -> llama.cpp / Vulkan
+  +-- devstral-devops -> llama.cpp / Vulkan
 
 Multimodal
-  +-- Ollama uniquement tant que le chemin SYCL mmproj n'est pas qualifié
+  +-- Ollama uniquement
 ```
 
-Changer de backend texte ne réécrit ni les huit rôles, ni le Project Orchestrator, ni les politiques d'escalade.
+Changer de profil ne réécrit ni les huit rôles, ni le Project Orchestrator, ni les politiques d'escalade.
 
 ## Ollama/Vulkan
 
-Ollama reste le chemin nominal car il simplifie :
+Ollama reste le chemin nominal et de rollback car il simplifie :
 
 - téléchargement et inventaire des modèles ;
 - API locale ;
-- intégration OpenClaw ;
-- multimodalité déjà intégrée ;
-- exploitation quotidienne ;
-- rollback immédiat.
+- multimodalité ;
+- Qwen, qui reste le plus rapide sur le benchmark isolé ;
+- récupération immédiate si un runtime candidat échoue.
 
-L'API reste liée à `127.0.0.1:11434`. Les modèles sont stockés sous `<OPENCLAW_LOCAL_ROOT>\models\ollama` via `OLLAMA_MODELS`.
+L'API reste liée à `127.0.0.1:11434`.
 
 ## llama.cpp/SYCL/Level Zero
 
-Le candidat Intel est maintenant géré par le dépôt :
+Le chemin SYCL reste géré et qualifiable :
 
-- release llama.cpp verrouillée dans `runtime_versions.json` ;
-- archive Windows SYCL officielle vérifiée par SHA-256 avant extraction ;
-- aucun toolkit oneAPI complet requis pour exécuter le binaire distribué ;
+- llama.cpp `b10621` verrouillé par SHA-256 ;
 - `ONEAPI_DEVICE_SELECTOR=level_zero:gpu` ;
 - device exigé : `SYCL0` ;
-- détection explicite de `Intel Arc B580` par `llama-server --list-devices` ;
-- écoute loopback uniquement sur `127.0.0.1:8080` ;
-- mode `--offline` ;
-- `--gpu-layers all` ;
-- `--models-max 1` ;
-- routeur multi-modèles avec chargement/déchargement à la demande ;
-- réutilisation des blobs GGUF déjà possédés par Ollama plutôt qu'un deuxième téléchargement des poids ;
-- API OpenAI-compatible `/v1` exposée à OpenClaw sous le provider distinct `intel-sycl`.
+- B580 détectée via `--list-devices` ;
+- endpoint `127.0.0.1:8080/v1` ;
+- `--offline` ;
+- `--gpu-layers auto` + `--fit on` ;
+- `models_max=1` ;
+- `parallel=1` ;
+- contexte initial 8192 ;
+- unload explicite entre modèles ;
+- Devstral utilise un GGUF llama.cpp natif Q4_K_M verrouillé par SHA-256.
 
-`models-max=1` est volontaire : les trois modèles font environ 24 à 27B de paramètres et la B580 dispose de 12 Go de VRAM. Charger plusieurs gros modèles simultanément serait contraire à l'objectif de stabilité mémoire.
+SYCL reste utile pour qualification et comparaison, mais n'est plus le candidat prioritaire du profil B580 mesuré.
 
-## Intégration OpenClaw
+## llama.cpp/Vulkan géré
 
-La bascule est explicite :
+Le runtime Vulkan de production candidate utilise la même release llama.cpp `b10621` que SYCL, avec l'archive Windows Vulkan officielle vérifiée par SHA-256.
 
-```powershell
-.\menu.ps1 -Action configure-openclaw -Backend llama-cpp-sycl
+Contrat :
+
+- endpoint : `http://127.0.0.1:8081/v1` ;
+- device B580 détecté dynamiquement (`Vulkan0` sur la workstation qualifiée) ;
+- `models_max=1` ;
+- `parallel=1` ;
+- `gpu_layers=auto` ;
+- `fit=on` ;
+- contexte 8192 ;
+- `--offline` ;
+- PID suivi dans l'état géré ;
+- Gemma + Devstral seulement ;
+- Qwen reste volontairement sur Ollama ;
+- mêmes sources GGUF effectives que le chemin llama.cpp/SYCL ;
+- unload explicite après chaque smoke/switch.
+
+Le setup Vulkan arrête le routeur SYCL suivi avant de démarrer afin d'éviter une contention de VRAM entre deux runtimes llama.cpp.
+
+## Profil `b580-hybrid`
+
+Le renderer OpenClaw configure deux providers locaux simultanés :
+
+```text
+ollama
+  baseUrl -> http://127.0.0.1:11434
+  qwen3.8:27b
+  gemma4:26b (multimodal / rollback local)
+  devstral-small-2:24b (rollback local)
+
+intel-vulkan
+  baseUrl -> http://127.0.0.1:8081/v1
+  gemma4:26B
+  devstral-small-2:24B
 ```
 
-Le renderer produit alors :
+Routage texte :
 
-- modèles **texte** des huit agents → `intel-sycl/<runtime_id>` ;
-- `imageModel` et `pdfModel` → restent `ollama/...` ;
-- provider `intel-sycl` → `http://127.0.0.1:8080/v1` avec `api: openai-completions` ;
-- profil de compatibilité outils `llamacpp`.
-
-La configuration refuse la bascule si le serveur Intel n'est pas joignable ou si l'un des trois modèles n'est pas annoncé.
-
-Rollback :
-
-```powershell
-.\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
+```text
+qwen-max        -> ollama/qwen3.8:27b
+gemma-deep      -> intel-vulkan/gemma4:26B
+devstral-devops -> intel-vulkan/devstral-small-2:24B
 ```
 
-## Cycle opérateur Intel
+Les `imageModel` et `pdfModel` restent systématiquement sur Ollama. Le profil n'ajoute aucun provider cloud.
+
+## Cycle opérateur recommandé
+
+### Qualification SYCL
 
 ```powershell
-# installer le runtime verrouillé, prouver B580/SYCL/Level Zero,
-# démarrer le routeur et tester les 3 modèles
 .\menu.ps1 -Action intel-sycl-setup
-
-# refaire les contrôles sans réinstaller
 .\menu.ps1 -Action intel-sycl-verify
-
-# comparaison courte
 .\menu.ps1 -Action intel-sycl-compare -Quick
+```
 
-# comparaison complète
-.\menu.ps1 -Action intel-sycl-compare
+### Qualification Vulkan géré
 
-# après preuves seulement : bascule texte OpenClaw
-.\menu.ps1 -Action configure-openclaw -Backend llama-cpp-sycl
-.\menu.ps1 -Action e2e
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+```
 
-# rollback configuration puis arrêt du candidat
+### Bascule hybride explicite
+
+Uniquement après succès des deux commandes précédentes :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+L'E2E doit prouver :
+
+- provider primaire attendu agent par agent ;
+- Qwen réellement servi par Ollama ;
+- agents Gemma/Devstral réellement servis par `intel-vulkan` ;
+- tool-calling réel Devstral/Vulkan ;
+- réparation après erreur outil ;
+- trois runs stables ;
+- aucune escalade cloud.
+
+### Rollback
+
+```powershell
 .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
-.\menu.ps1 -Action intel-sycl-stop
+.\menu.ps1 -Action intel-vulkan-stop
 ```
 
 ## Protocole de comparaison
 
-Comparer les **mêmes runtime IDs** sur :
+Comparer les mêmes modèles et le même scénario sur :
 
 - durée murale ;
-- chargement du modèle quand le backend l'expose ;
+- chargement du modèle ;
 - prompt tokens/seconde ;
 - génération tokens/seconde ;
 - stabilité ;
-- erreurs ou sorties vides ;
 - changement de modèle ;
-- consommation VRAM/RAM disponible dans les preuves machine ;
+- isolation VRAM entre backends ;
 - tool-calling OpenClaw ;
 - contextes réellement qualifiés ;
 - simplicité de démarrage, mise à jour et récupération.
 
-Le runner `scripts/28_compare_local_backends.py` produit un JSON sous `benchmarks/results/` et écrit toujours `promotion_allowed: false`. Un gain de débit ne constitue donc jamais une promotion automatique.
+Le runner `scripts/28_compare_local_backends.py` écrit toujours `promotion_allowed: false`. Le probe Vulkan accepte uniquement une baseline schema `1.5.0` portant `gpu_memory_isolation_between_backends=true`.
 
-## Conditions de promotion SYCL
+## Conditions de promotion du profil hybride
 
-Le backend ne peut être considéré comme candidat de production qu'après preuve de :
+Le profil `b580-hybrid` ne peut devenir nominal qu'après preuve de :
 
 1. B580 détectée ;
-2. `SYCL0` détecté sous `level_zero:gpu` ;
-3. trois modèles chargeables ;
-4. comparaison reproductible avec Ollama ;
+2. runtime Vulkan géré et intègre ;
+3. Gemma + Devstral chargeables sur Vulkan ;
+4. benchmark isolé reproductible ;
 5. configuration OpenClaw valide ;
-6. tool-calling réel ;
-7. réparation après retour d'outil ;
-8. multi-agent/E2E sans erreur de changement de modèle ;
-9. trois exécutions stables ;
-10. revue humaine.
+6. provider attendu prouvé pour chaque rôle ;
+7. tool-calling Devstral/Vulkan réel ;
+8. réparation après retour d'outil ;
+9. multi-agent/E2E sans fallback cloud ;
+10. trois exécutions stables ;
+11. revue humaine.
 
-La promotion ne doit jamais être déduite du nom « XMX », d'un TOPS théorique ou d'un benchmark externe.
+Le dépôt conserve `default_backend: ollama-vulkan` et `no_automatic_promotion: true` jusqu'à cette décision humaine.
 
 ## Preuves
 
-Les preuves Intel locales sont placées sous :
-
 ```text
 <OPENCLAW_LOCAL_ROOT>\proofs\intel-sycl\
+<OPENCLAW_LOCAL_ROOT>\proofs\intel-vulkan\
+<OPENCLAW_LOCAL_ROOT>\proofs\intel-vulkan-probe\
+<repo>\benchmarks\results\
 ```
 
-Elles contiennent notamment :
-
-- release et SHA attendus ;
-- binaire réellement lancé ;
-- PID ;
-- selector Level Zero ;
-- sortie de détection B580/SYCL ;
-- modèles annoncés ;
-- smoke-tests ;
-- logs stdout/stderr du serveur.
-
-Les résultats de comparaison restent sous `benchmarks/results/` et hors Git selon la politique de qualification.
+Les preuves contiennent release, SHA, binaire, PID, device, modèles, smokes et logs stdout/stderr. Les résultats de qualification restent locaux/hors Git selon la politique du projet.
