@@ -346,19 +346,33 @@ function Get-LatestBackendBaseline {
     foreach ($File in $Files) {
         try {
             $Data = Get-Content -Raw -LiteralPath $File.FullName | ConvertFrom-Json
-            $Protocol = $Data.protocol
+            $SchemaProperty = $Data.PSObject.Properties['schema_version']
+            $ProtocolProperty = $Data.PSObject.Properties['protocol']
+            $SummaryProperty = $Data.PSObject.Properties['summary']
+            if (-not $SchemaProperty -or -not $ProtocolProperty -or -not $SummaryProperty) {
+                Write-Warning "Baseline ignorée (structure incomplète): $($File.FullName)"
+                continue
+            }
+            $Protocol = $ProtocolProperty.Value
+            $Summary = $SummaryProperty.Value
+            $IsolationProperty = $Protocol.PSObject.Properties['gpu_memory_isolation_between_backends']
+            $ModelsProperty = $Summary.PSObject.Properties['models']
             if (
-                [string]$Data.schema_version -eq '1.5.0' -and
-                $Protocol -and
-                [bool]$Protocol.gpu_memory_isolation_between_backends
+                [string]$SchemaProperty.Value -ne '1.5.0' -or
+                -not $IsolationProperty -or
+                -not [bool]$IsolationProperty.Value -or
+                -not $ModelsProperty
             ) {
-                return [pscustomobject]@{
-                    path = $File.FullName
-                    data = $Data
-                }
+                Write-Warning "Baseline ignorée (protocole non isolé ou schéma incompatible): $($File.FullName)"
+                continue
+            }
+            return [pscustomobject]@{
+                path = $File.FullName
+                data = $Data
             }
         }
         catch {
+            Write-Warning "Baseline ignorée (JSON invalide): $($File.FullName)"
             continue
         }
     }
@@ -422,9 +436,32 @@ foreach ($Result in $Results) {
             }
         }
     }
-    $VulkanTps = [double]$Result.tokens_per_second
-    $VsOllama = if ($OllamaTps) { $VulkanTps / [double]$OllamaTps } else { $null }
-    $VsSycl = if ($SyclTps) { $VulkanTps / [double]$SyclTps } else { $null }
+    $VulkanTps = if ($null -ne $Result.tokens_per_second) {
+        [double]$Result.tokens_per_second
+    }
+    else {
+        $null
+    }
+    $VsOllama = if (
+        $null -ne $VulkanTps -and
+        $null -ne $OllamaTps -and
+        [double]$OllamaTps -ne 0
+    ) {
+        [double]$VulkanTps / [double]$OllamaTps
+    }
+    else {
+        $null
+    }
+    $VsSycl = if (
+        $null -ne $VulkanTps -and
+        $null -ne $SyclTps -and
+        [double]$SyclTps -ne 0
+    ) {
+        [double]$VulkanTps / [double]$SyclTps
+    }
+    else {
+        $null
+    }
     $Comparisons += [pscustomobject]@{
         model = [string]$Result.model
         llama_cpp_vulkan_tps = $VulkanTps
@@ -465,6 +502,12 @@ $ProofPath = Join-Path $ProofDirectory 'vulkan_probe.json'
 $Proof | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $ProofPath -Encoding utf8
 Write-Host "INTEL_VULKAN_PROBE=$ProofPath"
 foreach ($Comparison in $Comparisons) {
+    $VulkanText = if ($null -ne $Comparison.llama_cpp_vulkan_tps) {
+        [string][double]$Comparison.llama_cpp_vulkan_tps
+    }
+    else {
+        'n/a'
+    }
     $VsOllamaText = if ($null -ne $Comparison.vulkan_speedup_vs_ollama) {
         '{0:N2}x' -f [double]$Comparison.vulkan_speedup_vs_ollama
     }
@@ -478,7 +521,7 @@ foreach ($Comparison in $Comparisons) {
         'n/a'
     }
     Write-Host (
-        "SUMMARY $($Comparison.model) llama_cpp_vulkan=$($Comparison.llama_cpp_vulkan_tps) " +
+        "SUMMARY $($Comparison.model) llama_cpp_vulkan=$VulkanText " +
         "vulkan_vs_ollama=$VsOllamaText vulkan_vs_sycl=$VsSyclText"
     )
 }
