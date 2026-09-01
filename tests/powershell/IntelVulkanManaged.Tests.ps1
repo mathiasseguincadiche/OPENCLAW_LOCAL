@@ -53,7 +53,8 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:VulkanHelper | Should -Match 'LLAMA_ARG_N_PARALLEL'
         $script:VulkanHelper | Should -Match 'Arc.*B580'
         $script:VulkanHelper | Should -Match 'Resolve-IntelSyclModelPath'
-        $script:VulkanHelper | Should -Match 'Unload-IntelVulkanModel'
+        $script:VulkanHelper | Should -Match 'Stop-IntelVulkanModel'
+        $script:VulkanHelper | Should -Match 'Get-IntelVulkanManagedModel'
     }
 
     It 'encode le profil mesuré Qwen Ollama et Gemma Devstral Vulkan sans auto-promotion' {
