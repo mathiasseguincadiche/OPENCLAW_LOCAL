@@ -39,14 +39,19 @@ Describe 'Backend Intel Arc B580 SYCL' {
         $Helper | Should -Match 'Resolve-OllamaGgufPath'
     }
 
-    It 'force le runtime Python géré au lieu du Python système' {
+    It 'force le runtime Python géré sur le checkout Git courant' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $PythonHelper = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'scripts\windows\lib\python_runtime.ps1'
         )
         $PythonHelper | Should -Match 'runtime\\venv\\Scripts\\python\.exe'
-        $PythonHelper | Should -Match 'import clawlocal, yaml'
         $PythonHelper | Should -Match 'OPENCLAW_LOCAL_PYTHON'
+        $PythonHelper | Should -Match 'OPENCLAW_LOCAL_REPO_ROOT'
+        $PythonHelper | Should -Match 'PYTHONPATH'
+        $PythonHelper | Should -Match "Join-Path \$RepoRoot 'src'"
+        $PythonHelper | Should -Match 'clawlocal\.__file__'
+        $PythonHelper | Should -Match 'checkout courant'
+        $PythonHelper | Should -Match 'import yaml'
         $PythonHelper | Should -Match 'install-core'
 
         foreach ($ScriptName in @(
