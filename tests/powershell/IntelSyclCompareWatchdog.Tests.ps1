@@ -25,6 +25,15 @@ Describe 'Intel SYCL compare watchdog' {
         $script:WatchdogScript | Should -Match 'compare_.*stderr\.log'
     }
 
+    It 'persiste une preuve JSON fail-closed pour timeout ou sortie Python en erreur' {
+        $script:WatchdogScript | Should -Match 'Write-CompareWatchdogProof'
+        $script:WatchdogScript | Should -Match 'compare_watchdog_\$\{Status\}_\$\{Stamp\}\.json'
+        $script:WatchdogScript | Should -Match 'INTEL_SYCL_COMPARE_WATCHDOG_PROOF='
+        $script:WatchdogScript | Should -Match "promotion_allowed = \$false"
+        $script:WatchdogScript | Should -Match "-Status 'timeout'"
+        $script:WatchdogScript | Should -Match "-Status 'failed'"
+    }
+
     It 'borne quick a 420 secondes et le benchmark complet a 1800 secondes' {
         $Quick = & pwsh -NoLogo -NoProfile -File $script:WatchdogScriptPath `
             -DryRun -Quick 2>&1
