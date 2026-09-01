@@ -157,7 +157,7 @@ function Test-IntelArcB580VulkanDevice {
     return [pscustomobject]@{ id = $Device; evidence = ($Output -join "`n") }
 }
 
-function Get-IntelVulkanManagedModels {
+function Get-IntelVulkanManagedModel {
     param([Parameter(Mandatory)]$RuntimeLock)
 
     $Models = @($RuntimeLock.managed_models | ForEach-Object { [string]$_ })
@@ -176,7 +176,7 @@ function New-IntelVulkanModelPreset {
         [Parameter(Mandatory)][string]$PresetPath
     )
 
-    $Models = Get-IntelVulkanManagedModels -RuntimeLock $RuntimeLock
+    $Models = Get-IntelVulkanManagedModel -RuntimeLock $RuntimeLock
     $Lines = @(
         'version = 1',
         '',
@@ -397,7 +397,7 @@ function Invoke-IntelVulkanChatSmoke {
     }
 }
 
-function Unload-IntelVulkanModel {
+function Stop-IntelVulkanModel {
     param(
         [Parameter(Mandatory)][string]$BaseUrl,
         [Parameter(Mandatory)][string]$Model,
