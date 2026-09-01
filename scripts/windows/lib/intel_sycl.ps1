@@ -307,7 +307,7 @@ function Stop-IntelSyclServer {
         $Process = Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
         if ($Process) {
             Stop-Process -Id $Process.Id -Force
-            $Process.WaitForExit(10000)
+            $null = $Process.WaitForExit(10000)
             Write-Host "OK  llama-server Intel SYCL arrêté (PID=$($Process.Id))."
         }
     }
@@ -362,7 +362,7 @@ function Start-IntelSyclServer {
         return $null
     }
     $Models = New-IntelSyclModelPreset -RepoRoot $RepoRoot -PresetPath $Paths.Preset -Confirm:$false
-    Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
+    $null = Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
 
     $Listeners = @(
         Get-NetTCPConnection -LocalPort ([int]$RuntimeLock.listen_port) `
@@ -441,7 +441,7 @@ function Start-IntelSyclServer {
         }
     }
     catch {
-        Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
+        $null = Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
         $Tail = if (Test-Path -LiteralPath $Paths.StderrLog) {
             (Get-Content -LiteralPath $Paths.StderrLog -Tail 80) -join "`n"
         }
@@ -454,7 +454,7 @@ function Start-IntelSyclServer {
     $Advertised = @($Api.data | ForEach-Object { [string]$_.id })
     foreach ($Model in $Models) {
         if ($Advertised -notcontains $Model) {
-            Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
+            $null = Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
             throw "Le routeur Intel SYCL n'annonce pas le modèle requis: $Model"
         }
     }

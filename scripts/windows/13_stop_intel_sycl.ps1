@@ -12,10 +12,11 @@ $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeL
 
 if ($DryRun) {
     Write-Host "[DRY-RUN] Arrêter le serveur Intel SYCL suivi par $($Paths.ProcessState)."
+    Write-Host '[DRY-RUN] Le stop ne doit rien émettre sur le success pipeline PowerShell.'
     Write-Host '[DRY-RUN] Aucun changement de configuration OpenClaw.'
     exit 0
 }
 
-Stop-IntelSyclServer -StatePath $Paths.ProcessState
+$null = Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
 Write-Host 'OK  Backend Intel SYCL arrêté. La configuration OpenClaw existante n''est pas modifiée.'
 exit 0

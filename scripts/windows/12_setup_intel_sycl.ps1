@@ -34,6 +34,7 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] Qwen/Gemma réutilisent Ollama; Devstral utilise un GGUF llama.cpp natif SHA-256 verrouillé.'
     Write-Host '[DRY-RUN] Le téléchargement Devstral est reprenable et n''est effectué que si le GGUF natif manque.'
     Write-Host '[DRY-RUN] Le runtime binaire embarque les dépendances SYCL; pas d''installation oneAPI complète.'
+    Write-Host '[DRY-RUN] Le stop du processus suivi ne doit jamais contaminer la sortie objet de Start-IntelSyclServer.'
     Write-Host '[DRY-RUN] Aucune promotion OpenClaw automatique; Ollama/Vulkan reste le rollback.'
     exit 0
 }
@@ -42,7 +43,7 @@ $ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
 Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 $Proof = [ordered]@{
-    schema_version = '1.4.0'
+    schema_version = '1.4.1'
     started_at = [DateTimeOffset]::UtcNow.ToString('o')
     release = [string]$RuntimeLock.release
     asset = [string]$RuntimeLock.asset
@@ -53,6 +54,7 @@ $Proof = [ordered]@{
     models_max = [int]$RuntimeLock.models_max
     model_source_policy = [string]$RuntimeLock.model_source_policy
     explicit_unload_between_models = $true
+    strict_process_output_contract = $true
     python = $ManagedPython
     runtime_manifest = $Paths.Manifest
     smoke = @()
@@ -67,6 +69,13 @@ try {
     ).Hash.ToLowerInvariant()
     $Server = Start-IntelSyclServer -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot `
         -TimeoutSeconds $ReadyTimeoutSeconds
+    if (
+        -not $Server -or
+        -not $Server.PSObject.Properties['Process'] -or
+        $null -eq $Server.Process
+    ) {
+        throw 'Contrat Start-IntelSyclServer invalide: objet runtime unique attendu avec Process non-null.'
+    }
     $Proof.pid = $Server.Process.Id
     $Proof.ollama_models = @($Server.Models)
     $Proof.driver = $Server.Driver
