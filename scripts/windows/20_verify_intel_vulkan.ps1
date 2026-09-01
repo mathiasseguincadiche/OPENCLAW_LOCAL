@@ -29,7 +29,7 @@ if (-not $Process) {
     throw "Processus Intel Vulkan suivi absent (PID=$($State.pid)). Exécutez intel-vulkan-setup."
 }
 $Inventory = Wait-IntelVulkanApi -BaseUrl ([string]$RuntimeLock.endpoint) -TimeoutSeconds 30
-$Models = Get-IntelVulkanManagedModels -RuntimeLock $RuntimeLock
+$Models = Get-IntelVulkanManagedModel -RuntimeLock $RuntimeLock
 foreach ($Model in $Models) {
     $null = Resolve-IntelVulkanRuntimeModelId -Inventory $Inventory -LogicalModel $Model
 }
@@ -47,7 +47,7 @@ $Proof = [ordered]@{
 foreach ($Model in $Models) {
     $Smoke = Invoke-IntelVulkanChatSmoke -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model
     $Proof.smoke += $Smoke
-    Unload-IntelVulkanModel -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Smoke.runtime_model
+    Stop-IntelVulkanModel -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Smoke.runtime_model
     Write-Host "OK  $($Smoke.runtime_model): wall=$($Smoke.wall_ms)ms tok/s=$($Smoke.tokens_per_second)"
 }
 
