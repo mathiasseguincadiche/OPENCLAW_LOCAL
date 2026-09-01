@@ -10,7 +10,13 @@ Describe 'Intel SYCL process output contract' {
         Mock Get-Content { '{"pid":4242}' }
         Mock Get-Process {
             $Process = [pscustomobject]@{ Id = 4242 }
-            $Process | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($Timeout) $true }
+            $Process | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value {
+                param($Timeout)
+                if ($Timeout -lt 0) {
+                    throw 'Timeout invalide.'
+                }
+                return $true
+            }
             return $Process
         }
         Mock Stop-Process { }
