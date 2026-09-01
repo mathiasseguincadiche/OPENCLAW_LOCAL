@@ -150,7 +150,7 @@ Describe 'Backend Intel Arc B580 SYCL' {
         $E2E = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'scripts\windows\10_test_openclaw_e2e.ps1'
         )
-        $E2E | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl'\)"
+        $E2E | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid'\)"
         $E2E | Should -Match "'intel-sycl'"
         $E2E | Should -Match 'Test-ExpectedProvider'
         $E2E | Should -Match 'tool-call-ok\.txt'

@@ -27,6 +27,10 @@ EXPECTED_SYCL_MODELS = {
     "gemma4:26B",
     "devstral-small-2:24B",
 }
+EXPECTED_VULKAN_MODELS = {
+    "gemma4:26B",
+    "devstral-small-2:24B",
+}
 
 PINNED_OPENCLAW_VERSION = "2026.7.1-2"
 PINNED_MODEL_KEYS = {
@@ -159,6 +163,44 @@ def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None
     }
     assert defaults["imageModel"] == expected_multimodal
     assert defaults["pdfModel"] == expected_multimodal
+
+
+def test_b580_hybrid_routes_each_model_to_measured_backend() -> None:
+    patch = build_openclaw_patch(Path("C:/OpenClawLocal"), backend_id="b580-hybrid")
+    providers = patch["models"]["providers"]
+    assert set(providers) == {"ollama", "intel-vulkan"}
+    vulkan = providers["intel-vulkan"]
+    assert vulkan["baseUrl"] == "http://127.0.0.1:8081/v1"
+    assert vulkan["api"] == "openai-completions"
+    assert vulkan["apiKey"] == "intel-vulkan-local"
+    assert {model["id"] for model in vulkan["models"]} == EXPECTED_VULKAN_MODELS
+    assert all(model["contextWindow"] == 8192 for model in vulkan["models"])
+
+    entries = _entries_by_id(patch)
+    assert entries["chef-operations"]["model"] == {
+        "primary": "ollama/qwen3.8:27b",
+        "fallbacks": ["intel-vulkan/gemma4:26B"],
+    }
+    assert entries["architecte-solutions"]["model"] == {
+        "primary": "intel-vulkan/gemma4:26B",
+        "fallbacks": ["ollama/qwen3.8:27b"],
+    }
+    assert entries["ingenieur-devops"]["model"] == {
+        "primary": "intel-vulkan/devstral-small-2:24B",
+        "fallbacks": ["ollama/qwen3.8:27b"],
+    }
+    defaults = patch["agents"]["defaults"]
+    assert defaults["model"] == {
+        "primary": "ollama/qwen3.8:27b",
+        "fallbacks": ["intel-vulkan/gemma4:26B"],
+    }
+    expected_multimodal = {
+        "primary": "ollama/qwen3.8:27b",
+        "fallbacks": ["ollama/gemma4:26b"],
+    }
+    assert defaults["imageModel"] == expected_multimodal
+    assert defaults["pdfModel"] == expected_multimodal
+    assert "openrouter/" not in str(patch["agents"])
 
 
 def test_unknown_backend_is_fail_closed() -> None:

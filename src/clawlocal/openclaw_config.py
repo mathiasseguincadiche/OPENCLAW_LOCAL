@@ -5,8 +5,9 @@ from typing import Any
 
 from clawlocal.config import load_contract
 
-SUPPORTED_BACKENDS = ("ollama-vulkan", "llama-cpp-sycl")
+SUPPORTED_BACKENDS = ("ollama-vulkan", "llama-cpp-sycl", "b580-hybrid")
 INTEL_SYCL_PROVIDER_ID = "intel-sycl"
+INTEL_VULKAN_PROVIDER_ID = "intel-vulkan"
 
 
 def _runtime_id(model: dict[str, Any], backend_id: str) -> str:
@@ -17,16 +18,44 @@ def _runtime_id(model: dict[str, Any], backend_id: str) -> str:
         if not runtime_id:
             raise ValueError("sycl_runtime_id absent pour un modèle local requis")
         return str(runtime_id)
+    if backend_id == "llama-cpp-vulkan":
+        runtime_id = model.get("vulkan_runtime_id")
+        if not runtime_id:
+            raise ValueError("vulkan_runtime_id absent pour un modèle local requis")
+        return str(runtime_id)
     raise ValueError(f"Backend local non supporté pour OpenClaw: {backend_id}")
 
 
-def _backend_ref(alias: str, catalog: dict[str, Any], backend_id: str) -> str:
+def _resolved_model_backend(
+    alias: str,
+    backends: dict[str, Any],
+    backend_id: str,
+) -> str:
+    if backend_id != "b580-hybrid":
+        return backend_id
+    profile = backends["backends"]["b580-hybrid"]
+    model_backends = profile.get("model_backends", {})
+    resolved = model_backends.get(alias)
+    if not resolved:
+        raise ValueError(f"Backend hybride absent pour le modèle: {alias}")
+    return str(resolved)
+
+
+def _backend_ref(
+    alias: str,
+    catalog: dict[str, Any],
+    backends: dict[str, Any],
+    backend_id: str,
+) -> str:
     model = catalog["models"][alias]
-    if backend_id == "ollama-vulkan":
-        return f"ollama/{_runtime_id(model, backend_id)}"
-    if backend_id == "llama-cpp-sycl":
-        return f"{INTEL_SYCL_PROVIDER_ID}/{_runtime_id(model, backend_id)}"
-    raise ValueError(f"Backend local non supporté pour OpenClaw: {backend_id}")
+    resolved_backend = _resolved_model_backend(alias, backends, backend_id)
+    if resolved_backend == "ollama-vulkan":
+        return f"ollama/{_runtime_id(model, resolved_backend)}"
+    if resolved_backend == "llama-cpp-sycl":
+        return f"{INTEL_SYCL_PROVIDER_ID}/{_runtime_id(model, resolved_backend)}"
+    if resolved_backend == "llama-cpp-vulkan":
+        return f"{INTEL_VULKAN_PROVIDER_ID}/{_runtime_id(model, resolved_backend)}"
+    raise ValueError(f"Backend modèle non supporté: {resolved_backend}")
 
 
 def _agent_tools(
@@ -75,21 +104,23 @@ def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
     return models
 
 
-def _intel_sycl_models(
+def _llamacpp_models(
     catalog: dict[str, Any],
     context_tokens: int,
+    backend_id: str,
+    aliases: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     models: list[dict[str, Any]] = []
-    for model in catalog["models"].values():
+    for alias, model in catalog["models"].items():
         if not model.get("required"):
             continue
-        runtime_id = _runtime_id(model, "llama-cpp-sycl")
+        if aliases is not None and alias not in aliases:
+            continue
+        runtime_id = _runtime_id(model, backend_id)
         models.append(
             {
                 "id": runtime_id,
                 "name": runtime_id,
-                # Le premier parcours SYCL est volontairement texte uniquement.
-                # Image/PDF restent sur Ollama jusqu'à qualification mmproj dédiée.
                 "input": ["text"],
                 "contextWindow": context_tokens,
                 "contextTokens": context_tokens,
@@ -100,8 +131,6 @@ def _intel_sycl_models(
                     "cacheRead": 0,
                     "cacheWrite": 0,
                 },
-                # Le candidat doit recevoir les schémas d'outils pour que le E2E
-                # puisse réellement confirmer ou invalider le tool-calling.
                 "compat": {
                     "supportsTools": True,
                     "toolSchemaProfile": "llamacpp",
@@ -121,32 +150,71 @@ def _ollama_provider(catalog: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _llamacpp_provider(
+    catalog: dict[str, Any],
+    backend: dict[str, Any],
+    backend_id: str,
+    provider_id: str,
+    api_key: str,
+    aliases: set[str] | None = None,
+) -> dict[str, Any]:
+    context_tokens = int(backend["router"]["context_tokens"])
+    return {
+        "baseUrl": str(backend["endpoint"]),
+        "apiKey": api_key,
+        "api": "openai-completions",
+        "timeoutSeconds": 300,
+        "models": _llamacpp_models(
+            catalog,
+            context_tokens,
+            backend_id,
+            aliases=aliases,
+        ),
+    }
+
+
 def _model_providers(
     catalog: dict[str, Any],
     backends: dict[str, Any],
     backend_id: str,
 ) -> dict[str, Any]:
     providers: dict[str, Any] = {"ollama": _ollama_provider(catalog)}
+    configured = backends["backends"]
     if backend_id == "ollama-vulkan":
         return providers
-
-    backend = backends["backends"][backend_id]
-    context_tokens = int(backend["router"]["context_tokens"])
-    providers[INTEL_SYCL_PROVIDER_ID] = {
-        "baseUrl": str(backend["endpoint"]),
-        "apiKey": "intel-sycl-local",
-        "api": "openai-completions",
-        "timeoutSeconds": 300,
-        "models": _intel_sycl_models(catalog, context_tokens),
-    }
-    return providers
+    if backend_id == "llama-cpp-sycl":
+        providers[INTEL_SYCL_PROVIDER_ID] = _llamacpp_provider(
+            catalog,
+            configured["llama-cpp-sycl"],
+            "llama-cpp-sycl",
+            INTEL_SYCL_PROVIDER_ID,
+            "intel-sycl-local",
+        )
+        return providers
+    if backend_id == "b580-hybrid":
+        profile = configured["b580-hybrid"]
+        vulkan_aliases = {
+            str(alias)
+            for alias, selected in profile["model_backends"].items()
+            if str(selected) == "llama-cpp-vulkan"
+        }
+        providers[INTEL_VULKAN_PROVIDER_ID] = _llamacpp_provider(
+            catalog,
+            configured["llama-cpp-vulkan"],
+            "llama-cpp-vulkan",
+            INTEL_VULKAN_PROVIDER_ID,
+            "intel-vulkan-local",
+            aliases=vulkan_aliases,
+        )
+        return providers
+    raise ValueError(f"Backend OpenClaw non supporté: {backend_id}")
 
 
 def build_openclaw_patch(
     platform_root: Path,
     backend_id: str = "ollama-vulkan",
 ) -> dict[str, Any]:
-    """Build the deterministic OpenClaw patch for one explicit local backend."""
+    """Build the deterministic OpenClaw patch for one explicit local backend profile."""
     if backend_id not in SUPPORTED_BACKENDS:
         raise ValueError(
             f"Backend OpenClaw invalide: {backend_id}; "
@@ -167,11 +235,11 @@ def build_openclaw_patch(
     workspaces_root = platform_root / "workspaces"
     agent_list: list[dict[str, Any]] = []
     for agent_id, route in routing["agents"].items():
-        primary = _backend_ref(route["local_primary"], catalog, backend_id)
+        primary = _backend_ref(route["local_primary"], catalog, backends, backend_id)
         fallbacks: list[str] = []
         fallback_alias = route.get("local_fallback")
         if fallback_alias:
-            fallbacks.append(_backend_ref(fallback_alias, catalog, backend_id))
+            fallbacks.append(_backend_ref(fallback_alias, catalog, backends, backend_id))
         agent_list.append(
             {
                 "id": agent_id,
@@ -189,10 +257,8 @@ def build_openclaw_patch(
 
     qwen = str(catalog["models"]["qwen-max"]["runtime_id"])
     gemma = str(catalog["models"]["gemma-deep"]["runtime_id"])
-    qwen_text_ref = _backend_ref("qwen-max", catalog, backend_id)
-    gemma_text_ref = _backend_ref("gemma-deep", catalog, backend_id)
-    # Le multimodal reste sciemment sur le backend déjà validé. Les blobs GGUF
-    # texte ne suffisent pas à prouver la présence/compatibilité des projecteurs.
+    qwen_text_ref = _backend_ref("qwen-max", catalog, backends, backend_id)
+    gemma_text_ref = _backend_ref("gemma-deep", catalog, backends, backend_id)
     qwen_multimodal_ref = f"ollama/{qwen}"
     gemma_multimodal_ref = f"ollama/{gemma}"
 
