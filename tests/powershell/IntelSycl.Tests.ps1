@@ -49,6 +49,7 @@ Describe 'Backend Intel Arc B580 SYCL' {
         $PythonHelper | Should -Match 'OPENCLAW_LOCAL_REPO_ROOT'
         $PythonHelper | Should -Match 'PYTHONPATH'
         $PythonHelper | Should -Match '\$SourceRoot\s*=\s*Join-Path\s+\$RepoRoot\s+''src'''
+        $PythonHelper | Should -Match '(?s)\$Candidates\s*=\s*@\(\(Join-Path\s+\$PSScriptRoot.*?if\s*\(\$env:OPENCLAW_LOCAL_REPO_ROOT\)'
         $PythonHelper | Should -Match 'clawlocal\.__file__'
         $PythonHelper | Should -Match 'checkout courant'
         $PythonHelper | Should -Match 'import yaml'
