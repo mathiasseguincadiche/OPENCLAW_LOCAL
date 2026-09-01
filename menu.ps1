@@ -5,13 +5,14 @@ param(
         'configure-openclaw', 'deploy-agents', 'verify', 'benchmark', 'inventory',
         'e2e', 'qualification', 'intel-sycl-setup', 'intel-sycl-stop',
         'intel-sycl-verify', 'intel-sycl-compare', 'intel-sycl-diagnose',
-        'intel-vulkan-probe', 'team', 'docs', 'logs'
+        'intel-vulkan-probe', 'intel-vulkan-setup', 'intel-vulkan-stop',
+        'intel-vulkan-verify', 'team', 'docs', 'logs'
     )]
     [string]$Action = 'menu',
     [switch]$DryRun,
     [switch]$Quick,
     [switch]$AllowRuntimeDrift,
-    [ValidateSet('ollama-vulkan', 'llama-cpp-sycl')]
+    [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
     [string]$Backend = 'ollama-vulkan',
     [ValidateSet('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b')]
     [string]$Model = 'devstral-small-2:24b',
@@ -42,6 +43,9 @@ $Scripts = @{
     'intel-sycl-compare' = Join-Path $RepoRoot 'scripts\windows\15_compare_intel_backends.ps1'
     'intel-sycl-diagnose' = Join-Path $RepoRoot 'scripts\windows\16_diagnose_intel_sycl_model.ps1'
     'intel-vulkan-probe' = Join-Path $RepoRoot 'scripts\windows\17_probe_intel_vulkan.ps1'
+    'intel-vulkan-setup' = Join-Path $RepoRoot 'scripts\windows\18_setup_intel_vulkan.ps1'
+    'intel-vulkan-stop' = Join-Path $RepoRoot 'scripts\windows\19_stop_intel_vulkan.ps1'
+    'intel-vulkan-verify' = Join-Path $RepoRoot 'scripts\windows\20_verify_intel_vulkan.ps1'
 }
 
 function Get-PlatformRoot {
@@ -131,7 +135,8 @@ function Show-Title {
     Write-Host ' OPENCLAW_LOCAL — CENTRE DE CONTRÔLE LOCAL-FIRST WINDOWS 11 PRO'
     Write-Host '============================================================================== '
     Write-Host ' Nominal : OpenClaw + Ollama/Vulkan natifs Windows'
-    Write-Host ' Intel   : llama.cpp/SYCL/Level Zero candidat B580, promotion explicite uniquement'
+    Write-Host ' B580    : profil hybride mesuré Qwen/Ollama + Gemma/Devstral llama.cpp/Vulkan'
+    Write-Host ' Intel   : llama.cpp/SYCL/Level Zero reste disponible pour qualification'
     Write-Host ' Cloud   : escalade explicite uniquement, jamais fallback silencieux'
 }
 
@@ -141,7 +146,7 @@ function Invoke-Action {
         [switch]$DryRunMode,
         [switch]$QuickMode,
         [switch]$AllowRuntimeDriftMode,
-        [ValidateSet('ollama-vulkan', 'llama-cpp-sycl')]
+        [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
         [string]$BackendMode = 'ollama-vulkan',
         [ValidateSet('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b')]
         [string]$ModelMode = 'devstral-small-2:24b',
@@ -221,12 +226,12 @@ while ($true) {
 3) Audit sans mutation
 4) Configurer/vérifier Ollama local
 5) Télécharger les modèles locaux de référence
-6) Générer/appliquer la configuration OpenClaw (paramètre -Backend pour SYCL)
+6) Générer/appliquer la configuration OpenClaw (paramètre -Backend)
 7) Déployer les 8 workspaces agents
 8) Vérifier l'inférence locale Ollama
 9) Lancer le benchmark (utiliser -Quick pour 8K uniquement)
 10) Collecter l'inventaire de qualification
-11) Tester OpenClaw E2E + tool-calling + réparation (paramètre -Backend pour SYCL)
+11) Tester OpenClaw E2E + tool-calling + réparation (paramètre -Backend)
 12) Lancer la qualification matérielle (utiliser -Quick pour 36 cas au lieu de 72)
 13) Afficher les contrats de l'équipe IA
 14) Afficher la documentation
@@ -237,6 +242,9 @@ while ($true) {
 19) Arrêter le serveur Intel SYCL
 20) Diagnostiquer directement un modèle Intel SYCL (paramètre -Model; Devstral par défaut)
 21) Isoler llama.cpp Vulkan vs SYCL/Ollama sur Intel B580
+22) Installer/démarrer llama.cpp Vulkan géré pour le profil B580 hybride
+23) Vérifier llama.cpp Vulkan géré (Gemma + Devstral)
+24) Arrêter le serveur llama.cpp Vulkan géré
 0) Quitter
 '@ | Write-Host
 
@@ -262,6 +270,9 @@ while ($true) {
         '19' { Invoke-Action -Name 'intel-sycl-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '20' { Invoke-Action -Name 'intel-sycl-diagnose' -DryRunMode:$DryRun -BackendMode $Backend -ModelMode $Model -NoLogMode:$NoLog }
         '21' { Invoke-Action -Name 'intel-vulkan-probe' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '22' { Invoke-Action -Name 'intel-vulkan-setup' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '23' { Invoke-Action -Name 'intel-vulkan-verify' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '24' { Invoke-Action -Name 'intel-vulkan-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }
