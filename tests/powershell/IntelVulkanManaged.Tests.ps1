@@ -53,6 +53,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:VulkanHelper | Should -Match 'LLAMA_ARG_N_PARALLEL'
         $script:VulkanHelper | Should -Match 'Arc.*B580'
         $script:VulkanHelper | Should -Match 'Resolve-IntelSyclModelPath'
+        $script:VulkanHelper | Should -Match 'AllowDownload'
         $script:VulkanHelper | Should -Match 'Invoke-IntelVulkanModelUnload'
         $script:VulkanHelper | Should -Match 'Get-IntelVulkanManagedModel'
     }
