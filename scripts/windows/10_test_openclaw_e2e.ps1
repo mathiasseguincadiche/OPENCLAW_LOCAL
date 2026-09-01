@@ -224,10 +224,10 @@ if ($DryRun) {
     if ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Qwen -> Ollama; Gemma/Devstral -> intel-vulkan; tool-call Devstral/Vulkan obligatoire.'
     }
-    Write-Host '[DRY-RUN] tool-calling via ingenieur-devops dans son workspace borné.'
+    Write-Host '[DRY-RUN] tool-calling via le modèle primaire réellement routé pour ingenieur-devops.'
     Write-Host '[DRY-RUN] compatibilité CLI OpenClaw 2026.7.1-2: agent --agent/--model/--message.'
-    Write-Host '[DRY-RUN] erreur outil contrôlée -> réparation'
-    Write-Host '[DRY-RUN] 3 runs de stabilité'
+    Write-Host '[DRY-RUN] erreur outil contrôlée -> réparation avec le même spécialiste.'
+    Write-Host '[DRY-RUN] 3 runs de stabilité avec le même spécialiste.'
     Write-Host '[DRY-RUN] progression visible pour chaque appel long.'
     Write-Host '[DRY-RUN] aucune escalade cloud ni fallback de provider/transport.'
     exit 0
@@ -301,6 +301,8 @@ Write-Host "OK  OpenClaw verrouillé: $ActualOpenClawVersion"
 $RunStamp = Get-Date -Format 'yyyyMMdd_HHmmssfff'
 $SessionPrefix = "e2e-$RunStamp"
 $ToolWorkspace = Get-AgentWorkspace -Config $Config -AgentId $ToolAgentId
+$ToolModelRef = Get-AgentPrimaryModelRef -Config $Config -AgentId $ToolAgentId
+$ToolProvider = Get-ProviderFromModelRef -ModelRef $ToolModelRef
 $ScratchRelative = ".openclaw-e2e\$RunStamp"
 $ScratchPromptPath = $ScratchRelative -replace '\\', '/'
 $ScratchRoot = Join-Path $ToolWorkspace $ScratchRelative
@@ -309,7 +311,18 @@ if (Test-Path -LiteralPath $ScratchRoot) {
 }
 New-Item -ItemType Directory -Path $ScratchRoot -Force | Out-Null
 Write-Host "E2E  Workspace outils=$ToolWorkspace"
+Write-Host "E2E  Modèle outils=$ToolModelRef provider=$ToolProvider"
 Write-Host "E2E  Scratch borné=$ScratchRoot"
+
+if ($Backend -eq 'b580-hybrid') {
+    $ExpectedHybridToolRef = 'intel-vulkan/devstral-small-2:24B'
+    if ($ToolModelRef -ne $ExpectedHybridToolRef) {
+        throw (
+            'Routage hybride inattendu pour ingenieur-devops. ' +
+            "Attendu=$ExpectedHybridToolRef Reçu=$ToolModelRef"
+        )
+    }
+}
 
 $null = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'config', 'validate', '--json'
@@ -327,7 +340,7 @@ if (-not $GatewayReadiness.ready) {
 }
 
 $Evidence = [ordered]@{
-    schema_version = '1.3.0'
+    schema_version = '1.4.0'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     platform_root = $PlatformRoot
     backend = $Backend
@@ -338,6 +351,8 @@ $Evidence = [ordered]@{
     cloud_enabled = $false
     transport = 'gateway'
     tool_agent = $ToolAgentId
+    tool_model_ref = $ToolModelRef
+    tool_provider = $ToolProvider
     tool_workspace = $ToolWorkspace
     scratch_root = $ScratchRoot
     session_prefix = $SessionPrefix
@@ -376,14 +391,14 @@ foreach ($AgentId in $AgentIds) {
 
 $ToolMarkerRelative = "$ScratchPromptPath/tool-call-ok.txt"
 $ToolPrompt = @"
-Utilise réellement l'outil d'écriture disponible. Dans ton workspace, crée
-$ToolMarkerRelative avec exactement TOOL_OK. Ensuite réponds TOOL_OK.
+Utilise réellement l'outil write disponible. Dans ton workspace, crée
+$ToolMarkerRelative avec exactement TOOL_OK. Ne simule pas l'action et ne réponds
+qu'après avoir vérifié que le fichier existe avec ce contenu. Ensuite réponds TOOL_OK.
 "@
-$ToolProvider = Get-ProviderFromModelRef -ModelRef $ModelRef
 $ToolResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', '--agent', $ToolAgentId,
     '--session-key', "$SessionPrefix-tool",
-    '--model', $ModelRef, '--message', $ToolPrompt,
+    '--model', $ToolModelRef, '--message', $ToolPrompt,
     '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description "Tool-calling OpenClaw/$ToolProvider"
 $null = Test-ExpectedProvider -Payload $ToolResult -ExpectedProvider $ToolProvider `
@@ -392,7 +407,11 @@ $null = Test-GatewayTransport -Payload $ToolResult `
     -Description "Tool-calling OpenClaw/$ToolProvider"
 $ToolMarker = Join-Path $ScratchRoot 'tool-call-ok.txt'
 if (-not (Test-Path -LiteralPath $ToolMarker)) {
-    throw "Le modèle n'a pas créé le marqueur tool-call-ok.txt."
+    $ToolText = Get-OpenClawText -Payload $ToolResult
+    throw (
+        "Le spécialiste $ToolModelRef n'a pas créé tool-call-ok.txt. " +
+        "Réponse modèle=$ToolText"
+    )
 }
 if ((Get-Content -Raw -LiteralPath $ToolMarker).Trim() -ne 'TOOL_OK') {
     throw 'Le contenu du marqueur tool-call-ok.txt est incorrect.'
@@ -400,12 +419,13 @@ if ((Get-Content -Raw -LiteralPath $ToolMarker).Trim() -ne 'TOOL_OK') {
 $Evidence.tool_call = $ToolResult
 
 if ($Backend -eq 'b580-hybrid') {
-    $VulkanToolRef = 'intel-vulkan/devstral-small-2:24B'
+    $VulkanToolRef = $ToolModelRef
     $VulkanMarkerRelative = "$ScratchPromptPath/vulkan-tool-ok.txt"
     $VulkanMarker = Join-Path $ScratchRoot 'vulkan-tool-ok.txt'
     $VulkanPrompt = @"
-Utilise réellement l'outil d'écriture disponible. Dans ton workspace, crée
-$VulkanMarkerRelative avec exactement VULKAN_TOOL_OK. Ensuite réponds VULKAN_TOOL_OK.
+Utilise réellement l'outil write disponible. Dans ton workspace, crée
+$VulkanMarkerRelative avec exactement VULKAN_TOOL_OK. Ne simule pas l'action et
+ne réponds qu'après avoir vérifié le fichier. Ensuite réponds VULKAN_TOOL_OK.
 "@
     $VulkanResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
         'agent', '--agent', $ToolAgentId,
@@ -418,7 +438,8 @@ $VulkanMarkerRelative avec exactement VULKAN_TOOL_OK. Ensuite réponds VULKAN_TO
     $null = Test-GatewayTransport -Payload $VulkanResult `
         -Description 'Tool-calling OpenClaw/intel-vulkan'
     if (-not (Test-Path -LiteralPath $VulkanMarker)) {
-        throw 'Devstral/Vulkan n''a pas créé vulkan-tool-ok.txt.'
+        $VulkanText = Get-OpenClawText -Payload $VulkanResult
+        throw "Devstral/Vulkan n'a pas créé vulkan-tool-ok.txt. Réponse modèle=$VulkanText"
     }
     if ((Get-Content -Raw -LiteralPath $VulkanMarker).Trim() -ne 'VULKAN_TOOL_OK') {
         throw 'Le contenu de vulkan-tool-ok.txt est incorrect.'
@@ -434,12 +455,12 @@ $RepairRelative = "$ScratchPromptPath/repair-ok.txt"
 $RepairPrompt = @"
 Teste d'abord $MissingRelative, qui n'existe pas. Après l'erreur outil, corrige
 le plan: lis $FallbackRelative, puis crée $RepairRelative avec exactement REPAIRED.
-Ne fabrique pas le premier résultat.
+Ne fabrique pas le premier résultat et vérifie le fichier avant de répondre.
 "@
 $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', '--agent', $ToolAgentId,
     '--session-key', "$SessionPrefix-repair",
-    '--model', $ModelRef, '--message', $RepairPrompt,
+    '--model', $ToolModelRef, '--message', $RepairPrompt,
     '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description 'Réparation après erreur outil'
 $null = Test-ExpectedProvider -Payload $RepairResult -ExpectedProvider $ToolProvider `
@@ -448,7 +469,8 @@ $null = Test-GatewayTransport -Payload $RepairResult `
     -Description 'Réparation après erreur outil'
 $RepairMarker = Join-Path $ScratchRoot 'repair-ok.txt'
 if (-not (Test-Path -LiteralPath $RepairMarker)) {
-    throw "Le scénario de réparation n'a pas créé repair-ok.txt."
+    $RepairText = Get-OpenClawText -Payload $RepairResult
+    throw "Le scénario de réparation n'a pas créé repair-ok.txt. Réponse modèle=$RepairText"
 }
 if ((Get-Content -Raw -LiteralPath $RepairMarker).Trim() -ne 'REPAIRED') {
     throw 'Le contenu de repair-ok.txt est incorrect.'
@@ -459,7 +481,7 @@ for ($Run = 1; $Run -le 3; $Run++) {
     $StableResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
         'agent', '--agent', $ToolAgentId,
         '--session-key', "$SessionPrefix-stable-$Run",
-        '--model', $ModelRef, '--message', "Réponds exactement STABLE_$Run",
+        '--model', $ToolModelRef, '--message', "Réponds exactement STABLE_$Run",
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Stabilité run $Run/3"
     $null = Test-ExpectedProvider -Payload $StableResult -ExpectedProvider $ToolProvider `
