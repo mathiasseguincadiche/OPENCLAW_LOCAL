@@ -24,11 +24,10 @@ function Get-ClawLocalManagedPython {
 }
 
 function Get-ClawLocalRepoRoot {
-    $Candidates = @()
+    $Candidates = @((Join-Path $PSScriptRoot '..\..\..'))
     if ($env:OPENCLAW_LOCAL_REPO_ROOT) {
         $Candidates += [string]$env:OPENCLAW_LOCAL_REPO_ROOT
     }
-    $Candidates += (Join-Path $PSScriptRoot '..\..\..')
 
     foreach ($Candidate in $Candidates) {
         if (-not (Test-Path -LiteralPath $Candidate)) {
@@ -47,7 +46,7 @@ function Get-ClawLocalRepoRoot {
 
     throw (
         'Checkout OPENCLAW_LOCAL introuvable pour le runtime Python géré. ' +
-        'OPENCLAW_LOCAL_REPO_ROOT doit pointer vers le dépôt courant.'
+        'Le helper doit résider dans le dépôt courant ou OPENCLAW_LOCAL_REPO_ROOT doit être valide.'
     )
 }
 
