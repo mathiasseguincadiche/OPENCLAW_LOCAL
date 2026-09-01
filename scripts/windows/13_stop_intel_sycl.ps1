@@ -5,7 +5,6 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 . (Join-Path $PSScriptRoot 'lib\intel_sycl.ps1')
-. (Join-Path $PSScriptRoot 'lib\intel_sycl_process_contract.ps1')
 
 $PlatformRoot = Get-OpenClawLocalPlatformRoot
 $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
@@ -18,6 +17,6 @@ if ($DryRun) {
     exit 0
 }
 
-$null = Stop-IntelSyclServer -StatePath $Paths.ProcessState
+$null = Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
 Write-Host 'OK  Backend Intel SYCL arrêté. La configuration OpenClaw existante n''est pas modifiée.'
 exit 0
