@@ -156,7 +156,17 @@ try {
 
     if (-not $Process.HasExited) {
         Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
-        $null = $Process.WaitForExit(10000)
+        $ExitedAfterStop = $Process.WaitForExit(10000)
+        if (-not $ExitedAfterStop -and -not $Process.HasExited) {
+            try {
+                $Process.Kill($true)
+            }
+            catch {
+                Write-Warning "Kill arbre Python impossible après timeout: $($_.Exception.Message)"
+            }
+            $null = $Process.WaitForExit(5000)
+        }
+        $TimeoutExitCode = if ($Process.HasExited) { $Process.ExitCode } else { $null }
         $null = Stop-IntelSyclServer -StatePath $Paths.ProcessState -Confirm:$false
         $RouterTail = if (Test-Path -LiteralPath $Paths.StderrLog) {
             (Get-Content -LiteralPath $Paths.StderrLog -Tail 160) -join "`n"
@@ -170,7 +180,7 @@ try {
             -HardTimeout $EffectiveHardTimeout -Python $PythonIdentity `
             -ChildStdout $ChildStdout -ChildStderr $ChildStderr `
             -RouterStderr $Paths.StderrLog -RouterTail $RouterTail `
-            -StartedAt $StartedAt -ProcessId $Process.Id -ExitCode $Process.ExitCode `
+            -StartedAt $StartedAt -ProcessId $Process.Id -ExitCode $TimeoutExitCode `
             -Reason $Reason
         throw (
             "Watchdog: benchmark interrompu après $EffectiveHardTimeout s. " +
