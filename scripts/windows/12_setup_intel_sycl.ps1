@@ -18,6 +18,10 @@ $PlatformRoot = Get-OpenClawLocalPlatformRoot
 $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
 $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
 
+if ([int]$RuntimeLock.parallel -ne 1) {
+    throw 'Contrat Intel SYCL invalide: parallel=1 requis pour un seul gros modèle sur B580.'
+}
+
 if ($DryRun) {
     Write-Host '[DRY-RUN] Installer et démarrer le backend Intel Arc B580 SYCL/Level Zero.'
     Write-Host "Release     : $($RuntimeLock.release)"
@@ -26,6 +30,7 @@ if ($DryRun) {
     Write-Host "Device      : $($RuntimeLock.device) via $($RuntimeLock.oneapi_device_selector)"
     Write-Host "Endpoint    : $($RuntimeLock.endpoint)"
     Write-Host "Models max  : $($RuntimeLock.models_max) (un gros modèle à la fois)"
+    Write-Host "Parallel    : $($RuntimeLock.parallel) slot (évite le défaut auto=4 de llama-server)"
     Write-Host '[DRY-RUN] Utiliser le runtime Python géré OPENCLAW_LOCAL, jamais un Python système ambigu.'
     Write-Host '[DRY-RUN] Vérifier le pilote B580, l''archive officielle, le manifeste du binaire et le port 8080.'
     Write-Host '[DRY-RUN] Résoudre les IDs réellement annoncés par le routeur llama.cpp avant les smokes.'
@@ -43,7 +48,7 @@ $ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
 Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 $Proof = [ordered]@{
-    schema_version = '1.4.1'
+    schema_version = '1.5.0'
     started_at = [DateTimeOffset]::UtcNow.ToString('o')
     release = [string]$RuntimeLock.release
     asset = [string]$RuntimeLock.asset
@@ -52,9 +57,11 @@ $Proof = [ordered]@{
     device = [string]$RuntimeLock.device
     oneapi_device_selector = [string]$RuntimeLock.oneapi_device_selector
     models_max = [int]$RuntimeLock.models_max
+    parallel = [int]$RuntimeLock.parallel
     model_source_policy = [string]$RuntimeLock.model_source_policy
     explicit_unload_between_models = $true
     strict_process_output_contract = $true
+    single_slot_runtime_contract = $true
     python = $ManagedPython
     runtime_manifest = $Paths.Manifest
     smoke = @()
@@ -67,8 +74,23 @@ try {
     $Proof.server_sha256 = (
         Get-FileHash -LiteralPath $Binary -Algorithm SHA256
     ).Hash.ToLowerInvariant()
-    $Server = Start-IntelSyclServer -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot `
-        -TimeoutSeconds $ReadyTimeoutSeconds
+
+    $PreviousParallel = $env:LLAMA_ARG_N_PARALLEL
+    try {
+        $env:LLAMA_ARG_N_PARALLEL = [string]$RuntimeLock.parallel
+        Write-Host "OK  llama-server Intel SYCL forcé à $($RuntimeLock.parallel) slot."
+        $Server = Start-IntelSyclServer -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot `
+            -TimeoutSeconds $ReadyTimeoutSeconds
+    }
+    finally {
+        if ($null -eq $PreviousParallel) {
+            Remove-Item Env:LLAMA_ARG_N_PARALLEL -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:LLAMA_ARG_N_PARALLEL = $PreviousParallel
+        }
+    }
+
     if (
         -not $Server -or
         -not $Server.PSObject.Properties['Process'] -or
