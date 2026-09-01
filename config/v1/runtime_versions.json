@@ -76,6 +76,7 @@
     "device": "SYCL0",
     "oneapi_device_selector": "level_zero:gpu",
     "models_max": 1,
+    "parallel": 1,
     "context_tokens": 8192,
     "gpu_layers": "auto",
     "offline": true,
