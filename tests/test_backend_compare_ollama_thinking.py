@@ -17,7 +17,7 @@ def load_module() -> ModuleType:
     return module
 
 
-def test_ollama_benchmark_disables_thinking_for_every_model() -> None:
+def test_ollama_benchmark_disables_thinking_and_unloads_every_model() -> None:
     module = load_module()
     captured: list[dict[str, Any]] = []
 
@@ -25,6 +25,11 @@ def test_ollama_benchmark_disables_thinking_for_every_model() -> None:
         url: str, payload: dict[str, Any], timeout: float
     ) -> dict[str, Any]:
         captured.append({"url": url, "payload": payload, "timeout": timeout})
+        if not payload.get("messages"):
+            return {
+                "message": {"content": "", "thinking": ""},
+                "done_reason": "unload",
+            }
         return {
             "message": {"content": "ok", "thinking": ""},
             "load_duration": 1_000_000,
@@ -35,13 +40,29 @@ def test_ollama_benchmark_disables_thinking_for_every_model() -> None:
             "done_reason": "stop",
         }
 
+    def fake_get_json(url: str, timeout: float = 5.0) -> dict[str, Any]:
+        assert url.endswith("/api/ps")
+        assert timeout == 10
+        return {"models": []}
+
     module.post_json = fake_post_json
+    module.get_json = fake_get_json
     for model in ("qwen3.8:27b", "gemma4:26b", "devstral-small-2:24b"):
         result = module.run_ollama(
             "http://127.0.0.1:11434", model, "test", 32, 10.0
         )
         assert result["content"] == "ok"
+        assert result["unloaded_after_case"] is True
 
-    assert len(captured) == 3
-    assert all(item["payload"]["think"] is False for item in captured)
-    assert all(item["payload"]["options"]["num_ctx"] == 8192 for item in captured)
+    generation_calls = [
+        item for item in captured if bool(item["payload"].get("messages"))
+    ]
+    unload_calls = [
+        item for item in captured if not item["payload"].get("messages")
+    ]
+    assert len(generation_calls) == 3
+    assert len(unload_calls) == 6
+    assert all(item["payload"]["think"] is False for item in generation_calls)
+    assert all(item["payload"]["options"]["num_ctx"] == 8192 for item in generation_calls)
+    assert all(item["payload"]["keep_alive"] == 0 for item in generation_calls)
+    assert all(item["payload"]["keep_alive"] == 0 for item in unload_calls)
