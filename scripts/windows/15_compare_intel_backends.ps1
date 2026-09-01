@@ -2,7 +2,7 @@
 param(
     [switch]$DryRun,
     [switch]$Quick,
-    [ValidateRange(120, 7200)]
+    [ValidateRange(0, 7200)]
     [int]$HardTimeoutSeconds = 0
 )
 
@@ -16,6 +16,9 @@ $PlatformRoot = Get-OpenClawLocalPlatformRoot
 $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
 $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
 $CompareScript = Join-Path $RepoRoot 'scripts\28_compare_local_backends.py'
+if ($HardTimeoutSeconds -gt 0 -and $HardTimeoutSeconds -lt 120) {
+    throw 'HardTimeoutSeconds doit valoir 0 (automatique) ou être compris entre 120 et 7200 secondes.'
+}
 $EffectiveHardTimeout = if ($HardTimeoutSeconds -gt 0) {
     $HardTimeoutSeconds
 }
