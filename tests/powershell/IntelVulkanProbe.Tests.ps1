@@ -34,6 +34,13 @@ Describe 'Intel Vulkan isolation probe' {
         $ProbeScript | Should -Match 'Resolve-IntelSyclModelPath'
     }
 
+    It 'refuse implicitement les anciennes baselines non isolees' {
+        $ProbeScript | Should -Match "schema_version -eq '1\.5\.0'"
+        $ProbeScript | Should -Match 'gpu_memory_isolation_between_backends'
+        $ProbeScript | Should -Match "baseline_required_schema = '1\.5\.0'"
+        $ProbeScript | Should -Match 'Baseline acceptée uniquement si schéma 1\.5\.0'
+    }
+
     It 'compare la mesure Vulkan au dernier benchmark Ollama et SYCL sans promotion' {
         $ProbeScript | Should -Match 'backend_compare_b580_\*\.json'
         $ProbeScript | Should -Match "PSObject\.Properties\['ollama-vulkan'\]"
