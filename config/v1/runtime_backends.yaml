@@ -1,4 +1,4 @@
-schema_version: "1.1.0"
+schema_version: "1.2.0"
 platform_version: "0.2.0"
 backends:
   ollama-vulkan:
@@ -29,6 +29,7 @@ backends:
       jinja: true
       gpu_layers: auto
       context_tokens: 8192
+      parallel: 1
     model_source: provider_specific_gguf
     qualification_required: true
     promotion_requires:
@@ -44,16 +45,65 @@ backends:
 
   llama-cpp-vulkan:
     provider: llama_cpp_http
+    provider_id: intel-vulkan
     mode: candidate
     windows_native: true
-    endpoint: "http://127.0.0.1:8080/v1"
+    endpoint: "http://127.0.0.1:8081/v1"
     api: openai-completions
     accelerator: vulkan
-    activation: operator_managed
+    device: Vulkan0
+    activation: managed_candidate
+    runtime_lock: llama_cpp_vulkan
+    router:
+      models_max: 1
+      autoload: true
+      offline: true
+      jinja: true
+      gpu_layers: auto
+      context_tokens: 8192
+      parallel: 1
+    managed_models:
+      - gemma-deep
+      - devstral-devops
+    model_source: provider_specific_gguf
     qualification_required: true
+    promotion_requires:
+      - intel_arc_b580_detected
+      - vulkan_device_detected
+      - gemma_and_devstral_load
+      - benchmark_vs_ollama_and_sycl
+      - openclaw_http_provider_smoke
+      - tool_calling_e2e
+      - three_stable_runs
+      - human_review
+
+  b580-hybrid:
+    provider: mixed_local
+    mode: candidate_profile
+    windows_native: true
+    activation: explicit_only
+    qualification_required: true
+    model_backends:
+      qwen-max: ollama-vulkan
+      gemma-deep: llama-cpp-vulkan
+      devstral-devops: llama-cpp-vulkan
+    multimodal_backend: ollama-vulkan
+    rollback_backend: ollama-vulkan
+    benchmark_basis:
+      qwen-max: ollama-vulkan
+      gemma-deep: llama-cpp-vulkan
+      devstral-devops: llama-cpp-vulkan
+    promotion_requires:
+      - isolated_b580_benchmark
+      - managed_vulkan_runtime_ready
+      - openclaw_mixed_provider_smoke
+      - vulkan_tool_calling_e2e
+      - three_stable_runs
+      - human_review
 
 selection:
   default_backend: ollama-vulkan
+  recommended_candidate: b580-hybrid
   production_backend_requires_b580_benchmark: true
   compare_same_model_when_possible: true
   no_automatic_promotion: true
