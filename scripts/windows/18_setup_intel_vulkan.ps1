@@ -56,7 +56,7 @@ try {
         Write-Host "SMOKE Intel Vulkan: $Model"
         $Smoke = Invoke-IntelVulkanChatSmoke -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model
         $Proof.smoke += $Smoke
-        Unload-IntelVulkanModel -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Smoke.runtime_model
+        Stop-IntelVulkanModel -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Smoke.runtime_model
         Write-Host "OK  $($Smoke.runtime_model) via Vulkan: wall=$($Smoke.wall_ms)ms tok/s=$($Smoke.tokens_per_second) prompt_tok/s=$($Smoke.prompt_tokens_per_second)"
     }
     $Proof.status = 'pass'
