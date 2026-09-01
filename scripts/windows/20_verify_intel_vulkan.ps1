@@ -47,7 +47,7 @@ $Proof = [ordered]@{
 foreach ($Model in $Models) {
     $Smoke = Invoke-IntelVulkanChatSmoke -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Model
     $Proof.smoke += $Smoke
-    Stop-IntelVulkanModel -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Smoke.runtime_model
+    Invoke-IntelVulkanModelUnload -BaseUrl ([string]$RuntimeLock.endpoint) -Model $Smoke.runtime_model
     Write-Host "OK  $($Smoke.runtime_model): wall=$($Smoke.wall_ms)ms tok/s=$($Smoke.tokens_per_second)"
 }
 
