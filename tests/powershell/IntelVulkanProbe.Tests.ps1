@@ -1,3 +1,4 @@
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 Describe 'Intel Vulkan isolation probe' {
@@ -34,11 +35,19 @@ Describe 'Intel Vulkan isolation probe' {
         $script:VulkanProbeScript | Should -Match 'Resolve-IntelSyclModelPath'
     }
 
-    It 'refuse implicitement les anciennes baselines non isolees' {
-        $script:VulkanProbeScript | Should -Match "schema_version -eq '1\.5\.0'"
+    It 'refuse les baselines anciennes ou structurellement incompletes' {
+        $script:VulkanProbeScript | Should -Match "SchemaProperty\.Value -ne '1\.5\.0'"
         $script:VulkanProbeScript | Should -Match 'gpu_memory_isolation_between_backends'
+        $script:VulkanProbeScript | Should -Match "PSObject\.Properties\['summary'\]"
+        $script:VulkanProbeScript | Should -Match "PSObject\.Properties\['models'\]"
         $script:VulkanProbeScript | Should -Match "baseline_required_schema = '1\.5\.0'"
         $script:VulkanProbeScript | Should -Match 'Baseline acceptée uniquement si schéma 1\.5\.0'
+    }
+
+    It 'preserve null quand llama.cpp ne fournit pas les timings' {
+        $script:VulkanProbeScript | Should -Match '\$null -ne \$Result\.tokens_per_second'
+        $script:VulkanProbeScript | Should -Match 'llama_cpp_vulkan_tps = \$VulkanTps'
+        $script:VulkanProbeScript | Should -Match '\$null -ne \$VulkanTps'
     }
 
     It 'compare la mesure Vulkan au dernier benchmark Ollama et SYCL sans promotion' {
