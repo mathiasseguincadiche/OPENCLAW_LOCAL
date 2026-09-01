@@ -3,56 +3,56 @@ $ErrorActionPreference = 'Stop'
 Describe 'Intel Vulkan isolation probe' {
     BeforeAll {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-        $RuntimeVersions = Get-Content -Raw -LiteralPath (
+        $script:VulkanRuntimeVersions = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'config\v1\runtime_versions.json'
         ) | ConvertFrom-Json
-        $ProbeScript = Get-Content -Raw -LiteralPath (
+        $script:VulkanProbeScript = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'scripts\windows\17_probe_intel_vulkan.ps1'
         )
-        $MenuScript = Get-Content -Raw -LiteralPath (Join-Path $TestRepoRoot 'menu.ps1')
+        $script:VulkanMenuScript = Get-Content -Raw -LiteralPath (Join-Path $TestRepoRoot 'menu.ps1')
     }
 
     It 'verrouille le runtime Vulkan b10621 officiel et son SHA-256' {
-        $RuntimeVersions.llama_cpp_vulkan_probe.release | Should -Be 'b10621'
-        $RuntimeVersions.llama_cpp_vulkan_probe.asset |
+        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.release | Should -Be 'b10621'
+        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.asset |
             Should -Be 'llama-b10621-bin-win-vulkan-x64.zip'
-        $RuntimeVersions.llama_cpp_vulkan_probe.sha256 |
+        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.sha256 |
             Should -Be '2672d85bf87c8280d94dee01eb6a86280046878f70a07d786a93637fa9081163'
-        $RuntimeVersions.llama_cpp_vulkan_probe.promotion_allowed | Should -BeFalse
+        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.promotion_allowed | Should -BeFalse
     }
 
     It 'utilise le meme contrat de charge que SYCL pour isoler le backend' {
-        $RuntimeVersions.llama_cpp_vulkan_probe.context_tokens | Should -Be 8192
-        $RuntimeVersions.llama_cpp_vulkan_probe.gpu_layers | Should -Be 'auto'
-        $RuntimeVersions.llama_cpp_vulkan_probe.parallel | Should -Be 1
-        $ProbeScript | Should -Match "'--ctx-size'"
-        $ProbeScript | Should -Match "'--gpu-layers'"
-        $ProbeScript | Should -Match "'--parallel'"
-        $ProbeScript | Should -Match "'--fit', 'on'"
-        $ProbeScript | Should -Match "'--device'"
-        $ProbeScript | Should -Match 'enable_thinking = \$false'
-        $ProbeScript | Should -Match 'Resolve-IntelSyclModelPath'
+        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.context_tokens | Should -Be 8192
+        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.gpu_layers | Should -Be 'auto'
+        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.parallel | Should -Be 1
+        $script:VulkanProbeScript | Should -Match "'--ctx-size'"
+        $script:VulkanProbeScript | Should -Match "'--gpu-layers'"
+        $script:VulkanProbeScript | Should -Match "'--parallel'"
+        $script:VulkanProbeScript | Should -Match "'--fit', 'on'"
+        $script:VulkanProbeScript | Should -Match "'--device'"
+        $script:VulkanProbeScript | Should -Match 'enable_thinking = \$false'
+        $script:VulkanProbeScript | Should -Match 'Resolve-IntelSyclModelPath'
     }
 
     It 'refuse implicitement les anciennes baselines non isolees' {
-        $ProbeScript | Should -Match "schema_version -eq '1\.5\.0'"
-        $ProbeScript | Should -Match 'gpu_memory_isolation_between_backends'
-        $ProbeScript | Should -Match "baseline_required_schema = '1\.5\.0'"
-        $ProbeScript | Should -Match 'Baseline acceptée uniquement si schéma 1\.5\.0'
+        $script:VulkanProbeScript | Should -Match "schema_version -eq '1\.5\.0'"
+        $script:VulkanProbeScript | Should -Match 'gpu_memory_isolation_between_backends'
+        $script:VulkanProbeScript | Should -Match "baseline_required_schema = '1\.5\.0'"
+        $script:VulkanProbeScript | Should -Match 'Baseline acceptée uniquement si schéma 1\.5\.0'
     }
 
     It 'compare la mesure Vulkan au dernier benchmark Ollama et SYCL sans promotion' {
-        $ProbeScript | Should -Match 'backend_compare_b580_\*\.json'
-        $ProbeScript | Should -Match "PSObject\.Properties\['ollama-vulkan'\]"
-        $ProbeScript | Should -Match "PSObject\.Properties\['llama-cpp-sycl'\]"
-        $ProbeScript | Should -Match 'PROMOTION_ALLOWED=false'
-        $ProbeScript | Should -Match 'openclaw_modified = \$false'
+        $script:VulkanProbeScript | Should -Match 'backend_compare_b580_\*\.json'
+        $script:VulkanProbeScript | Should -Match "PSObject\.Properties\['ollama-vulkan'\]"
+        $script:VulkanProbeScript | Should -Match "PSObject\.Properties\['llama-cpp-sycl'\]"
+        $script:VulkanProbeScript | Should -Match 'PROMOTION_ALLOWED=false'
+        $script:VulkanProbeScript | Should -Match 'openclaw_modified = \$false'
     }
 
     It 'expose une action menu dediee et un dry-run sans mutation' {
-        $MenuScript | Should -Match "'intel-vulkan-probe'"
-        $MenuScript | Should -Match '17_probe_intel_vulkan\.ps1'
-        $ProbeScript | Should -Match '\[DRY-RUN\] Probe d''isolation llama\.cpp Vulkan'
-        $ProbeScript | Should -Match 'Aucune modification OpenClaw et aucune promotion backend'
+        $script:VulkanMenuScript | Should -Match "'intel-vulkan-probe'"
+        $script:VulkanMenuScript | Should -Match '17_probe_intel_vulkan\.ps1'
+        $script:VulkanProbeScript | Should -Match '\[DRY-RUN\] Probe d''isolation llama\.cpp Vulkan'
+        $script:VulkanProbeScript | Should -Match 'Aucune modification OpenClaw et aucune promotion backend'
     }
 }
