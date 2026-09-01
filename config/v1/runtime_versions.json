@@ -97,6 +97,32 @@
     "promotion_requires_real_b580_e2e": true,
     "hardware_tested": null
   },
+  "llama_cpp_vulkan": {
+    "source": "ggml-org/llama.cpp",
+    "release": "b10621",
+    "release_commit": "c1d0e7a004015f23bc0233470b747b596f29b264",
+    "asset": "llama-b10621-bin-win-vulkan-x64.zip",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10621/llama-b10621-bin-win-vulkan-x64.zip",
+    "sha256": "2672d85bf87c8280d94dee01eb6a86280046878f70a07d786a93637fa9081163",
+    "provider_id": "intel-vulkan",
+    "endpoint": "http://127.0.0.1:8081/v1",
+    "listen_host": "127.0.0.1",
+    "listen_port": 8081,
+    "device_match": "Intel Arc B580",
+    "models_max": 1,
+    "parallel": 1,
+    "context_tokens": 8192,
+    "gpu_layers": "auto",
+    "offline": true,
+    "managed_models": [
+      "gemma4:26b",
+      "devstral-small-2:24b"
+    ],
+    "model_source_policy": "same_effective_llama_cpp_sources_as_sycl",
+    "install_policy": "pinned_release_with_sha256",
+    "promotion_requires_real_b580_e2e": true,
+    "hardware_tested": null
+  },
   "llama_cpp_vulkan_probe": {
     "source": "ggml-org/llama.cpp",
     "release": "b10621",
