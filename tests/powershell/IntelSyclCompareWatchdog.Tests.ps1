@@ -11,7 +11,7 @@ Describe 'Intel SYCL compare watchdog' {
 
     It 'supervise le Python gere au lieu de bloquer le shell indefiniment' {
         $script:WatchdogScript | Should -Match 'Start-Process -FilePath \$ManagedPython'
-        $script:WatchdogScript | Should -Match "@\('-u', \$CompareScript\)"
+        $script:WatchdogScript | Should -Match '@\(''-u'', \$CompareScript\)'
         $script:WatchdogScript | Should -Match 'Python benchmark effectif'
         $script:WatchdogScript | Should -Match 'WaitForExit\(10000\)'
         $script:WatchdogScript | Should -Match 'Watchdog: benchmark interrompu'
@@ -29,9 +29,9 @@ Describe 'Intel SYCL compare watchdog' {
         $script:WatchdogScript | Should -Match 'Write-CompareWatchdogProof'
         $script:WatchdogScript | Should -Match 'compare_watchdog_\$\{Status\}_\$\{Stamp\}\.json'
         $script:WatchdogScript | Should -Match 'INTEL_SYCL_COMPARE_WATCHDOG_PROOF='
-        $script:WatchdogScript | Should -Match "promotion_allowed = \$false"
-        $script:WatchdogScript | Should -Match "-Status 'timeout'"
-        $script:WatchdogScript | Should -Match "-Status 'failed'"
+        $script:WatchdogScript | Should -Match 'promotion_allowed = \$false'
+        $script:WatchdogScript | Should -Match '-Status ''timeout'''
+        $script:WatchdogScript | Should -Match '-Status ''failed'''
     }
 
     It 'borne quick a 420 secondes et le benchmark complet a 1800 secondes' {
