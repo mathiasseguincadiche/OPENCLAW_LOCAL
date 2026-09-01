@@ -24,6 +24,7 @@ $AgentIds = @(
     'redacteur-technique',
     'auditeur-qualite'
 )
+$ToolAgentId = 'ingenieur-devops'
 
 if (-not (Test-Path -LiteralPath $GatewayHealth)) {
     throw "Bibliothèque de santé Gateway introuvable: $GatewayHealth"
@@ -58,6 +59,9 @@ function Invoke-OpenClawJson {
         [Parameter(Mandatory)][string[]]$Arguments,
         [Parameter(Mandatory)][string]$Description
     )
+
+    $Started = [DateTimeOffset]::UtcNow
+    Write-Host "E2E  START $Description (timeout appel=${TimeoutSeconds}s)"
     $Output = & $OpenClaw @Arguments 2>&1
     $ExitCode = $LASTEXITCODE
     $Text = ($Output | Out-String).Trim()
@@ -65,11 +69,14 @@ function Invoke-OpenClawJson {
         throw "$Description en échec (code $ExitCode): $Text"
     }
     try {
-        return $Text | ConvertFrom-Json
+        $Parsed = $Text | ConvertFrom-Json
     }
     catch {
         throw "$Description n'a pas renvoyé un JSON valide: $Text"
     }
+    $Elapsed = ([DateTimeOffset]::UtcNow - $Started).TotalSeconds
+    Write-Host ("E2E  PASS  {0} ({1:N1} s)" -f $Description, $Elapsed)
+    return $Parsed
 }
 
 function Test-ExpectedProvider {
@@ -89,6 +96,48 @@ function Test-ExpectedProvider {
     return $true
 }
 
+function Test-GatewayTransport {
+    param(
+        [Parameter(Mandatory)][object]$Payload,
+        [Parameter(Mandatory)][string]$Description
+    )
+    $Json = $Payload | ConvertTo-Json -Depth 50 -Compress
+    if (
+        $Json -match '"fallbackFrom"\s*:\s*"gateway"' -or
+        $Json -match '"transport"\s*:\s*"embedded"'
+    ) {
+        throw (
+            "$Description a quitté silencieusement le transport Gateway. " +
+            'Le E2E exige le chemin réellement configuré.'
+        )
+    }
+    return $true
+}
+
+function Get-OpenClawText {
+    param([Parameter(Mandatory)][object]$Payload)
+
+    $FinalProperty = $Payload.PSObject.Properties['final']
+    if ($FinalProperty -and -not [string]::IsNullOrWhiteSpace([string]$FinalProperty.Value)) {
+        return [string]$FinalProperty.Value
+    }
+    $PayloadsProperty = $Payload.PSObject.Properties['payloads']
+    if ($PayloadsProperty) {
+        $Texts = @(
+            $PayloadsProperty.Value | ForEach-Object {
+                $TextProperty = $_.PSObject.Properties['text']
+                if ($TextProperty -and -not [string]::IsNullOrWhiteSpace([string]$TextProperty.Value)) {
+                    [string]$TextProperty.Value
+                }
+            }
+        )
+        if ($Texts.Count -gt 0) {
+            return ($Texts -join "`n")
+        }
+    }
+    return ''
+}
+
 function Get-ProviderFromModelRef {
     param([Parameter(Mandatory)][string]$ModelRef)
     if ($ModelRef -notmatch '^([^/]+)/') {
@@ -97,7 +146,7 @@ function Get-ProviderFromModelRef {
     return $Matches[1]
 }
 
-function Get-AgentPrimaryModelRef {
+function Get-AgentEntry {
     param(
         [Parameter(Mandatory)]$Config,
         [Parameter(Mandatory)][string]$AgentId
@@ -107,7 +156,29 @@ function Get-AgentPrimaryModelRef {
     if (-not $Entry) {
         throw "Agent absent de la configuration OpenClaw: $AgentId"
     }
+    return $Entry
+}
+
+function Get-AgentPrimaryModelRef {
+    param(
+        [Parameter(Mandatory)]$Config,
+        [Parameter(Mandatory)][string]$AgentId
+    )
+    $Entry = Get-AgentEntry -Config $Config -AgentId $AgentId
     return [string]$Entry.model.primary
+}
+
+function Get-AgentWorkspace {
+    param(
+        [Parameter(Mandatory)]$Config,
+        [Parameter(Mandatory)][string]$AgentId
+    )
+    $Entry = Get-AgentEntry -Config $Config -AgentId $AgentId
+    $Workspace = [string]$Entry.workspace
+    if ([string]::IsNullOrWhiteSpace($Workspace)) {
+        throw "Workspace OpenClaw absent pour l'agent: $AgentId"
+    }
+    return $Workspace
 }
 
 function Test-HybridRuntimeReady {
@@ -153,10 +224,12 @@ if ($DryRun) {
     if ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Qwen -> Ollama; Gemma/Devstral -> intel-vulkan; tool-call Devstral/Vulkan obligatoire.'
     }
-    Write-Host '[DRY-RUN] agent exec -> tool write'
+    Write-Host '[DRY-RUN] tool-calling via ingenieur-devops dans son workspace borné.'
+    Write-Host '[DRY-RUN] compatibilité CLI OpenClaw 2026.7.1-2: agent --agent/--model/--message.'
     Write-Host '[DRY-RUN] erreur outil contrôlée -> réparation'
     Write-Host '[DRY-RUN] 3 runs de stabilité'
-    Write-Host '[DRY-RUN] aucune escalade cloud ni fallback de provider'
+    Write-Host '[DRY-RUN] progression visible pour chaque appel long.'
+    Write-Host '[DRY-RUN] aucune escalade cloud ni fallback de provider/transport.'
     exit 0
 }
 
@@ -199,7 +272,6 @@ elseif ($Backend -eq 'b580-hybrid') {
 $PlatformRoot = Get-PlatformRoot
 $StateDir = Join-Path $PlatformRoot 'state'
 $ProofsRoot = Join-Path $PlatformRoot 'proofs'
-$ScratchRoot = Join-Path $PlatformRoot 'runtime\e2e-scratch'
 $ConfigPath = Join-Path $StateDir 'openclaw.json'
 
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
@@ -213,10 +285,37 @@ $env:INTEL_SYCL_API_KEY = 'intel-sycl-local'
 $env:INTEL_VULKAN_API_KEY = 'intel-vulkan-local'
 $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'false'
 
+$ExpectedOpenClawVersion = [string]$RuntimeLock.openclaw.preferred
+$ActualOpenClawVersion = (& $OpenClaw '--version' 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Impossible de lire la version OpenClaw: $ActualOpenClawVersion"
+}
+if ($ActualOpenClawVersion -notmatch [regex]::Escape($ExpectedOpenClawVersion)) {
+    throw (
+        "Runtime OpenClaw inattendu. Attendu=$ExpectedOpenClawVersion " +
+        "Reçu=$ActualOpenClawVersion"
+    )
+}
+Write-Host "OK  OpenClaw verrouillé: $ActualOpenClawVersion"
+
+$RunStamp = Get-Date -Format 'yyyyMMdd_HHmmssfff'
+$SessionPrefix = "e2e-$RunStamp"
+$ToolWorkspace = Get-AgentWorkspace -Config $Config -AgentId $ToolAgentId
+$ScratchRelative = ".openclaw-e2e\$RunStamp"
+$ScratchPromptPath = $ScratchRelative -replace '\\', '/'
+$ScratchRoot = Join-Path $ToolWorkspace $ScratchRelative
+if (Test-Path -LiteralPath $ScratchRoot) {
+    Remove-Item -Recurse -Force -LiteralPath $ScratchRoot
+}
+New-Item -ItemType Directory -Path $ScratchRoot -Force | Out-Null
+Write-Host "E2E  Workspace outils=$ToolWorkspace"
+Write-Host "E2E  Scratch borné=$ScratchRoot"
+
 $null = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'config', 'validate', '--json'
 ) -Description 'Validation config'
 
+Write-Host "E2E  START Gateway readiness (max=${GatewayReadyTimeoutSeconds}s)"
 $GatewayReadiness = Wait-OpenClawGatewayReady -OpenClaw $OpenClaw `
     -TimeoutSeconds $GatewayReadyTimeoutSeconds
 if (-not $GatewayReadiness.ready) {
@@ -228,14 +327,20 @@ if (-not $GatewayReadiness.ready) {
 }
 
 $Evidence = [ordered]@{
-    schema_version = '1.2.0'
+    schema_version = '1.3.0'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     platform_root = $PlatformRoot
     backend = $Backend
     expected_provider = $ExpectedProviderLabel
     primary_model = $PrimaryModel
     primary_model_ref = $ModelRef
+    openclaw_version = $ActualOpenClawVersion
     cloud_enabled = $false
+    transport = 'gateway'
+    tool_agent = $ToolAgentId
+    tool_workspace = $ToolWorkspace
+    scratch_root = $ScratchRoot
+    session_prefix = $SessionPrefix
     agent_smoke = @()
     provider_by_agent = [ordered]@{}
     tool_call = $null
@@ -244,17 +349,23 @@ $Evidence = [ordered]@{
     stability = @()
 }
 
+$AgentIndex = 0
 foreach ($AgentId in $AgentIds) {
+    $AgentIndex++
     $AgentModelRef = Get-AgentPrimaryModelRef -Config $Config -AgentId $AgentId
     $ExpectedProvider = Get-ProviderFromModelRef -ModelRef $AgentModelRef
     $Evidence.provider_by_agent[$AgentId] = $ExpectedProvider
     $Prompt = "Réponds en une ligne avec exactement: AGENT_OK $AgentId"
+    Write-Host "E2E  Agent $AgentIndex/$($AgentIds.Count): $AgentId -> $ExpectedProvider"
     $Result = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
-        'agent', '--agent', $AgentId, '--message', $Prompt,
+        'agent', '--agent', $AgentId,
+        '--session-key', "$SessionPrefix-smoke-$AgentId",
+        '--message', $Prompt,
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Smoke agent $AgentId"
     $null = Test-ExpectedProvider -Payload $Result -ExpectedProvider $ExpectedProvider `
         -Description "Smoke agent $AgentId"
+    $null = Test-GatewayTransport -Payload $Result -Description "Smoke agent $AgentId"
     $Evidence.agent_smoke += [ordered]@{
         agent = $AgentId
         model_ref = $AgentModelRef
@@ -263,22 +374,21 @@ foreach ($AgentId in $AgentIds) {
     }
 }
 
-if (Test-Path -LiteralPath $ScratchRoot) {
-    Remove-Item -Recurse -Force -LiteralPath $ScratchRoot
-}
-New-Item -ItemType Directory -Path $ScratchRoot -Force | Out-Null
-
-$ToolPrompt = @'
-Utilise réellement l'outil d'écriture disponible. Crée tool-call-ok.txt dans le
-répertoire de travail avec exactement TOOL_OK. Ensuite réponds TOOL_OK.
-'@
+$ToolMarkerRelative = "$ScratchPromptPath/tool-call-ok.txt"
+$ToolPrompt = @"
+Utilise réellement l'outil d'écriture disponible. Dans ton workspace, crée
+$ToolMarkerRelative avec exactement TOOL_OK. Ensuite réponds TOOL_OK.
+"@
 $ToolProvider = Get-ProviderFromModelRef -ModelRef $ModelRef
 $ToolResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
-    'agent', 'exec', $ToolPrompt, '--cwd', $ScratchRoot,
-    '--model', $ModelRef, '--code-mode', 'code', '--local-model-lean',
-    '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
+    'agent', '--agent', $ToolAgentId,
+    '--session-key', "$SessionPrefix-tool",
+    '--model', $ModelRef, '--message', $ToolPrompt,
+    '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description "Tool-calling OpenClaw/$ToolProvider"
 $null = Test-ExpectedProvider -Payload $ToolResult -ExpectedProvider $ToolProvider `
+    -Description "Tool-calling OpenClaw/$ToolProvider"
+$null = Test-GatewayTransport -Payload $ToolResult `
     -Description "Tool-calling OpenClaw/$ToolProvider"
 $ToolMarker = Join-Path $ScratchRoot 'tool-call-ok.txt'
 if (-not (Test-Path -LiteralPath $ToolMarker)) {
@@ -291,17 +401,21 @@ $Evidence.tool_call = $ToolResult
 
 if ($Backend -eq 'b580-hybrid') {
     $VulkanToolRef = 'intel-vulkan/devstral-small-2:24B'
+    $VulkanMarkerRelative = "$ScratchPromptPath/vulkan-tool-ok.txt"
     $VulkanMarker = Join-Path $ScratchRoot 'vulkan-tool-ok.txt'
-    $VulkanPrompt = @'
-Utilise réellement l'outil d'écriture. Crée vulkan-tool-ok.txt dans le répertoire
-de travail avec exactement VULKAN_TOOL_OK. Ensuite réponds VULKAN_TOOL_OK.
-'@
+    $VulkanPrompt = @"
+Utilise réellement l'outil d'écriture disponible. Dans ton workspace, crée
+$VulkanMarkerRelative avec exactement VULKAN_TOOL_OK. Ensuite réponds VULKAN_TOOL_OK.
+"@
     $VulkanResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
-        'agent', 'exec', $VulkanPrompt, '--cwd', $ScratchRoot,
-        '--model', $VulkanToolRef, '--code-mode', 'code', '--local-model-lean',
-        '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
+        'agent', '--agent', $ToolAgentId,
+        '--session-key', "$SessionPrefix-vulkan",
+        '--model', $VulkanToolRef, '--message', $VulkanPrompt,
+        '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description 'Tool-calling OpenClaw/intel-vulkan'
     $null = Test-ExpectedProvider -Payload $VulkanResult -ExpectedProvider 'intel-vulkan' `
+        -Description 'Tool-calling OpenClaw/intel-vulkan'
+    $null = Test-GatewayTransport -Payload $VulkanResult `
         -Description 'Tool-calling OpenClaw/intel-vulkan'
     if (-not (Test-Path -LiteralPath $VulkanMarker)) {
         throw 'Devstral/Vulkan n''a pas créé vulkan-tool-ok.txt.'
@@ -312,19 +426,25 @@ de travail avec exactement VULKAN_TOOL_OK. Ensuite réponds VULKAN_TOOL_OK.
     $Evidence.hybrid_vulkan_tool_call = $VulkanResult
 }
 
-Set-Content -LiteralPath (Join-Path $ScratchRoot 'fallback.txt') `
-    -Value 'FALLBACK_OK' -Encoding utf8
-$RepairPrompt = @'
-Teste d'abord missing-intentional.txt, qui n'existe pas. Après l'erreur outil,
-corrige le plan: lis fallback.txt, puis crée repair-ok.txt avec exactement
-REPAIRED. Ne fabrique pas le premier résultat.
-'@
+$FallbackMarker = Join-Path $ScratchRoot 'fallback.txt'
+Set-Content -LiteralPath $FallbackMarker -Value 'FALLBACK_OK' -Encoding utf8
+$MissingRelative = "$ScratchPromptPath/missing-intentional.txt"
+$FallbackRelative = "$ScratchPromptPath/fallback.txt"
+$RepairRelative = "$ScratchPromptPath/repair-ok.txt"
+$RepairPrompt = @"
+Teste d'abord $MissingRelative, qui n'existe pas. Après l'erreur outil, corrige
+le plan: lis $FallbackRelative, puis crée $RepairRelative avec exactement REPAIRED.
+Ne fabrique pas le premier résultat.
+"@
 $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
-    'agent', 'exec', $RepairPrompt, '--cwd', $ScratchRoot,
-    '--model', $ModelRef, '--code-mode', 'code', '--local-model-lean',
-    '--auth-env-only', '--timeout', [string]$TimeoutSeconds, '--json'
+    'agent', '--agent', $ToolAgentId,
+    '--session-key', "$SessionPrefix-repair",
+    '--model', $ModelRef, '--message', $RepairPrompt,
+    '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description 'Réparation après erreur outil'
 $null = Test-ExpectedProvider -Payload $RepairResult -ExpectedProvider $ToolProvider `
+    -Description 'Réparation après erreur outil'
+$null = Test-GatewayTransport -Payload $RepairResult `
     -Description 'Réparation après erreur outil'
 $RepairMarker = Join-Path $ScratchRoot 'repair-ok.txt'
 if (-not (Test-Path -LiteralPath $RepairMarker)) {
@@ -337,14 +457,17 @@ $Evidence.tool_feedback_repair = $RepairResult
 
 for ($Run = 1; $Run -le 3; $Run++) {
     $StableResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
-        'agent', 'exec', "Réponds exactement STABLE_$Run", '--cwd', $ScratchRoot,
-        '--model', $ModelRef, '--auth-env-only',
+        'agent', '--agent', $ToolAgentId,
+        '--session-key', "$SessionPrefix-stable-$Run",
+        '--model', $ModelRef, '--message', "Réponds exactement STABLE_$Run",
         '--timeout', [string]$TimeoutSeconds, '--json'
-    ) -Description "Stabilité run $Run"
+    ) -Description "Stabilité run $Run/3"
     $null = Test-ExpectedProvider -Payload $StableResult -ExpectedProvider $ToolProvider `
         -Description "Stabilité run $Run"
-    if ([string]$StableResult.final -notmatch "STABLE_$Run") {
-        throw "Stabilité run ${Run}: réponse finale inattendue."
+    $null = Test-GatewayTransport -Payload $StableResult -Description "Stabilité run $Run"
+    $StableText = Get-OpenClawText -Payload $StableResult
+    if ($StableText -notmatch "STABLE_$Run") {
+        throw "Stabilité run ${Run}: réponse finale inattendue: $StableText"
     }
     $Evidence.stability += $StableResult
 }
