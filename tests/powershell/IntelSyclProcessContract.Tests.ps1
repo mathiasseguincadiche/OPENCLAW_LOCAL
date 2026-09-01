@@ -6,9 +6,14 @@ Describe 'Intel SYCL process output contract' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         . (Join-Path $TestRepoRoot 'scripts\windows\lib\intel_sycl_process_contract.ps1')
 
-        Mock Test-Path { $true }
-        Mock Get-Content { '{"pid":4242}' }
+        $StatePath = Join-Path $TestDrive 'server.json'
+        '{"pid":4242}' | Set-Content -LiteralPath $StatePath -Encoding utf8
+
         Mock Get-Process {
+            param($Id)
+            if ($Id -ne 4242) {
+                throw "PID inattendu: $Id"
+            }
             $Process = [pscustomobject]@{ Id = 4242 }
             $Process | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value {
                 param($Timeout)
@@ -19,11 +24,16 @@ Describe 'Intel SYCL process output contract' {
             }
             return $Process
         }
-        Mock Stop-Process { }
-        Mock Remove-Item { }
+        Mock Stop-Process {
+            param($Id, [switch]$Force)
+            if ($Id -ne 4242 -or -not $Force) {
+                throw 'Stop-Process n a pas reçu le PID et Force attendus.'
+            }
+        }
 
-        $Output = @(Stop-IntelSyclServer -StatePath 'X:\state\server.json' -Confirm:$false)
+        $Output = @(Stop-IntelSyclServer -StatePath $StatePath -Confirm:$false)
         $Output.Count | Should -Be 0
+        Test-Path -LiteralPath $StatePath | Should -BeFalse
     }
 
     It 'charge le contrat strict avant le setup et le stop opérationnels' {
