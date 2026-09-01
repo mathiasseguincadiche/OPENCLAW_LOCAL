@@ -185,7 +185,8 @@ function New-IntelVulkanModelPreset {
         ''
     )
     foreach ($Model in $Models) {
-        $Path = Resolve-IntelSyclModelPath -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot -Model $Model
+        $Path = Resolve-IntelSyclModelPath -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot `
+            -Model $Model -AllowDownload
         $Normalized = $Path -replace '\\', '/'
         $Lines += "[$Model]"
         $Lines += "model = $Normalized"
