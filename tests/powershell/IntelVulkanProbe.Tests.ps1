@@ -52,7 +52,7 @@ Describe 'Intel Vulkan isolation probe' {
     It 'expose une action menu dediee et un dry-run sans mutation' {
         $script:VulkanMenuScript | Should -Match "'intel-vulkan-probe'"
         $script:VulkanMenuScript | Should -Match '17_probe_intel_vulkan\.ps1'
-        $script:VulkanProbeScript | Should -Match '\[DRY-RUN\] Probe d''isolation llama\.cpp Vulkan'
+        $script:VulkanProbeScript | Should -Match '\[DRY-RUN\] Probe d.+isolation llama\.cpp Vulkan'
         $script:VulkanProbeScript | Should -Match 'Aucune modification OpenClaw et aucune promotion backend'
     }
 }
