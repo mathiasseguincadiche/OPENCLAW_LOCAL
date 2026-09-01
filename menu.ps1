@@ -5,7 +5,7 @@ param(
         'configure-openclaw', 'deploy-agents', 'verify', 'benchmark', 'inventory',
         'e2e', 'qualification', 'intel-sycl-setup', 'intel-sycl-stop',
         'intel-sycl-verify', 'intel-sycl-compare', 'intel-sycl-diagnose',
-        'team', 'docs', 'logs'
+        'intel-vulkan-probe', 'team', 'docs', 'logs'
     )]
     [string]$Action = 'menu',
     [switch]$DryRun,
@@ -41,6 +41,7 @@ $Scripts = @{
     'intel-sycl-verify' = Join-Path $RepoRoot 'scripts\windows\14_verify_intel_sycl.ps1'
     'intel-sycl-compare' = Join-Path $RepoRoot 'scripts\windows\15_compare_intel_backends.ps1'
     'intel-sycl-diagnose' = Join-Path $RepoRoot 'scripts\windows\16_diagnose_intel_sycl_model.ps1'
+    'intel-vulkan-probe' = Join-Path $RepoRoot 'scripts\windows\17_probe_intel_vulkan.ps1'
 }
 
 function Get-PlatformRoot {
@@ -235,6 +236,7 @@ while ($true) {
 18) Comparer Ollama/Vulkan vs Intel SYCL (utiliser -Quick pour diagnostic court)
 19) Arrêter le serveur Intel SYCL
 20) Diagnostiquer directement un modèle Intel SYCL (paramètre -Model; Devstral par défaut)
+21) Isoler llama.cpp Vulkan vs SYCL/Ollama sur Intel B580
 0) Quitter
 '@ | Write-Host
 
@@ -259,6 +261,7 @@ while ($true) {
         '18' { Invoke-Action -Name 'intel-sycl-compare' -DryRunMode:$DryRun -QuickMode:$Quick -BackendMode $Backend -NoLogMode:$NoLog }
         '19' { Invoke-Action -Name 'intel-sycl-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '20' { Invoke-Action -Name 'intel-sycl-diagnose' -DryRunMode:$DryRun -BackendMode $Backend -ModelMode $Model -NoLogMode:$NoLog }
+        '21' { Invoke-Action -Name 'intel-vulkan-probe' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }
