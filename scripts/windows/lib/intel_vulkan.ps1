@@ -397,7 +397,7 @@ function Invoke-IntelVulkanChatSmoke {
     }
 }
 
-function Stop-IntelVulkanModel {
+function Invoke-IntelVulkanModelUnload {
     param(
         [Parameter(Mandatory)][string]$BaseUrl,
         [Parameter(Mandatory)][string]$Model,
