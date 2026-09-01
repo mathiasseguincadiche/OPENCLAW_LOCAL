@@ -79,6 +79,20 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'intel-vulkan/devstral-small-2:24B'
         $script:HybridE2E | Should -Match 'vulkan-tool-ok\.txt'
         $script:HybridE2E | Should -Match 'Test-ExpectedProvider'
+        $script:HybridE2E | Should -Match 'Test-GatewayTransport'
+    }
+
+    It 'reste compatible avec la CLI OpenClaw verrouillée 2026.7.1-2' {
+        [string]$script:HybridRuntime.openclaw.preferred | Should -Be '2026.7.1-2'
+        $script:HybridE2E | Should -Not -Match "'agent', 'exec'"
+        $script:HybridE2E | Should -Not -Match "'--cwd'"
+        $script:HybridE2E | Should -Not -Match "'--auth-env-only'"
+        $script:HybridE2E | Should -Match "'--agent'"
+        $script:HybridE2E | Should -Match "'--model'"
+        $script:HybridE2E | Should -Match "'--session-key'"
+        $script:HybridE2E | Should -Match 'Get-AgentWorkspace'
+        $script:HybridE2E | Should -Match "ToolAgentId = 'ingenieur-devops'"
+        $script:HybridE2E | Should -Match 'progression visible pour chaque appel long'
     }
 
     It 'expose setup verify stop et le profil hybride dans le menu' {
