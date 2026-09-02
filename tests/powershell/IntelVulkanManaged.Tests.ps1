@@ -93,7 +93,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match "N'utilise pas exec"
         $script:HybridE2E | Should -Match 'N''utilise jamais exec'
         $script:HybridE2E | Should -Match 'Ne fais aucune vérification supplémentaire'
-        $script:HybridE2E | Should -Match "\$ToolText -ne 'TOOL_OK'"
+        $script:HybridE2E | Should -Match '\$ToolText -ne ''TOOL_OK'''
         $script:HybridE2E | Should -Match 'HeartbeatSeconds = 15'
         $script:HybridE2E | Should -Match 'Start-Job'
         $script:HybridE2E | Should -Match 'Wait-Job'
@@ -104,10 +104,13 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
     It 'sépare le budget des smokes agents et conserve les probes ciblés bornés' {
         $script:HybridE2E | Should -Match 'AgentSmokeTimeoutSeconds = 300'
         $script:HybridE2E | Should -Match '\$SmokeTimeoutSeconds = \[Math\]::Max\(\$TimeoutSeconds, \$AgentSmokeTimeoutSeconds\)'
+        $script:HybridE2E | Should -Match 'RepairTimeoutSeconds = \[Math\]::Min'
         $script:HybridE2E | Should -Match 'agent_smoke_timeout_seconds'
         $script:HybridE2E | Should -Match 'probe_timeout_seconds = \$TimeoutSeconds'
-        $script:HybridE2E | Should -Match "'--timeout', \[string\]\$SmokeTimeoutSeconds"
-        $script:HybridE2E | Should -Match "'--timeout', \[string\]\$TimeoutSeconds"
+        $script:HybridE2E | Should -Match 'repair_timeout_seconds = \$RepairTimeoutSeconds'
+        $script:HybridE2E | Should -Match '''--timeout'', \[string\]\$SmokeTimeoutSeconds'
+        $script:HybridE2E | Should -Match '''--timeout'', \[string\]\$TimeoutSeconds'
+        $script:HybridE2E | Should -Match '''--timeout'', \[string\]\$RepairTimeoutSeconds'
         $script:HybridE2E | Should -Not -Match 'ColdModelTimeoutSeconds'
         $script:HybridE2E | Should -Not -Match 'SeenModelRefs'
         $script:HybridE2E | Should -Match 'smokes groupés par modèle'
