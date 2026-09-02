@@ -4,6 +4,7 @@ param(
     [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
     [string]$Backend = 'ollama-vulkan',
     [int]$TimeoutSeconds = 180,
+    [ValidateRange(180, 600)][int]$ColdModelTimeoutSeconds = 300,
     [ValidateRange(5, 300)][int]$GatewayReadyTimeoutSeconds = 60
 )
 
@@ -15,14 +16,16 @@ $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
 $GatewayHealth = Join-Path $PSScriptRoot 'lib\gateway_health.ps1'
 $RuntimeLockPath = Join-Path $RepoRoot 'config\v1\runtime_versions.json'
 $AgentIds = @(
+    # Grouper les agents par modèle évite des swaps Vulkan inutiles avec models_max=1.
     'chef-operations',
     'expert-recherche',
-    'architecte-solutions',
-    'ingenieur-devops',
     'ingenieur-securite',
     'ingenieur-release-forges',
+    'architecte-solutions',
     'redacteur-technique',
-    'auditeur-qualite'
+    'auditeur-qualite',
+    # Devstral reste résident pour les probes outils qui suivent.
+    'ingenieur-devops'
 )
 $ToolAgentId = 'ingenieur-devops'
 $HeartbeatSeconds = 15
@@ -61,8 +64,17 @@ function Invoke-OpenClawJson {
         [Parameter(Mandatory)][string]$Description
     )
 
+    $CallTimeoutSeconds = $TimeoutSeconds
+    $TimeoutIndex = [Array]::IndexOf($Arguments, '--timeout')
+    if ($TimeoutIndex -ge 0 -and ($TimeoutIndex + 1) -lt $Arguments.Count) {
+        $ParsedTimeout = 0
+        if ([int]::TryParse([string]$Arguments[$TimeoutIndex + 1], [ref]$ParsedTimeout)) {
+            $CallTimeoutSeconds = $ParsedTimeout
+        }
+    }
+
     $Started = [DateTimeOffset]::UtcNow
-    Write-Host "E2E  START $Description (timeout appel=${TimeoutSeconds}s)"
+    Write-Host "E2E  START $Description (timeout appel=${CallTimeoutSeconds}s)"
 
     $Job = Start-Job -ScriptBlock {
         param(
@@ -327,6 +339,8 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] readiness Gateway RPC bornée à ${GatewayReadyTimeoutSeconds}s"
     Write-Host '[DRY-RUN] 8 agents -> Gateway -> provider local attendu sans fallback silencieux.'
     Write-Host '[DRY-RUN] smoke agents déterministe: aucun outil, thinking OpenClaw désactivé.'
+    Write-Host "[DRY-RUN] cold model switch Vulkan: timeout dédié ${ColdModelTimeoutSeconds}s; appels normaux ${TimeoutSeconds}s."
+    Write-Host '[DRY-RUN] smokes groupés par modèle; Devstral en dernier pour rester résident avant tool-calling.'
     if ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Qwen -> Ollama; Gemma/Devstral -> intel-vulkan; tool-call Devstral/Vulkan obligatoire.'
     }
@@ -476,19 +490,33 @@ $Evidence = [ordered]@{
 }
 
 $AgentIndex = 0
+$LastVulkanModelRef = ''
 foreach ($AgentId in $AgentIds) {
     $AgentIndex++
     $AgentModelRef = Get-AgentPrimaryModelRef -Config $Config -AgentId $AgentId
     $ExpectedProvider = Get-ProviderFromModelRef -ModelRef $AgentModelRef
     $Evidence.provider_by_agent[$AgentId] = $ExpectedProvider
+
+    $SmokeTimeoutSeconds = $TimeoutSeconds
+    $ColdModelSwitch = $false
+    if ($ExpectedProvider -eq 'intel-vulkan' -and $AgentModelRef -ne $LastVulkanModelRef) {
+        $SmokeTimeoutSeconds = [Math]::Max($TimeoutSeconds, $ColdModelTimeoutSeconds)
+        $ColdModelSwitch = $true
+        $LastVulkanModelRef = $AgentModelRef
+    }
+
     $Prompt = "N'utilise aucun outil. Réponds immédiatement en une ligne avec exactement: AGENT_OK $AgentId"
-    Write-Host "E2E  Agent $AgentIndex/$($AgentIds.Count): $AgentId -> $ExpectedProvider"
+    Write-Host (
+        "E2E  Agent {0}/{1}: {2} -> {3} model={4} timeout={5}s cold_switch={6}" -f
+        $AgentIndex, $AgentIds.Count, $AgentId, $ExpectedProvider,
+        $AgentModelRef, $SmokeTimeoutSeconds, $ColdModelSwitch
+    )
     $Result = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
         'agent', '--agent', $AgentId,
         '--session-key', "$SessionPrefix-smoke-$AgentId",
         '--message', $Prompt,
         '--thinking', 'off',
-        '--timeout', [string]$TimeoutSeconds, '--json'
+        '--timeout', [string]$SmokeTimeoutSeconds, '--json'
     ) -Description "Smoke agent $AgentId"
     $null = Test-OpenClawAgentSuccess -Payload $Result -Description "Smoke agent $AgentId"
     $null = Test-ExpectedProvider -Payload $Result -ExpectedProvider $ExpectedProvider `
@@ -507,6 +535,8 @@ foreach ($AgentId in $AgentIds) {
         agent = $AgentId
         model_ref = $AgentModelRef
         expected_provider = $ExpectedProvider
+        timeout_seconds = $SmokeTimeoutSeconds
+        cold_model_switch = $ColdModelSwitch
         result = $Result
     }
 }
