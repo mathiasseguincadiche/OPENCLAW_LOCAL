@@ -101,6 +101,18 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'Remove-Job'
     }
 
+    It 'traite les swaps mono-modèle Vulkan sans diluer le timeout nominal' {
+        $script:HybridE2E | Should -Match 'ColdModelTimeoutSeconds = 300'
+        $script:HybridE2E | Should -Match 'LastVulkanModelRef'
+        $script:HybridE2E | Should -Match "ExpectedProvider -eq 'intel-vulkan'"
+        $script:HybridE2E | Should -Match '\[Math\]::Max\(\$TimeoutSeconds, \$ColdModelTimeoutSeconds\)'
+        $script:HybridE2E | Should -Match 'cold_model_switch = \$ColdModelSwitch'
+        $script:HybridE2E | Should -Match 'timeout_seconds = \$SmokeTimeoutSeconds'
+        $script:HybridE2E | Should -Match 'smokes groupés par modèle'
+        $script:HybridE2E | Should -Match 'Devstral reste résident'
+        $script:HybridE2E | Should -Match "'auditeur-qualite',[\s\S]*'ingenieur-devops'"
+    }
+
     It 'reste compatible avec la CLI OpenClaw verrouillée 2026.7.1-2' {
         [string]$script:HybridRuntime.openclaw.preferred | Should -Be '2026.7.1-2'
         $script:HybridE2E | Should -Not -Match "'agent', 'exec'"
