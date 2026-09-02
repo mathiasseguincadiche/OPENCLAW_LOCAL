@@ -158,5 +158,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
             -Action e2e -Backend b580-hybrid -DryRun 2>&1
         $LASTEXITCODE | Should -Be 0
         ($E2E -join "`n") | Should -Match 'mixed-local'
+        ($E2E -join "`n") | Should -Match 'probes ciblés 300s'
+        ($E2E -join "`n") | Should -Match 'réparation multi-outils 600s'
     }
 }
