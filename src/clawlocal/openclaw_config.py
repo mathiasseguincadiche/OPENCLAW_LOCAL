@@ -275,6 +275,10 @@ def build_openclaw_patch(
         "agents": {
             "defaults": {
                 "skipBootstrap": True,
+                "compaction": {
+                    "reserveTokens": 4096,
+                    "reserveTokensFloor": 4096,
+                },
                 "model": {
                     "primary": qwen_text_ref,
                     "fallbacks": [gemma_text_ref],
