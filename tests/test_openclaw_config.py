@@ -65,6 +65,10 @@ def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
     assert set(entries) == EXPECTED_AGENTS
     assert patch["gateway"] == {"mode": "local", "bind": "loopback"}
     assert patch["agents"]["defaults"]["skipBootstrap"] is True
+    assert patch["agents"]["defaults"]["compaction"] == {
+        "reserveTokens": 4096,
+        "reserveTokensFloor": 4096,
+    }
     assert [entry["id"] for entry in patch["agents"]["list"] if entry.get("default")] == [
         "chef-operations"
     ]
@@ -141,7 +145,7 @@ def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None
     assert sycl["apiKey"] == "intel-sycl-local"
     assert {model["id"] for model in sycl["models"]} == EXPECTED_SYCL_MODELS
     assert all(model["input"] == ["text"] for model in sycl["models"])
-    assert all(model["contextWindow"] == 8192 for model in sycl["models"])
+    assert all(model["contextWindow"] == 16384 for model in sycl["models"])
     assert all(model["compat"]["toolSchemaProfile"] == "llamacpp" for model in sycl["models"])
 
     entries = _entries_by_id(patch)
@@ -174,7 +178,7 @@ def test_b580_hybrid_routes_each_model_to_measured_backend() -> None:
     assert vulkan["api"] == "openai-completions"
     assert vulkan["apiKey"] == "intel-vulkan-local"
     assert {model["id"] for model in vulkan["models"]} == EXPECTED_VULKAN_MODELS
-    assert all(model["contextWindow"] == 8192 for model in vulkan["models"])
+    assert all(model["contextWindow"] == 16384 for model in vulkan["models"])
 
     entries = _entries_by_id(patch)
     assert entries["chef-operations"]["model"] == {
