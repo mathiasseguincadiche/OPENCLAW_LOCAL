@@ -1,27 +1,26 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import sys
 from pathlib import Path
 
-# Always import clawlocal from the current repository checkout. The managed venv
-# intentionally survives Git updates, so its site-packages copy can otherwise
-# lag behind main and make configuration rendering use stale code. Reposition
-# src even when an editable install already placed it later in sys.path.
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-SRC_ROOT_TEXT = str(SRC_ROOT)
-sys.path[:] = [entry for entry in sys.path if entry != SRC_ROOT_TEXT]
-sys.path.insert(0, SRC_ROOT_TEXT)
 
-openclaw_config = importlib.import_module("clawlocal.openclaw_config")
-SUPPORTED_BACKENDS = openclaw_config.SUPPORTED_BACKENDS
-build_openclaw_patch = openclaw_config.build_openclaw_patch
+def _activate_repository_sources() -> None:
+    # Always import clawlocal from the current repository checkout. The managed
+    # venv intentionally survives Git updates, so its site-packages copy can
+    # otherwise lag behind main and make configuration rendering use stale code.
+    repo_root = Path(__file__).resolve().parents[1]
+    src = repo_root / "src"
+    src_text = str(src)
+    sys.path[:] = [entry for entry in sys.path if entry != src_text]
+    sys.path.insert(0, src_text)
 
 
 def main() -> int:
+    _activate_repository_sources()
+    from clawlocal.openclaw_config import SUPPORTED_BACKENDS, build_openclaw_patch
+
     parser = argparse.ArgumentParser(
         description="Génère le patch OpenClaw local-first versionné."
     )
