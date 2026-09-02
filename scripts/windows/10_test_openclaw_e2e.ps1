@@ -16,7 +16,7 @@ $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
 $GatewayHealth = Join-Path $PSScriptRoot 'lib\gateway_health.ps1'
 $RuntimeLockPath = Join-Path $RepoRoot 'config\v1\runtime_versions.json'
 $AgentIds = @(
-    # Grouper les agents par modèle évite des swaps Vulkan inutiles avec models_max=1.
+    # Grouper les agents par modèle évite des swaps inutiles et garde les caches chauds.
     'chef-operations',
     'expert-recherche',
     'ingenieur-securite',
@@ -339,7 +339,7 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] readiness Gateway RPC bornée à ${GatewayReadyTimeoutSeconds}s"
     Write-Host '[DRY-RUN] 8 agents -> Gateway -> provider local attendu sans fallback silencieux.'
     Write-Host '[DRY-RUN] smoke agents déterministe: aucun outil, thinking OpenClaw désactivé.'
-    Write-Host "[DRY-RUN] cold model switch Vulkan: timeout dédié ${ColdModelTimeoutSeconds}s; appels normaux ${TimeoutSeconds}s."
+    Write-Host "[DRY-RUN] premier appel de chaque modèle: timeout cold-start ${ColdModelTimeoutSeconds}s; appels suivants ${TimeoutSeconds}s."
     Write-Host '[DRY-RUN] smokes groupés par modèle; Devstral en dernier pour rester résident avant tool-calling.'
     if ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Qwen -> Ollama; Gemma/Devstral -> intel-vulkan; tool-call Devstral/Vulkan obligatoire.'
@@ -490,26 +490,28 @@ $Evidence = [ordered]@{
 }
 
 $AgentIndex = 0
-$LastVulkanModelRef = ''
+$SeenModelRefs = [System.Collections.Generic.HashSet[string]]::new(
+    [System.StringComparer]::OrdinalIgnoreCase
+)
 foreach ($AgentId in $AgentIds) {
     $AgentIndex++
     $AgentModelRef = Get-AgentPrimaryModelRef -Config $Config -AgentId $AgentId
     $ExpectedProvider = Get-ProviderFromModelRef -ModelRef $AgentModelRef
     $Evidence.provider_by_agent[$AgentId] = $ExpectedProvider
 
-    $SmokeTimeoutSeconds = $TimeoutSeconds
-    $ColdModelSwitch = $false
-    if ($ExpectedProvider -eq 'intel-vulkan' -and $AgentModelRef -ne $LastVulkanModelRef) {
-        $SmokeTimeoutSeconds = [Math]::Max($TimeoutSeconds, $ColdModelTimeoutSeconds)
-        $ColdModelSwitch = $true
-        $LastVulkanModelRef = $AgentModelRef
+    $ColdModelStart = $SeenModelRefs.Add($AgentModelRef)
+    $SmokeTimeoutSeconds = if ($ColdModelStart) {
+        [Math]::Max($TimeoutSeconds, $ColdModelTimeoutSeconds)
+    }
+    else {
+        $TimeoutSeconds
     }
 
     $Prompt = "N'utilise aucun outil. Réponds immédiatement en une ligne avec exactement: AGENT_OK $AgentId"
     Write-Host (
-        "E2E  Agent {0}/{1}: {2} -> {3} model={4} timeout={5}s cold_switch={6}" -f
+        "E2E  Agent {0}/{1}: {2} -> {3} model={4} timeout={5}s cold_start={6}" -f
         $AgentIndex, $AgentIds.Count, $AgentId, $ExpectedProvider,
-        $AgentModelRef, $SmokeTimeoutSeconds, $ColdModelSwitch
+        $AgentModelRef, $SmokeTimeoutSeconds, $ColdModelStart
     )
     $Result = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
         'agent', '--agent', $AgentId,
@@ -536,7 +538,7 @@ foreach ($AgentId in $AgentIds) {
         model_ref = $AgentModelRef
         expected_provider = $ExpectedProvider
         timeout_seconds = $SmokeTimeoutSeconds
-        cold_model_switch = $ColdModelSwitch
+        cold_model_start = $ColdModelStart
         result = $Result
     }
 }
