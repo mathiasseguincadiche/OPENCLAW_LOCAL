@@ -2,12 +2,25 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from clawlocal.openclaw_config import SUPPORTED_BACKENDS, build_openclaw_patch
+
+def _activate_repository_sources() -> None:
+    # Always import clawlocal from the current repository checkout. The managed
+    # venv intentionally survives Git updates, so its site-packages copy can
+    # otherwise lag behind main and make configuration rendering use stale code.
+    repo_root = Path(__file__).resolve().parents[1]
+    src = repo_root / "src"
+    src_text = str(src)
+    sys.path[:] = [entry for entry in sys.path if entry != src_text]
+    sys.path.insert(0, src_text)
 
 
 def main() -> int:
+    _activate_repository_sources()
+    from clawlocal.openclaw_config import SUPPORTED_BACKENDS, build_openclaw_patch
+
     parser = argparse.ArgumentParser(
         description="Génère le patch OpenClaw local-first versionné."
     )

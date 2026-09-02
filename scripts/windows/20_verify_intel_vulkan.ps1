@@ -13,7 +13,7 @@ $Paths = Get-IntelVulkanPathSet -PlatformRoot $PlatformRoot -RuntimeLock $Runtim
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Vérifier le routeur Intel Vulkan suivi sur la B580.'
-    Write-Host '[DRY-RUN] Exiger Gemma + Devstral, smoke et unload explicite.'
+    Write-Host '[DRY-RUN] Exiger identité du llama-server suivi, Gemma + Devstral, smoke et unload explicite.'
     Write-Host '[DRY-RUN] Ne modifier ni OpenClaw ni le backend nominal.'
     exit 0
 }
@@ -27,6 +27,22 @@ $State = Get-Content -Raw -LiteralPath $Paths.ProcessState | ConvertFrom-Json
 $Process = Get-Process -Id ([int]$State.pid) -ErrorAction SilentlyContinue
 if (-not $Process) {
     throw "Processus Intel Vulkan suivi absent (PID=$($State.pid)). Exécutez intel-vulkan-setup."
+}
+$ExpectedBinary = Get-IntelVulkanServerBinary -VersionRoot $Paths.VersionRoot
+if (-not $ExpectedBinary) {
+    throw 'Runtime llama.cpp Vulkan géré absent. Exécutez intel-vulkan-setup.'
+}
+$ActualProcessPath = try { [string]$Process.Path } catch { '' }
+if (-not $ActualProcessPath -or
+    -not [string]::Equals(
+        [IO.Path]::GetFullPath($ActualProcessPath),
+        [IO.Path]::GetFullPath($ExpectedBinary),
+        [StringComparison]::OrdinalIgnoreCase
+    )) {
+    throw (
+        "État Intel Vulkan périmé: PID=$($State.pid) ne correspond plus au llama-server géré. " +
+        'Exécutez intel-vulkan-setup pour recréer un état propre.'
+    )
 }
 $Inventory = Wait-IntelVulkanApi -BaseUrl ([string]$RuntimeLock.endpoint) -TimeoutSeconds 30
 $Models = Get-IntelVulkanManagedModel -RuntimeLock $RuntimeLock
