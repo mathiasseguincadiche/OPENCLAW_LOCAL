@@ -189,8 +189,16 @@ function Invoke-Action {
         elseif ($Name -in @('benchmark', 'qualification', 'intel-sycl-compare')) {
             & $Script -DryRun:$DryRunMode -Quick:$QuickMode
         }
-        elseif ($Name -in @('configure-openclaw', 'e2e')) {
+        elseif ($Name -eq 'configure-openclaw') {
             & $Script -DryRun:$DryRunMode -Backend $BackendMode
+        }
+        elseif ($Name -eq 'e2e') {
+            if ($BackendMode -eq 'b580-hybrid') {
+                & $Script -DryRun:$DryRunMode -Backend $BackendMode -TimeoutSeconds 300
+            }
+            else {
+                & $Script -DryRun:$DryRunMode -Backend $BackendMode
+            }
         }
         elseif ($Name -eq 'intel-sycl-diagnose') {
             & $Script -DryRun:$DryRunMode -Model $ModelMode
