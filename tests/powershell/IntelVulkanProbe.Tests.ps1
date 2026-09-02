@@ -23,7 +23,7 @@ Describe 'Intel Vulkan isolation probe' {
     }
 
     It 'utilise le meme contrat de charge que SYCL pour isoler le backend' {
-        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.context_tokens | Should -Be 8192
+        $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.context_tokens | Should -Be 16384
         $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.gpu_layers | Should -Be 'auto'
         $script:VulkanRuntimeVersions.llama_cpp_vulkan_probe.parallel | Should -Be 1
         $script:VulkanProbeScript | Should -Match "'--ctx-size'"
