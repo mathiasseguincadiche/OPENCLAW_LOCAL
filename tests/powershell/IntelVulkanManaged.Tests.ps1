@@ -88,6 +88,8 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'finalAssistantVisibleText'
         $script:HybridE2E | Should -Match 'liveness invalide'
         $script:HybridE2E | Should -Match '\$SmokeText -ne \$ExpectedSmokeText'
+        $script:HybridE2E | Should -Match "N'utilise aucun outil"
+        $script:HybridE2E | Should -Match "'--thinking', 'off'"
         $script:HybridE2E | Should -Match "N'utilise pas exec"
         $script:HybridE2E | Should -Match 'N''utilise jamais exec'
         $script:HybridE2E | Should -Match 'Ne fais aucune vérification supplémentaire'
