@@ -25,6 +25,7 @@ $AgentIds = @(
     'auditeur-qualite'
 )
 $ToolAgentId = 'ingenieur-devops'
+$HeartbeatSeconds = 15
 
 if (-not (Test-Path -LiteralPath $GatewayHealth)) {
     throw "Bibliothèque de santé Gateway introuvable: $GatewayHealth"
@@ -62,9 +63,53 @@ function Invoke-OpenClawJson {
 
     $Started = [DateTimeOffset]::UtcNow
     Write-Host "E2E  START $Description (timeout appel=${TimeoutSeconds}s)"
-    $Output = & $OpenClaw @Arguments 2>&1
-    $ExitCode = $LASTEXITCODE
-    $Text = ($Output | Out-String).Trim()
+
+    $Job = Start-Job -ScriptBlock {
+        param(
+            [string]$OpenClawPath,
+            [string[]]$OpenClawArguments
+        )
+
+        $ErrorActionPreference = 'Stop'
+        try {
+            $CommandOutput = & $OpenClawPath @OpenClawArguments 2>&1
+            [pscustomobject]@{
+                ExitCode = $LASTEXITCODE
+                Output = ($CommandOutput | Out-String).Trim()
+            }
+        }
+        catch {
+            [pscustomobject]@{
+                ExitCode = 1
+                Output = ($_ | Out-String).Trim()
+            }
+        }
+    } -ArgumentList $OpenClaw, $Arguments
+
+    try {
+        while ($Job.State -in @('NotStarted', 'Running')) {
+            $Completed = Wait-Job -Job $Job -Timeout $HeartbeatSeconds
+            if ($Completed) {
+                break
+            }
+            $Elapsed = ([DateTimeOffset]::UtcNow - $Started).TotalSeconds
+            Write-Host ("E2E  WAIT  {0} ({1:N0} s écoulées)" -f $Description, $Elapsed)
+        }
+
+        $JobResult = Receive-Job -Job $Job -Wait
+        if (-not $JobResult) {
+            throw "$Description n'a retourné aucun résultat de processus."
+        }
+        $ExitCode = [int]$JobResult.ExitCode
+        $Text = [string]$JobResult.Output
+    }
+    finally {
+        if ($Job.State -in @('NotStarted', 'Running')) {
+            Stop-Job -Job $Job -ErrorAction SilentlyContinue
+        }
+        Remove-Job -Job $Job -Force -ErrorAction SilentlyContinue
+    }
+
     if ($ExitCode -ne 0) {
         throw "$Description en échec (code $ExitCode): $Text"
     }
@@ -288,6 +333,7 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] compatibilité CLI OpenClaw 2026.7.1-2: agent --agent/--model/--message.'
     Write-Host '[DRY-RUN] succès agent validé sur status/meta.error/liveness et réponse attendue.'
     Write-Host '[DRY-RUN] outils fichiers via write/read; exec interactif interdit dans les probes unattended.'
+    Write-Host '[DRY-RUN] heartbeat E2E toutes les 15 s pendant les appels OpenClaw.'
     Write-Host '[DRY-RUN] erreur outil contrôlée -> réparation avec le même spécialiste.'
     Write-Host '[DRY-RUN] 3 runs de stabilité avec le même spécialiste.'
     Write-Host '[DRY-RUN] progression visible pour chaque appel long.'
