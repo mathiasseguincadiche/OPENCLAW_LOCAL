@@ -4,7 +4,7 @@ param(
     [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
     [string]$Backend = 'ollama-vulkan',
     [int]$TimeoutSeconds = 180,
-    [ValidateRange(180, 600)][int]$ColdModelTimeoutSeconds = 300,
+    [ValidateRange(180, 600)][int]$AgentSmokeTimeoutSeconds = 300,
     [ValidateRange(5, 300)][int]$GatewayReadyTimeoutSeconds = 60
 )
 
@@ -136,50 +136,85 @@ function Invoke-OpenClawJson {
     return $Parsed
 }
 
+function Write-OpenClawFailureEvidence {
+    param(
+        [Parameter(Mandatory)][object]$Payload,
+        [Parameter(Mandatory)][string]$Description,
+        [Parameter(Mandatory)][string]$FailureEvidenceRoot
+    )
+
+    New-Item -ItemType Directory -Path $FailureEvidenceRoot -Force | Out-Null
+    $SafeDescription = $Description -replace '[^a-zA-Z0-9._-]', '_'
+    $DiagnosticStamp = Get-Date -Format 'yyyyMMdd_HHmmssfff'
+    $DiagnosticPath = Join-Path $FailureEvidenceRoot (
+        "openclaw_e2e_failure_${SafeDescription}_$DiagnosticStamp.json"
+    )
+    [ordered]@{
+        schema_version = '1.0.0'
+        timestamp_utc = [DateTime]::UtcNow.ToString('o')
+        description = $Description
+        payload = $Payload
+    } | ConvertTo-Json -Depth 50 |
+        Set-Content -LiteralPath $DiagnosticPath -Encoding utf8
+    Write-Host "E2E  DIAG  $Description -> $DiagnosticPath"
+    Write-Host "E2E_FAILURE_DIAGNOSTIC=$DiagnosticPath"
+    return $DiagnosticPath
+}
+
 function Test-OpenClawAgentSuccess {
     param(
         [Parameter(Mandatory)][object]$Payload,
-        [Parameter(Mandatory)][string]$Description
+        [Parameter(Mandatory)][string]$Description,
+        [string]$FailureEvidenceRoot = ''
     )
 
-    $ResultProperty = $Payload.PSObject.Properties['result']
-    if (-not $ResultProperty -or -not $ResultProperty.Value) {
-        throw "$Description n'a pas renvoyé de résultat agent."
-    }
-
-    $MetaProperty = $ResultProperty.Value.PSObject.Properties['meta']
-    if (-not $MetaProperty -or -not $MetaProperty.Value) {
-        throw "$Description n'a pas renvoyé de métadonnées agent."
-    }
-    $Meta = $MetaProperty.Value
-
-    $ErrorProperty = $Meta.PSObject.Properties['error']
-    if ($ErrorProperty -and $ErrorProperty.Value) {
-        $KindProperty = $ErrorProperty.Value.PSObject.Properties['kind']
-        $MessageProperty = $ErrorProperty.Value.PSObject.Properties['message']
-        $Kind = if ($KindProperty) { [string]$KindProperty.Value } else { '' }
-        $Message = if ($MessageProperty) { [string]$MessageProperty.Value } else { '' }
-        if (
-            -not [string]::IsNullOrWhiteSpace($Kind) -or
-            -not [string]::IsNullOrWhiteSpace($Message)
-        ) {
-            throw "$Description erreur OpenClaw: kind=$Kind message=$Message"
+    try {
+        $ResultProperty = $Payload.PSObject.Properties['result']
+        if (-not $ResultProperty -or -not $ResultProperty.Value) {
+            throw "$Description n'a pas renvoyé de résultat agent."
         }
-    }
 
-    $LivenessProperty = $Meta.PSObject.Properties['livenessState']
-    $Liveness = if ($LivenessProperty) { [string]$LivenessProperty.Value } else { '' }
-    if ($Liveness -match '^(blocked|error|failed)$') {
-        throw "$Description liveness invalide: $Liveness"
-    }
+        $MetaProperty = $ResultProperty.Value.PSObject.Properties['meta']
+        if (-not $MetaProperty -or -not $MetaProperty.Value) {
+            throw "$Description n'a pas renvoyé de métadonnées agent."
+        }
+        $Meta = $MetaProperty.Value
 
-    $StatusProperty = $Payload.PSObject.Properties['status']
-    $Status = if ($StatusProperty) { [string]$StatusProperty.Value } else { '' }
-    if (-not [string]::IsNullOrWhiteSpace($Status) -and $Status -ne 'ok') {
-        throw "$Description status inattendu: $Status"
-    }
+        $ErrorProperty = $Meta.PSObject.Properties['error']
+        if ($ErrorProperty -and $ErrorProperty.Value) {
+            $KindProperty = $ErrorProperty.Value.PSObject.Properties['kind']
+            $MessageProperty = $ErrorProperty.Value.PSObject.Properties['message']
+            $Kind = if ($KindProperty) { [string]$KindProperty.Value } else { '' }
+            $Message = if ($MessageProperty) { [string]$MessageProperty.Value } else { '' }
+            if (
+                -not [string]::IsNullOrWhiteSpace($Kind) -or
+                -not [string]::IsNullOrWhiteSpace($Message)
+            ) {
+                throw "$Description erreur OpenClaw: kind=$Kind message=$Message"
+            }
+        }
 
-    return $true
+        $LivenessProperty = $Meta.PSObject.Properties['livenessState']
+        $Liveness = if ($LivenessProperty) { [string]$LivenessProperty.Value } else { '' }
+        if ($Liveness -match '^(blocked|error|failed)$') {
+            throw "$Description liveness invalide: $Liveness"
+        }
+
+        $StatusProperty = $Payload.PSObject.Properties['status']
+        $Status = if ($StatusProperty) { [string]$StatusProperty.Value } else { '' }
+        if (-not [string]::IsNullOrWhiteSpace($Status) -and $Status -ne 'ok') {
+            throw "$Description status inattendu: $Status"
+        }
+
+        return $true
+    }
+    catch {
+        if (-not [string]::IsNullOrWhiteSpace($FailureEvidenceRoot)) {
+            $null = Write-OpenClawFailureEvidence -Payload $Payload `
+                -Description $Description -FailureEvidenceRoot $FailureEvidenceRoot
+        }
+        throw
+    }
 }
 
 function Test-ExpectedProvider {
@@ -338,8 +373,9 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] provider agent déduit de la référence primary effectivement configurée.'
     Write-Host "[DRY-RUN] readiness Gateway RPC bornée à ${GatewayReadyTimeoutSeconds}s"
     Write-Host '[DRY-RUN] 8 agents -> Gateway -> provider local attendu sans fallback silencieux.'
-    Write-Host '[DRY-RUN] smoke agents déterministe: aucun outil, thinking OpenClaw désactivé.'
-    Write-Host "[DRY-RUN] premier appel de chaque modèle: timeout cold-start ${ColdModelTimeoutSeconds}s; appels suivants ${TimeoutSeconds}s."
+    Write-Host '[DRY-RUN] smoke agents déterministe: aucun outil demandé, thinking OpenClaw désactivé.'
+    Write-Host "[DRY-RUN] smokes agents complets: timeout dédié ${AgentSmokeTimeoutSeconds}s; probes ciblés ${TimeoutSeconds}s."
+    Write-Host '[DRY-RUN] échec applicatif: payload JSON sauvegardé immédiatement dans proofs.'
     Write-Host '[DRY-RUN] smokes groupés par modèle; Devstral en dernier pour rester résident avant tool-calling.'
     if ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Qwen -> Ollama; Gemma/Devstral -> intel-vulkan; tool-call Devstral/Vulkan obligatoire.'
@@ -481,6 +517,8 @@ $Evidence = [ordered]@{
     tool_workspace = $ToolWorkspace
     scratch_root = $ScratchRoot
     session_prefix = $SessionPrefix
+    agent_smoke_timeout_seconds = [Math]::Max($TimeoutSeconds, $AgentSmokeTimeoutSeconds)
+    probe_timeout_seconds = $TimeoutSeconds
     agent_smoke = @()
     provider_by_agent = [ordered]@{}
     tool_call = $null
@@ -490,28 +528,18 @@ $Evidence = [ordered]@{
 }
 
 $AgentIndex = 0
-$SeenModelRefs = [System.Collections.Generic.HashSet[string]]::new(
-    [System.StringComparer]::OrdinalIgnoreCase
-)
+$SmokeTimeoutSeconds = [Math]::Max($TimeoutSeconds, $AgentSmokeTimeoutSeconds)
 foreach ($AgentId in $AgentIds) {
     $AgentIndex++
     $AgentModelRef = Get-AgentPrimaryModelRef -Config $Config -AgentId $AgentId
     $ExpectedProvider = Get-ProviderFromModelRef -ModelRef $AgentModelRef
     $Evidence.provider_by_agent[$AgentId] = $ExpectedProvider
 
-    $ColdModelStart = $SeenModelRefs.Add($AgentModelRef)
-    $SmokeTimeoutSeconds = if ($ColdModelStart) {
-        [Math]::Max($TimeoutSeconds, $ColdModelTimeoutSeconds)
-    }
-    else {
-        $TimeoutSeconds
-    }
-
     $Prompt = "N'utilise aucun outil. Réponds immédiatement en une ligne avec exactement: AGENT_OK $AgentId"
     Write-Host (
-        "E2E  Agent {0}/{1}: {2} -> {3} model={4} timeout={5}s cold_start={6}" -f
+        "E2E  Agent {0}/{1}: {2} -> {3} model={4} timeout={5}s" -f
         $AgentIndex, $AgentIds.Count, $AgentId, $ExpectedProvider,
-        $AgentModelRef, $SmokeTimeoutSeconds, $ColdModelStart
+        $AgentModelRef, $SmokeTimeoutSeconds
     )
     $Result = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
         'agent', '--agent', $AgentId,
@@ -520,13 +548,17 @@ foreach ($AgentId in $AgentIds) {
         '--thinking', 'off',
         '--timeout', [string]$SmokeTimeoutSeconds, '--json'
     ) -Description "Smoke agent $AgentId"
-    $null = Test-OpenClawAgentSuccess -Payload $Result -Description "Smoke agent $AgentId"
+    $null = Test-OpenClawAgentSuccess -Payload $Result -Description "Smoke agent $AgentId" `
+        -FailureEvidenceRoot $ProofsRoot
     $null = Test-ExpectedProvider -Payload $Result -ExpectedProvider $ExpectedProvider `
         -Description "Smoke agent $AgentId"
     $null = Test-GatewayTransport -Payload $Result -Description "Smoke agent $AgentId"
     $SmokeText = (Get-OpenClawText -Payload $Result).Trim()
     $ExpectedSmokeText = "AGENT_OK $AgentId"
     if ($SmokeText -ne $ExpectedSmokeText) {
+        $null = Write-OpenClawFailureEvidence -Payload $Result `
+            -Description "Smoke agent $AgentId réponse inattendue" `
+            -FailureEvidenceRoot $ProofsRoot
         throw (
             "Smoke agent $AgentId réponse inattendue. " +
             "Attendu='$ExpectedSmokeText' Reçu='$SmokeText'"
@@ -538,7 +570,6 @@ foreach ($AgentId in $AgentIds) {
         model_ref = $AgentModelRef
         expected_provider = $ExpectedProvider
         timeout_seconds = $SmokeTimeoutSeconds
-        cold_model_start = $ColdModelStart
         result = $Result
     }
 }
@@ -563,7 +594,7 @@ $ToolResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description "Tool-calling OpenClaw/$ToolProvider"
 $null = Test-OpenClawAgentSuccess -Payload $ToolResult `
-    -Description "Tool-calling OpenClaw/$ToolProvider"
+    -Description "Tool-calling OpenClaw/$ToolProvider" -FailureEvidenceRoot $ProofsRoot
 $null = Test-ExpectedProvider -Payload $ToolResult -ExpectedProvider $ToolProvider `
     -Description "Tool-calling OpenClaw/$ToolProvider"
 $null = Test-GatewayTransport -Payload $ToolResult `
@@ -571,6 +602,9 @@ $null = Test-GatewayTransport -Payload $ToolResult `
 $ToolMarker = Join-Path $ScratchRoot 'tool-call-ok.txt'
 if (-not (Test-Path -LiteralPath $ToolMarker)) {
     $ToolText = Get-OpenClawText -Payload $ToolResult
+    $null = Write-OpenClawFailureEvidence -Payload $ToolResult `
+        -Description "Tool-calling OpenClaw/$ToolProvider marqueur absent" `
+        -FailureEvidenceRoot $ProofsRoot
     throw (
         "Le spécialiste $ToolModelRef n'a pas créé tool-call-ok.txt. " +
         "Réponse modèle=$ToolText"
@@ -581,6 +615,9 @@ if ((Get-Content -Raw -LiteralPath $ToolMarker).Trim() -ne 'TOOL_OK') {
 }
 $ToolText = (Get-OpenClawText -Payload $ToolResult).Trim()
 if ($ToolText -ne 'TOOL_OK') {
+    $null = Write-OpenClawFailureEvidence -Payload $ToolResult `
+        -Description "Tool-calling OpenClaw/$ToolProvider réponse inattendue" `
+        -FailureEvidenceRoot $ProofsRoot
     throw "Réponse finale tool-call inattendue: '$ToolText'"
 }
 Write-Host "E2E  PASS  Tool-calling OpenClaw/$ToolProvider"
@@ -609,13 +646,16 @@ Ne fais aucune vérification supplémentaire.
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description 'Tool-calling OpenClaw/intel-vulkan'
     $null = Test-OpenClawAgentSuccess -Payload $VulkanResult `
-        -Description 'Tool-calling OpenClaw/intel-vulkan'
+        -Description 'Tool-calling OpenClaw/intel-vulkan' -FailureEvidenceRoot $ProofsRoot
     $null = Test-ExpectedProvider -Payload $VulkanResult -ExpectedProvider 'intel-vulkan' `
         -Description 'Tool-calling OpenClaw/intel-vulkan'
     $null = Test-GatewayTransport -Payload $VulkanResult `
         -Description 'Tool-calling OpenClaw/intel-vulkan'
     if (-not (Test-Path -LiteralPath $VulkanMarker)) {
         $VulkanText = Get-OpenClawText -Payload $VulkanResult
+        $null = Write-OpenClawFailureEvidence -Payload $VulkanResult `
+            -Description 'Tool-calling OpenClaw/intel-vulkan marqueur absent' `
+            -FailureEvidenceRoot $ProofsRoot
         throw "Devstral/Vulkan n'a pas créé vulkan-tool-ok.txt. Réponse modèle=$VulkanText"
     }
     if ((Get-Content -Raw -LiteralPath $VulkanMarker).Trim() -ne 'VULKAN_TOOL_OK') {
@@ -623,6 +663,9 @@ Ne fais aucune vérification supplémentaire.
     }
     $VulkanText = (Get-OpenClawText -Payload $VulkanResult).Trim()
     if ($VulkanText -ne 'VULKAN_TOOL_OK') {
+        $null = Write-OpenClawFailureEvidence -Payload $VulkanResult `
+            -Description 'Tool-calling OpenClaw/intel-vulkan réponse inattendue' `
+            -FailureEvidenceRoot $ProofsRoot
         throw "Réponse finale Vulkan inattendue: '$VulkanText'"
     }
     Write-Host 'E2E  PASS  Tool-calling OpenClaw/intel-vulkan'
@@ -655,7 +698,7 @@ $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     '--timeout', [string]$TimeoutSeconds, '--json'
 ) -Description 'Réparation après erreur outil'
 $null = Test-OpenClawAgentSuccess -Payload $RepairResult `
-    -Description 'Réparation après erreur outil'
+    -Description 'Réparation après erreur outil' -FailureEvidenceRoot $ProofsRoot
 $null = Test-ExpectedProvider -Payload $RepairResult -ExpectedProvider $ToolProvider `
     -Description 'Réparation après erreur outil'
 $null = Test-GatewayTransport -Payload $RepairResult `
@@ -663,6 +706,9 @@ $null = Test-GatewayTransport -Payload $RepairResult `
 $RepairMarker = Join-Path $ScratchRoot 'repair-ok.txt'
 if (-not (Test-Path -LiteralPath $RepairMarker)) {
     $RepairText = Get-OpenClawText -Payload $RepairResult
+    $null = Write-OpenClawFailureEvidence -Payload $RepairResult `
+        -Description 'Réparation après erreur outil marqueur absent' `
+        -FailureEvidenceRoot $ProofsRoot
     throw "Le scénario de réparation n'a pas créé repair-ok.txt. Réponse modèle=$RepairText"
 }
 if ((Get-Content -Raw -LiteralPath $RepairMarker).Trim() -ne 'REPAIRED') {
@@ -670,6 +716,9 @@ if ((Get-Content -Raw -LiteralPath $RepairMarker).Trim() -ne 'REPAIRED') {
 }
 $RepairText = (Get-OpenClawText -Payload $RepairResult).Trim()
 if ($RepairText -ne 'REPAIRED') {
+    $null = Write-OpenClawFailureEvidence -Payload $RepairResult `
+        -Description 'Réparation après erreur outil réponse inattendue' `
+        -FailureEvidenceRoot $ProofsRoot
     throw "Réponse finale réparation inattendue: '$RepairText'"
 }
 Write-Host 'E2E  PASS  Réparation après erreur outil'
@@ -683,12 +732,15 @@ for ($Run = 1; $Run -le 3; $Run++) {
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Stabilité run $Run/3"
     $null = Test-OpenClawAgentSuccess -Payload $StableResult `
-        -Description "Stabilité run $Run"
+        -Description "Stabilité run $Run" -FailureEvidenceRoot $ProofsRoot
     $null = Test-ExpectedProvider -Payload $StableResult -ExpectedProvider $ToolProvider `
         -Description "Stabilité run $Run"
     $null = Test-GatewayTransport -Payload $StableResult -Description "Stabilité run $Run"
     $StableText = (Get-OpenClawText -Payload $StableResult).Trim()
     if ($StableText -ne "STABLE_$Run") {
+        $null = Write-OpenClawFailureEvidence -Payload $StableResult `
+            -Description "Stabilité run $Run réponse inattendue" `
+            -FailureEvidenceRoot $ProofsRoot
         throw "Stabilité run ${Run}: réponse finale inattendue: $StableText"
     }
     Write-Host "E2E  PASS  Stabilité run $Run/3"
