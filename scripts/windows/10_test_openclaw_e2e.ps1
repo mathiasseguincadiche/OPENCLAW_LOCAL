@@ -326,6 +326,7 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] provider agent déduit de la référence primary effectivement configurée.'
     Write-Host "[DRY-RUN] readiness Gateway RPC bornée à ${GatewayReadyTimeoutSeconds}s"
     Write-Host '[DRY-RUN] 8 agents -> Gateway -> provider local attendu sans fallback silencieux.'
+    Write-Host '[DRY-RUN] smoke agents déterministe: aucun outil, thinking OpenClaw désactivé.'
     if ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Qwen -> Ollama; Gemma/Devstral -> intel-vulkan; tool-call Devstral/Vulkan obligatoire.'
     }
@@ -480,12 +481,13 @@ foreach ($AgentId in $AgentIds) {
     $AgentModelRef = Get-AgentPrimaryModelRef -Config $Config -AgentId $AgentId
     $ExpectedProvider = Get-ProviderFromModelRef -ModelRef $AgentModelRef
     $Evidence.provider_by_agent[$AgentId] = $ExpectedProvider
-    $Prompt = "Réponds en une ligne avec exactement: AGENT_OK $AgentId"
+    $Prompt = "N'utilise aucun outil. Réponds immédiatement en une ligne avec exactement: AGENT_OK $AgentId"
     Write-Host "E2E  Agent $AgentIndex/$($AgentIds.Count): $AgentId -> $ExpectedProvider"
     $Result = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
         'agent', '--agent', $AgentId,
         '--session-key', "$SessionPrefix-smoke-$AgentId",
         '--message', $Prompt,
+        '--thinking', 'off',
         '--timeout', [string]$TimeoutSeconds, '--json'
     ) -Description "Smoke agent $AgentId"
     $null = Test-OpenClawAgentSuccess -Payload $Result -Description "Smoke agent $AgentId"
