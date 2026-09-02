@@ -83,7 +83,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'Test-GatewayTransport'
     }
 
-    It 'valide le succès applicatif et évite exec dans les probes unattended' {
+    It 'valide le succès applicatif, affiche un heartbeat et évite exec unattended' {
         $script:HybridE2E | Should -Match 'Test-OpenClawAgentSuccess'
         $script:HybridE2E | Should -Match 'finalAssistantVisibleText'
         $script:HybridE2E | Should -Match 'liveness invalide'
@@ -92,6 +92,11 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'N''utilise jamais exec'
         $script:HybridE2E | Should -Match 'Ne fais aucune vérification supplémentaire'
         $script:HybridE2E | Should -Match "\$ToolText -ne 'TOOL_OK'"
+        $script:HybridE2E | Should -Match 'HeartbeatSeconds = 15'
+        $script:HybridE2E | Should -Match 'Start-Job'
+        $script:HybridE2E | Should -Match 'Wait-Job'
+        $script:HybridE2E | Should -Match 'E2E  WAIT'
+        $script:HybridE2E | Should -Match 'Remove-Job'
     }
 
     It 'reste compatible avec la CLI OpenClaw verrouillée 2026.7.1-2' {
