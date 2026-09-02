@@ -101,18 +101,27 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'Remove-Job'
     }
 
-    It 'accorde un budget cold-start au premier appel de chaque modèle sans diluer le nominal' {
-        $script:HybridE2E | Should -Match 'ColdModelTimeoutSeconds = 300'
-        $script:HybridE2E | Should -Match 'SeenModelRefs'
-        $script:HybridE2E | Should -Match 'HashSet\[string\]'
-        $script:HybridE2E | Should -Match '\$SeenModelRefs\.Add\(\$AgentModelRef\)'
-        $script:HybridE2E | Should -Match '\[Math\]::Max\(\$TimeoutSeconds, \$ColdModelTimeoutSeconds\)'
-        $script:HybridE2E | Should -Match 'cold_model_start = \$ColdModelStart'
-        $script:HybridE2E | Should -Match 'timeout_seconds = \$SmokeTimeoutSeconds'
-        $script:HybridE2E | Should -Match 'premier appel de chaque modèle'
+    It 'sépare le budget des smokes agents et conserve les probes ciblés bornés' {
+        $script:HybridE2E | Should -Match 'AgentSmokeTimeoutSeconds = 300'
+        $script:HybridE2E | Should -Match '\$SmokeTimeoutSeconds = \[Math\]::Max\(\$TimeoutSeconds, \$AgentSmokeTimeoutSeconds\)'
+        $script:HybridE2E | Should -Match 'agent_smoke_timeout_seconds'
+        $script:HybridE2E | Should -Match 'probe_timeout_seconds = \$TimeoutSeconds'
+        $script:HybridE2E | Should -Match "'--timeout', \[string\]\$SmokeTimeoutSeconds"
+        $script:HybridE2E | Should -Match "'--timeout', \[string\]\$TimeoutSeconds"
+        $script:HybridE2E | Should -Not -Match 'ColdModelTimeoutSeconds'
+        $script:HybridE2E | Should -Not -Match 'SeenModelRefs'
         $script:HybridE2E | Should -Match 'smokes groupés par modèle'
         $script:HybridE2E | Should -Match 'Devstral reste résident'
         $script:HybridE2E | Should -Match "'auditeur-qualite',[\s\S]*'ingenieur-devops'"
+    }
+
+    It 'persiste le payload de diagnostic avant tout échec applicatif' {
+        $script:HybridE2E | Should -Match 'Write-OpenClawFailureEvidence'
+        $script:HybridE2E | Should -Match 'FailureEvidenceRoot'
+        $script:HybridE2E | Should -Match 'openclaw_e2e_failure_'
+        $script:HybridE2E | Should -Match 'E2E_FAILURE_DIAGNOSTIC='
+        $script:HybridE2E | Should -Match 'payload = \$Payload'
+        $script:HybridE2E | Should -Match '-FailureEvidenceRoot \$ProofsRoot'
     }
 
     It 'reste compatible avec la CLI OpenClaw verrouillée 2026.7.1-2' {
