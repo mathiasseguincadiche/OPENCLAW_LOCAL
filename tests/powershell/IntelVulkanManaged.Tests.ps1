@@ -35,6 +35,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         [int]$script:HybridRuntime.llama_cpp_vulkan.listen_port | Should -Be 8081
         [int]$script:HybridRuntime.llama_cpp_vulkan.models_max | Should -Be 1
         [int]$script:HybridRuntime.llama_cpp_vulkan.parallel | Should -Be 1
+        [int]$script:HybridRuntime.llama_cpp_vulkan.context_tokens | Should -Be 16384
         [string]$script:HybridRuntime.llama_cpp_vulkan.gpu_layers | Should -Be 'auto'
         @($script:HybridRuntime.llama_cpp_vulkan.managed_models) |
             Should -Be @('gemma4:26b', 'devstral-small-2:24b')
@@ -79,6 +80,64 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'intel-vulkan/devstral-small-2:24B'
         $script:HybridE2E | Should -Match 'vulkan-tool-ok\.txt'
         $script:HybridE2E | Should -Match 'Test-ExpectedProvider'
+        $script:HybridE2E | Should -Match 'Test-GatewayTransport'
+    }
+
+    It 'valide le succès applicatif, affiche un heartbeat et évite exec unattended' {
+        $script:HybridE2E | Should -Match 'Test-OpenClawAgentSuccess'
+        $script:HybridE2E | Should -Match 'finalAssistantVisibleText'
+        $script:HybridE2E | Should -Match 'liveness invalide'
+        $script:HybridE2E | Should -Match '\$SmokeText -ne \$ExpectedSmokeText'
+        $script:HybridE2E | Should -Match "N'utilise aucun outil"
+        $script:HybridE2E | Should -Match "'--thinking', 'off'"
+        $script:HybridE2E | Should -Match "N'utilise pas exec"
+        $script:HybridE2E | Should -Match 'N''utilise jamais exec'
+        $script:HybridE2E | Should -Match 'Ne fais aucune vérification supplémentaire'
+        $script:HybridE2E | Should -Match '\$ToolText -ne ''TOOL_OK'''
+        $script:HybridE2E | Should -Match 'HeartbeatSeconds = 15'
+        $script:HybridE2E | Should -Match 'Start-Job'
+        $script:HybridE2E | Should -Match 'Wait-Job'
+        $script:HybridE2E | Should -Match 'E2E  WAIT'
+        $script:HybridE2E | Should -Match 'Remove-Job'
+    }
+
+    It 'sépare le budget des smokes agents et conserve les probes ciblés bornés' {
+        $script:HybridE2E | Should -Match 'AgentSmokeTimeoutSeconds = 300'
+        $script:HybridE2E | Should -Match '\$SmokeTimeoutSeconds = \[Math\]::Max\(\$TimeoutSeconds, \$AgentSmokeTimeoutSeconds\)'
+        $script:HybridE2E | Should -Match 'RepairTimeoutSeconds = \[Math\]::Min'
+        $script:HybridE2E | Should -Match 'agent_smoke_timeout_seconds'
+        $script:HybridE2E | Should -Match 'probe_timeout_seconds = \$TimeoutSeconds'
+        $script:HybridE2E | Should -Match 'repair_timeout_seconds = \$RepairTimeoutSeconds'
+        $script:HybridE2E | Should -Match '''--timeout'', \[string\]\$SmokeTimeoutSeconds'
+        $script:HybridE2E | Should -Match '''--timeout'', \[string\]\$TimeoutSeconds'
+        $script:HybridE2E | Should -Match '''--timeout'', \[string\]\$RepairTimeoutSeconds'
+        $script:HybridE2E | Should -Not -Match 'ColdModelTimeoutSeconds'
+        $script:HybridE2E | Should -Not -Match 'SeenModelRefs'
+        $script:HybridE2E | Should -Match 'smokes groupés par modèle'
+        $script:HybridE2E | Should -Match 'Devstral reste résident'
+        $script:HybridE2E | Should -Match "'auditeur-qualite',[\s\S]*'ingenieur-devops'"
+    }
+
+    It 'persiste le payload de diagnostic avant tout échec applicatif' {
+        $script:HybridE2E | Should -Match 'Write-OpenClawFailureEvidence'
+        $script:HybridE2E | Should -Match 'FailureEvidenceRoot'
+        $script:HybridE2E | Should -Match 'openclaw_e2e_failure_'
+        $script:HybridE2E | Should -Match 'E2E_FAILURE_DIAGNOSTIC='
+        $script:HybridE2E | Should -Match 'payload = \$Payload'
+        $script:HybridE2E | Should -Match '-FailureEvidenceRoot \$ProofsRoot'
+    }
+
+    It 'reste compatible avec la CLI OpenClaw verrouillée 2026.7.1-2' {
+        [string]$script:HybridRuntime.openclaw.preferred | Should -Be '2026.7.1-2'
+        $script:HybridE2E | Should -Not -Match "'agent', 'exec'"
+        $script:HybridE2E | Should -Not -Match "'--cwd'"
+        $script:HybridE2E | Should -Not -Match "'--auth-env-only'"
+        $script:HybridE2E | Should -Match "'--agent'"
+        $script:HybridE2E | Should -Match "'--model'"
+        $script:HybridE2E | Should -Match "'--session-key'"
+        $script:HybridE2E | Should -Match 'Get-AgentWorkspace'
+        $script:HybridE2E | Should -Match "ToolAgentId = 'ingenieur-devops'"
+        $script:HybridE2E | Should -Match 'progression visible pour chaque appel long'
     }
 
     It 'expose setup verify stop et le profil hybride dans le menu' {
