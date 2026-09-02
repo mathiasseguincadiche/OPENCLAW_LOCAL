@@ -29,6 +29,10 @@ $AgentIds = @(
 )
 $ToolAgentId = 'ingenieur-devops'
 $HeartbeatSeconds = 15
+$RepairTimeoutSeconds = [Math]::Min(
+    600,
+    [Math]::Max($AgentSmokeTimeoutSeconds, ($TimeoutSeconds * 2))
+)
 
 if (-not (Test-Path -LiteralPath $GatewayHealth)) {
     throw "Bibliothèque de santé Gateway introuvable: $GatewayHealth"
@@ -76,15 +80,12 @@ function Invoke-OpenClawJson {
     $Started = [DateTimeOffset]::UtcNow
     Write-Host "E2E  START $Description (timeout appel=${CallTimeoutSeconds}s)"
 
+    $OpenClawPath = $OpenClaw
+    $OpenClawArguments = $Arguments
     $Job = Start-Job -ScriptBlock {
-        param(
-            [string]$OpenClawPath,
-            [string[]]$OpenClawArguments
-        )
-
         $ErrorActionPreference = 'Stop'
         try {
-            $CommandOutput = & $OpenClawPath @OpenClawArguments 2>&1
+            $CommandOutput = & $using:OpenClawPath @using:OpenClawArguments 2>&1
             [pscustomobject]@{
                 ExitCode = $LASTEXITCODE
                 Output = ($CommandOutput | Out-String).Trim()
@@ -96,7 +97,7 @@ function Invoke-OpenClawJson {
                 Output = ($_ | Out-String).Trim()
             }
         }
-    } -ArgumentList $OpenClaw, $Arguments
+    }
 
     try {
         while ($Job.State -in @('NotStarted', 'Running')) {
@@ -224,7 +225,7 @@ function Test-ExpectedProvider {
         [Parameter(Mandatory)][string]$Description
     )
     $Json = $Payload | ConvertTo-Json -Depth 50 -Compress
-    $Pattern = '"provider"\s*:\s*"' + [regex]::Escape($ExpectedProvider) + '"'
+    $Pattern = '\"provider\"\s*:\s*\"' + [regex]::Escape($ExpectedProvider) + '\"'
     if ($Json -notmatch $Pattern) {
         throw (
             "$Description n'apporte pas de preuve provider=$ExpectedProvider. " +
@@ -241,8 +242,8 @@ function Test-GatewayTransport {
     )
     $Json = $Payload | ConvertTo-Json -Depth 50 -Compress
     if (
-        $Json -match '"fallbackFrom"\s*:\s*"gateway"' -or
-        $Json -match '"transport"\s*:\s*"embedded"'
+        $Json -match '\"fallbackFrom\"\s*:\s*\"gateway\"' -or
+        $Json -match '\"transport\"\s*:\s*\"embedded\"'
     ) {
         throw (
             "$Description a quitté silencieusement le transport Gateway. " +
@@ -374,7 +375,10 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] readiness Gateway RPC bornée à ${GatewayReadyTimeoutSeconds}s"
     Write-Host '[DRY-RUN] 8 agents -> Gateway -> provider local attendu sans fallback silencieux.'
     Write-Host '[DRY-RUN] smoke agents déterministe: aucun outil demandé, thinking OpenClaw désactivé.'
-    Write-Host "[DRY-RUN] smokes agents complets: timeout dédié ${AgentSmokeTimeoutSeconds}s; probes ciblés ${TimeoutSeconds}s."
+    Write-Host (
+        "[DRY-RUN] smokes agents complets: timeout dédié ${AgentSmokeTimeoutSeconds}s; " +
+        "probes ciblés ${TimeoutSeconds}s; réparation multi-outils ${RepairTimeoutSeconds}s."
+    )
     Write-Host '[DRY-RUN] échec applicatif: payload JSON sauvegardé immédiatement dans proofs.'
     Write-Host '[DRY-RUN] smokes groupés par modèle; Devstral en dernier pour rester résident avant tool-calling.'
     if ($Backend -eq 'b580-hybrid') {
@@ -501,7 +505,7 @@ if (-not $GatewayReadiness.ready) {
 Write-Host 'E2E  PASS  Gateway readiness'
 
 $Evidence = [ordered]@{
-    schema_version = '1.4.0'
+    schema_version = '1.5.0'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     platform_root = $PlatformRoot
     backend = $Backend
@@ -519,6 +523,7 @@ $Evidence = [ordered]@{
     session_prefix = $SessionPrefix
     agent_smoke_timeout_seconds = [Math]::Max($TimeoutSeconds, $AgentSmokeTimeoutSeconds)
     probe_timeout_seconds = $TimeoutSeconds
+    repair_timeout_seconds = $RepairTimeoutSeconds
     agent_smoke = @()
     provider_by_agent = [ordered]@{}
     tool_call = $null
@@ -695,7 +700,7 @@ $RepairResult = Invoke-OpenClawJson -OpenClaw $OpenClaw -Arguments @(
     'agent', '--agent', $ToolAgentId,
     '--session-key', "$SessionPrefix-repair",
     '--model', $ToolModelRef, '--message', $RepairPrompt,
-    '--timeout', [string]$TimeoutSeconds, '--json'
+    '--timeout', [string]$RepairTimeoutSeconds, '--json'
 ) -Description 'Réparation après erreur outil'
 $null = Test-OpenClawAgentSuccess -Payload $RepairResult `
     -Description 'Réparation après erreur outil' -FailureEvidenceRoot $ProofsRoot
