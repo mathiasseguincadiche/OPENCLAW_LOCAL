@@ -28,7 +28,7 @@ backends:
       offline: true
       jinja: true
       gpu_layers: auto
-      context_tokens: 8192
+      context_tokens: 16384
       parallel: 1
     model_source: provider_specific_gguf
     qualification_required: true
@@ -60,7 +60,7 @@ backends:
       offline: true
       jinja: true
       gpu_layers: auto
-      context_tokens: 8192
+      context_tokens: 16384
       parallel: 1
     managed_models:
       - gemma-deep
