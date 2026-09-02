@@ -101,13 +101,15 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'Remove-Job'
     }
 
-    It 'traite les swaps mono-modèle Vulkan sans diluer le timeout nominal' {
+    It 'accorde un budget cold-start au premier appel de chaque modèle sans diluer le nominal' {
         $script:HybridE2E | Should -Match 'ColdModelTimeoutSeconds = 300'
-        $script:HybridE2E | Should -Match 'LastVulkanModelRef'
-        $script:HybridE2E | Should -Match "ExpectedProvider -eq 'intel-vulkan'"
+        $script:HybridE2E | Should -Match 'SeenModelRefs'
+        $script:HybridE2E | Should -Match 'HashSet\[string\]'
+        $script:HybridE2E | Should -Match '\$SeenModelRefs\.Add\(\$AgentModelRef\)'
         $script:HybridE2E | Should -Match '\[Math\]::Max\(\$TimeoutSeconds, \$ColdModelTimeoutSeconds\)'
-        $script:HybridE2E | Should -Match 'cold_model_switch = \$ColdModelSwitch'
+        $script:HybridE2E | Should -Match 'cold_model_start = \$ColdModelStart'
         $script:HybridE2E | Should -Match 'timeout_seconds = \$SmokeTimeoutSeconds'
+        $script:HybridE2E | Should -Match 'premier appel de chaque modèle'
         $script:HybridE2E | Should -Match 'smokes groupés par modèle'
         $script:HybridE2E | Should -Match 'Devstral reste résident'
         $script:HybridE2E | Should -Match "'auditeur-qualite',[\s\S]*'ingenieur-devops'"
