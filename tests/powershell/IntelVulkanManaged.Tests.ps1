@@ -35,6 +35,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         [int]$script:HybridRuntime.llama_cpp_vulkan.listen_port | Should -Be 8081
         [int]$script:HybridRuntime.llama_cpp_vulkan.models_max | Should -Be 1
         [int]$script:HybridRuntime.llama_cpp_vulkan.parallel | Should -Be 1
+        [int]$script:HybridRuntime.llama_cpp_vulkan.context_tokens | Should -Be 16384
         [string]$script:HybridRuntime.llama_cpp_vulkan.gpu_layers | Should -Be 'auto'
         @($script:HybridRuntime.llama_cpp_vulkan.managed_models) |
             Should -Be @('gemma4:26b', 'devstral-small-2:24b')
@@ -80,6 +81,17 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'vulkan-tool-ok\.txt'
         $script:HybridE2E | Should -Match 'Test-ExpectedProvider'
         $script:HybridE2E | Should -Match 'Test-GatewayTransport'
+    }
+
+    It 'valide le succès applicatif et évite exec dans les probes unattended' {
+        $script:HybridE2E | Should -Match 'Test-OpenClawAgentSuccess'
+        $script:HybridE2E | Should -Match 'finalAssistantVisibleText'
+        $script:HybridE2E | Should -Match 'liveness invalide'
+        $script:HybridE2E | Should -Match '\$SmokeText -ne \$ExpectedSmokeText'
+        $script:HybridE2E | Should -Match "N'utilise pas exec"
+        $script:HybridE2E | Should -Match 'N''utilise jamais exec'
+        $script:HybridE2E | Should -Match 'Ne fais aucune vérification supplémentaire'
+        $script:HybridE2E | Should -Match "\$ToolText -ne 'TOOL_OK'"
     }
 
     It 'reste compatible avec la CLI OpenClaw verrouillée 2026.7.1-2' {
