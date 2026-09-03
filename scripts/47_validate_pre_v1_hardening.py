@@ -146,6 +146,7 @@ def main() -> int:
         failures.append("identité modèles: invalidation automatique requise")
     identity_source = read("src/clawlocal/model_identity.py", failures)
     identity_cli = read("scripts/48_model_identity_lock.py", failures)
+    model_catalog_cli = read("scripts/20_list_models.py", failures)
     qualification = read("scripts/windows/07_run_qualification.ps1", failures)
     verify = read("scripts/windows/04_verify_local.ps1", failures)
     for marker in (
@@ -161,6 +162,22 @@ def main() -> int:
             failures.append(f"qualification non reliée à l'identité: {marker}")
     if "--action check --allow-unqualified" not in verify:
         failures.append("verify: contrôle de qualification modèle absent")
+    for marker in (
+        "python_runtime.ps1",
+        "Enable-ClawLocalManagedPython",
+        "& $ManagedPython",
+    ):
+        if marker not in verify:
+            failures.append(f"verify: runtime Python géré non verrouillé: {marker}")
+    if "& python " in verify or "& python.exe " in verify:
+        failures.append("verify: appel Python système ambigu interdit")
+    for relative, source in (
+        ("scripts/20_list_models.py", model_catalog_cli),
+        ("scripts/48_model_identity_lock.py", identity_cli),
+    ):
+        for marker in ("runtime", "venv", "Scripts", "python.exe", "os.execv"):
+            if marker not in source:
+                failures.append(f"{relative}: auto-activation Python géré absente: {marker}")
     identity_actions = ("capture", "promote", "check")
     if any(action not in identity_cli for action in identity_actions):
         failures.append("CLI identité modèles incomplète")
@@ -254,6 +271,7 @@ def main() -> int:
     print("OK  ZIP générique sécurisé et non récursif")
     print("OK  REQ -> tâche -> sortie -> preuve -> verdict fail-closed")
     print("OK  identité modèles digest/quantification invalidable")
+    print("OK  runtime Python géré verrouillé sur les chemins sensibles")
     print("OK  Workspace Guard + collect_scopes appliqués par le code")
     print("OK  cinq golden projects exécutables localement")
     print("Verdict: CONFORME")
