@@ -178,7 +178,11 @@ function Test-SelectedBackendReady {
     $Lock = Get-Content -Raw -LiteralPath $LockPath | ConvertFrom-Json
     if ($BackendId -eq 'llama-cpp-sycl') {
         Test-LlamaCppInventory -Endpoint ([string]$Lock.llama_cpp_sycl.endpoint) `
-            -Expected @('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b') `
+            -Expected @(
+                'qwen3.5:9b-q4_K_M',
+                'gemma3:12b-it-q4_K_M',
+                'qwen2.5-coder:14b-instruct-q4_K_M'
+            ) `
             -Label 'Backend Intel SYCL'
         Write-Host 'OK  Backend texte sélectionné: llama-cpp-sycl (provider OpenClaw intel-sycl).'
         Write-Host 'INFO Image/PDF restent sur Ollama tant que le multimodal SYCL n''est pas qualifié.'
@@ -190,8 +194,8 @@ function Test-SelectedBackendReady {
         Test-LlamaCppInventory -Endpoint ([string]$Lock.llama_cpp_vulkan.endpoint) `
             -Expected @($Lock.llama_cpp_vulkan.managed_models | ForEach-Object { [string]$_ }) `
             -Label 'Backend Intel Vulkan géré'
-        Write-Host 'OK  Profil B580 hybride prêt: Qwen->Ollama, Gemma/Devstral->intel-vulkan.'
-        Write-Host 'INFO Image/PDF restent intégralement sur Ollama.'
+        Write-Host 'OK  Profil B580 hybride prêt: Qwen 3.5->Ollama, Gemma 3/Qwen Coder->intel-vulkan.'
+        Write-Host 'INFO Image/PDF restent intégralement sur Ollama via Qwen 3.5/Gemma 3.'
         return
     }
 
@@ -218,7 +222,8 @@ if ($DryRun) {
     }
     elseif ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Exiger Ollama + routeur Intel Vulkan géré prêt.'
-        Write-Host '[DRY-RUN] Routage texte mesuré: Qwen -> Ollama; Gemma + Devstral -> intel-vulkan; image/PDF -> Ollama.'
+        Write-Host '[DRY-RUN] Routage texte: Qwen 3.5 -> Ollama; Gemma 3 + Qwen Coder -> intel-vulkan; image/PDF -> Ollama.'
+        Write-Host '[DRY-RUN] Contexte nominal B580: 8192 tokens; 16384 reste un contexte de qualification.'
         Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
     }
     Write-Host '[DRY-RUN] Vérifier/installer Parallel, déployer 8 agents, capturer le schéma vivant, valider le patch puis l''appliquer.'
