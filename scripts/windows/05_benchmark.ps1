@@ -33,12 +33,14 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] Les trois modèles requis et la suite sont lus depuis les contrats YAML.'
     Write-Host '[DRY-RUN] Chaque scénario borne sa sortie avec max_output_tokens.'
     Write-Host '[DRY-RUN] Gemma 4: thinking désactivé pour préserver le budget de réponse finale des gates fonctionnels.'
-    Write-Host '[DRY-RUN] Le runner affiche durée, TTFT, tokens/s, tokens générés et progression.'
+    Write-Host '[DRY-RUN] Le runner affiche durée, premier token, réponse finale, tokens/s et progression.'
     if ($Quick) {
         Write-Host '[DRY-RUN] Mode QUICK: contexte 8192, 36 cas, thinking Qwen désactivé.'
     }
     else {
-        Write-Host '[DRY-RUN] Mode COMPLET: contextes 8192 + 16384, 72 cas, thinking Qwen natif et borné.'
+        Write-Host '[DRY-RUN] Mode COMPLET OPTIMISÉ: 36 cas 8K + 12 cas ciblés 16K = 48 cas.'
+        Write-Host '[DRY-RUN] Qwen thinking natif conservé mais borné à 768 tokens par cas.'
+        Write-Host '[DRY-RUN] 16K cible intake projet, diagnostic K8s, réparation outil et long contexte.'
     }
     exit 0
 }
