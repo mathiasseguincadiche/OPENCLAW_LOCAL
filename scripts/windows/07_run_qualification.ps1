@@ -22,11 +22,12 @@ function Assert-ExitCode([string]$Step) {
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Qualification locale stricte, sans appel cloud :'
-    Write-Host '  1. audit host avec VRAM fiable si disponible dans le registre Windows'
+    Write-Host '  1. audit host avec VRAM fiable si HardwareInformation.qwMemorySize est disponible'
     Write-Host '  2. smoke tests API sans spinner des trois modèles required du catalogue'
     Write-Host '  3. inventaire matériel/runtime'
     Write-Host '  4. benchmark borné des trois modèles selon qualification_policy.yaml'
     Write-Host '  5. progression avec durée, TTFT, tokens/s et estimation du restant'
+    Write-Host '  politique Gemma 4: thinking désactivé dans les gates fonctionnels bornés'
     if ($Quick) {
         Write-Host '  6. diagnostic automatique 8K uniquement; aucune qualification/promotion'
         Write-Host '  mode QUICK: contexte 8192, 36 cas, thinking Qwen désactivé'
