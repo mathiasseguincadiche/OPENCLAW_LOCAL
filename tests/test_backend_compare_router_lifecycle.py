@@ -33,7 +33,7 @@ def test_unload_sycl_model_uses_router_endpoint_and_waits_for_unloaded(
 
     def fake_post(url: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
         calls.append(("post", url))
-        assert payload == {"model": "qwen3.8:27B"}
+        assert payload == {"model": "qwen3.5:9b-q4_K_M"}
         assert timeout == 30.0
         return {"success": True}
 
@@ -43,7 +43,7 @@ def test_unload_sycl_model_uses_router_endpoint_and_waits_for_unloaded(
         return {
             "data": [
                 {
-                    "id": "qwen3.8:27B",
+                    "id": "qwen3.5:9b-q4_K_M",
                     "status": {"value": "unloaded"},
                 }
             ]
@@ -53,7 +53,7 @@ def test_unload_sycl_model_uses_router_endpoint_and_waits_for_unloaded(
     monkeypatch.setattr(module, "get_json", fake_get)
     module.unload_sycl_model(
         "http://127.0.0.1:8080/v1",
-        "qwen3.8:27B",
+        "qwen3.5:9b-q4_K_M",
         timeout=90.0,
     )
 
