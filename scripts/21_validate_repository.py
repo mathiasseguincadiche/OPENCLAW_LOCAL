@@ -122,6 +122,7 @@ REQUIRED = {
     "tests/test_sbom.py",
     "tests/test_versioning.py",
     "tests/test_release_readiness.py",
+    "tests/test_release_workflow.py",
     "tests/powershell/Repository.Tests.ps1",
 }
 
