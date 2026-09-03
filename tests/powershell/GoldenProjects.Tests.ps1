@@ -9,6 +9,7 @@ Describe 'Golden projects pre-V1 operator path' {
         $Menu | Should -Match "'golden'"
         $Menu | Should -Match '21_run_golden_projects\.ps1'
         $Menu | Should -Match '30 cas HARD-40M'
+        $Menu | Should -Match 'reset \+ prepare \+ execute \+ evaluate'
         $Menu | Should -Not -Match '36 cas au lieu de 72'
     }
 
@@ -25,12 +26,15 @@ Describe 'Golden projects pre-V1 operator path' {
         $Runner | Should -Not -Match '&\s+python(?:\.exe)?\b'
     }
 
-    It 'auto-active le venv gere dans le runner Python direct' {
+    It 'auto-active le venv gere dans le runner Python direct apres resolution de root' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Runner = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'scripts\49_run_golden_projects.py'
         )
 
+        $Runner | Should -Match 'requested_root'
+        $Runner | Should -Match 'parse_known_args'
+        $Runner | Should -Match '_activate_repository_runtime\(platform_root\)'
         $Runner | Should -Match 'runtime.*venv.*Scripts.*python\.exe'
         $Runner | Should -Match 'os\.execv'
         $Runner | Should -Match 'sys\.executable'
