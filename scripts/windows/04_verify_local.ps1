@@ -10,7 +10,20 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
+$ModelIdentity = Join-Path $RepoRoot 'scripts\48_model_identity_lock.py'
 $OllamaEndpoint = 'http://127.0.0.1:11434'
+
+function Get-PlatformRoot {
+    if ($env:OPENCLAW_LOCAL_ROOT) {
+        return $env:OPENCLAW_LOCAL_ROOT
+    }
+    if (Test-Path -LiteralPath 'E:\') {
+        return 'E:\AI\OpenClawLocal'
+    }
+    return (Join-Path $env:LOCALAPPDATA 'OpenClawLocal')
+}
+
+$PlatformRoot = Get-PlatformRoot
 
 if (-not $Model) {
     $RequiredModels = @(
@@ -30,6 +43,7 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test /api/chat sans spinner avec $Model."
     Write-Host '[DRY-RUN] Thinking désactivé pour les modèles de raisonnement pendant ce smoke runtime minimal.'
     Write-Host '[DRY-RUN] Lire ensuite /api/ps pour exposer la part réellement chargée en VRAM.'
+    Write-Host '[DRY-RUN] Vérifier enfin le digest/format/quantification contre l’identité qualifiée si elle existe.'
     exit 0
 }
 
@@ -69,9 +83,6 @@ $RequestBody = [ordered]@{
     }
 }
 if ($Model -like 'qwen3.8:*' -or $Model -like 'gemma4:*') {
-    # Ce smoke vérifie le runtime et la capacité à produire une réponse finale,
-    # pas le raisonnement profond. Un budget trop court peut sinon être consommé
-    # par le canal thinking avant que message.content ne soit produit.
     $RequestBody.think = $false
 }
 $Body = $RequestBody | ConvertTo-Json -Depth 6 -Compress
@@ -154,6 +165,11 @@ try {
 }
 catch {
     Write-Host "INFO Ollama mémoire $Model : métrique /api/ps indisponible."
+}
+
+& python $ModelIdentity --root $PlatformRoot --action check --allow-unqualified
+if ($LASTEXITCODE -ne 0) {
+    throw 'Identité modèle qualifiée INVALIDATED: digest/quantification a changé; requalification complète requise.'
 }
 
 exit 0
