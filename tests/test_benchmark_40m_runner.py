@@ -32,7 +32,7 @@ def test_hard_40m_policy_is_strictly_bounded() -> None:
     budget = hard40._runtime_budget(policy)
     assert budget["qualification"] == 2400
     assert budget["benchmark"] == 2100
-    assert budget["case"] == 150
+    assert budget["case"] == 210
 
 
 def test_matrix_has_30_cases_with_24_8k_and_6_16k() -> None:
