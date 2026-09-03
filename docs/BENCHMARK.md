@@ -211,7 +211,11 @@ Le tool-calling est une raison de challenger Gemma, pas un critère unique perme
 
 ## Identité modèle
 
-La qualification HARD-40M capture un fingerprint candidat des trois modèles routés et ne le promeut qu'après PASS complet. La preuve challenger est indépendante et ne modifie aucun fingerprint qualifié ni le catalogue.
+La qualification HARD-40M capture un fingerprint candidat des trois modèles routés et **ne promeut ce fingerprint** vers l'identité qualifiée qu'après un gate complet PASS. Cette opération **ne modifie ni le catalogue** de modèles ni le backend sélectionné et ne vaut pas approbation V1.
+
+La preuve challenger est indépendante et ne modifie aucun fingerprint qualifié.
+
+**Le mode `-Quick` ne promeut jamais** l'identité modèle.
 
 ## Commandes HARD-40M
 
