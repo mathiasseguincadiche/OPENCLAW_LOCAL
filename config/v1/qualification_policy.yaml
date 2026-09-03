@@ -82,8 +82,8 @@ model_selection_challenger:
     - tool_repair_pass_rate
     - protocol_error_count
     - median_wall_ms
-    - tokens_per_second
-    - b580_vram_fit
+    - median_tokens_per_second
+    - median_gpu_residency_ratio
   automatic_promotion: false
   human_decision_required: true
   evidence_required: true
