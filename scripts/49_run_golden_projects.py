@@ -2,14 +2,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
-
-from clawlocal.golden_projects import (
-    SCENARIOS,
-    evaluate_golden_project,
-    execute_golden_project,
-    prepare_golden_project,
-)
 
 
 def default_root() -> Path:
@@ -21,7 +15,34 @@ def default_root() -> Path:
     return Path(os.environ.get("LOCALAPPDATA", ".")) / "OpenClawLocal"
 
 
+def _activate_repository_runtime() -> None:
+    platform_root = default_root()
+    if os.name == "nt":
+        managed = platform_root / "runtime" / "venv" / "Scripts" / "python.exe"
+        if managed.is_file() and Path(sys.executable).resolve() != managed.resolve():
+            os.execv(
+                str(managed),
+                [str(managed), str(Path(__file__).resolve()), *sys.argv[1:]],
+            )
+
+    repo_root = Path(__file__).resolve().parents[1]
+    src = repo_root / "src"
+    src_text = str(src)
+    if src_text not in sys.path:
+        sys.path.insert(0, src_text)
+    os.environ.setdefault("OPENCLAW_LOCAL_REPO_ROOT", str(repo_root))
+
+
 def main() -> int:
+    _activate_repository_runtime()
+
+    from clawlocal.golden_projects import (
+        SCENARIOS,
+        evaluate_golden_project,
+        execute_golden_project,
+        prepare_golden_project,
+    )
+
     parser = argparse.ArgumentParser(description="Prépare et exécute les golden projects pré-V1.")
     parser.add_argument("--root", type=Path, default=default_root())
     parser.add_argument("--scenario", choices=["all", *SCENARIOS], default="all")
