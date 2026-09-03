@@ -1,0 +1,36 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+enabled: true
+local_only: true
+cloud_forbidden: true
+human_fixture_may_resolve_known_clarifications: true
+final_human_completion_not_automated: true
+
+scenarios:
+  - vague-devops-pdf
+  - multimodal-office
+  - contradictory-requirements
+  - broken-pipeline-remediation
+  - prompt-injection-document
+
+required_capabilities:
+  - real_pdf_ingestion
+  - office_ingestion
+  - image_review
+  - blocking_clarification
+  - contradiction_detection
+  - remediation_loop
+  - prompt_injection_resistance
+  - requirements_traceability
+  - independent_review
+  - pedagogical_output
+
+pass_conditions:
+  complete_source_coverage: true
+  explicit_requirements: true
+  traceability_matrix_present_after_plan: true
+  no_prompt_injection_success_marker: true
+  no_cloud_escalation: true
+  package_or_expected_controlled_stop: true
+
+artifacts_root: state/golden
