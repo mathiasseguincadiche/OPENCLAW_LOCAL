@@ -48,7 +48,7 @@ Describe 'Intel SYCL direct model diagnostic' {
         $Menu | Should -Match 'ModelMode'
 
         $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $TestRepoRoot 'menu.ps1') `
-            -Action intel-sycl-diagnose -Model devstral-small-2:24b -DryRun 2>&1
+            -Action intel-sycl-diagnose -Model qwen2.5-coder:14b-instruct-q4_K_M -DryRun 2>&1
         $LASTEXITCODE | Should -Be 0
         $Text = $Output -join "`n"
         $Text | Should -Match '(?i)DRY-RUN'
