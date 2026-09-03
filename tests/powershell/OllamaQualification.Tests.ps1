@@ -97,7 +97,7 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Benchmark | Should -Match 'benchmark_qualification_40m_v2\.py'
         $Benchmark | Should -Match 'timeout par cas 210 s'
         $Policy | Should -Match 'max_case_wall_seconds: 210'
-        $Launcher | Should -Match 'QWEN_NATIVE_MAX_OUTPUT_TOKENS = 768'
+        $Launcher | Should -Match 'QWEN_NATIVE_MAX_OUTPUT_TOKENS = 1024'
     }
 
     It 'transmet Quick à la qualification depuis le menu' {
