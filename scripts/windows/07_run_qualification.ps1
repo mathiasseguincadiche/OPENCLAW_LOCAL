@@ -38,7 +38,7 @@ if ($DryRun) {
     Write-Host '  2. smoke tests API sans spinner des trois modèles required du catalogue'
     Write-Host '  3. inventaire matériel/runtime'
     Write-Host '  4. benchmark borné des trois modèles selon qualification_policy.yaml'
-    Write-Host '  5. progression avec durée, TTFT, tokens/s et estimation du restant'
+    Write-Host '  5. progression avec durée, premier token, tokens/s et estimation du restant'
     Write-Host '  politique Gemma 4: thinking désactivé dans les gates fonctionnels bornés'
     if ($Quick) {
         Write-Host '  6. diagnostic automatique 8K uniquement; aucune qualification/promotion'
@@ -46,7 +46,9 @@ if ($DryRun) {
     }
     else {
         Write-Host '  6. évaluation complète des seuils; aucune promotion automatique'
-        Write-Host '  mode COMPLET: contextes 8192 + 16384, 72 cas, thinking Qwen natif et borné'
+        Write-Host '  mode COMPLET OPTIMISÉ: 36 cas 8K + 12 cas ciblés 16K = 48 cas'
+        Write-Host '  Qwen thinking natif conservé, budget borné à 768 tokens par cas'
+        Write-Host '  16K cible: intake projet, diagnostic K8s, réparation outil, long contexte'
     }
     exit 0
 }
