@@ -18,11 +18,16 @@ RESULTS = ROOT / "benchmarks" / "results"
 QWEN_ALIAS = "qwen-max"
 DEFAULT_MAX_OUTPUT_TOKENS = 1536
 DEFAULT_CASE_TIMEOUT_SECONDS = 480.0
+DEFAULT_THINKING_MODE = "native"
+THINKING_MODES = ("native", "off")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Calibre les probes Qwen natifs sans promouvoir la qualification."
+        description=(
+            "Calibre les probes Qwen avec thinking natif ou désactivé "
+            "sans promouvoir la qualification."
+        )
     )
     parser.add_argument("--endpoint", default="http://127.0.0.1:11434")
     parser.add_argument(
@@ -36,6 +41,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_CASE_TIMEOUT_SECONDS,
     )
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument(
+        "--thinking-mode",
+        choices=THINKING_MODES,
+        default=DEFAULT_THINKING_MODE,
+        help="native conserve le reasoning Ollama/Qwen; off envoie think=false.",
+    )
     return parser.parse_args()
 
 
@@ -60,6 +71,14 @@ def _native_plan(
             raise ValueError(f"scénario Qwen natif inconnu: {scenario_id}")
         plan.append((context, scenario))
     return plan
+
+
+def _thinking_value(mode: str) -> bool | None:
+    if mode == "native":
+        return None
+    if mode == "off":
+        return False
+    raise ValueError(f"thinking-mode invalide: {mode}")
 
 
 def _ollama_ps_snapshot(endpoint: str, runtime_id: str) -> dict[str, Any] | None:
@@ -87,6 +106,7 @@ def _case_record(
     repeat: int,
     context: int,
     scenario: dict[str, Any],
+    thinking_mode: str,
     status: str,
     result: dict[str, Any] | None,
     check_pass: bool | None,
@@ -98,6 +118,7 @@ def _case_record(
         "repeat": repeat,
         "context": context,
         "scenario_id": str(scenario["id"]),
+        "thinking_mode": thinking_mode,
         "status": status,
         "check_pass": check_pass,
         "check_details": check_details,
@@ -131,6 +152,7 @@ def _case_record(
 def _write_evidence(
     *,
     runtime_id: str,
+    thinking_mode: str,
     max_output_tokens: int,
     case_timeout_seconds: float,
     repeats: int,
@@ -141,14 +163,15 @@ def _write_evidence(
     statuses = [str(item["status"]) for item in cases]
     complete = bool(cases) and all(status == "COMPLETE" for status in statuses)
     payload = {
-        "schema_version": "1.0.0",
-        "protocol": "qwen-native-calibration-v1",
+        "schema_version": "1.1.0",
+        "protocol": "qwen-thinking-calibration-v2",
         "qualification_effect": "none",
         "promotion_allowed": False,
         "started_at": started_at.isoformat(),
         "finished_at": finished_at.isoformat(),
         "model_alias": QWEN_ALIAS,
         "runtime_id": runtime_id,
+        "thinking_mode": thinking_mode,
         "max_output_tokens": max_output_tokens,
         "case_timeout_seconds": case_timeout_seconds,
         "repeats": repeats,
@@ -156,7 +179,8 @@ def _write_evidence(
         "cases": cases,
     }
     RESULTS.mkdir(parents=True, exist_ok=True)
-    path = RESULTS / f"qwen_native_calibration_{finished_at.strftime('%Y%m%d_%H%M%S')}.json"
+    stamp = finished_at.strftime("%Y%m%d_%H%M%S")
+    path = RESULTS / f"qwen_thinking_calibration_{thinking_mode}_{stamp}.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
 
@@ -196,6 +220,7 @@ def main() -> int:
             print(f"KO  modèle absent dans Ollama: {runtime_id}")
             return 2
         plan = _native_plan(policy, suite)
+        think_value = _thinking_value(str(args.thinking_mode))
     except (OSError, urllib.error.URLError, json.JSONDecodeError, ValueError) as exc:
         print(f"KO  préflight calibration: {exc}")
         return 2
@@ -205,10 +230,10 @@ def main() -> int:
     total = len(plan) * args.repeats
     current = 0
     print(
-        "QWEN_NATIVE_CALIBRATION "
+        "QWEN_THINKING_CALIBRATION "
         f"probes={len(plan)} repeats={args.repeats} cases={total} "
-        f"max_out={args.max_output_tokens} timeout={int(args.case_timeout_seconds)}s "
-        "qualification_effect=none"
+        f"thinking={args.thinking_mode} max_out={args.max_output_tokens} "
+        f"timeout={int(args.case_timeout_seconds)}s qualification_effect=none"
     )
 
     for repeat in range(1, args.repeats + 1):
@@ -221,7 +246,7 @@ def main() -> int:
             )
             print(
                 f"[{current}/{total}] repeat={repeat} ctx={context} "
-                f"scenario={scenario_id} thinking=native"
+                f"scenario={scenario_id} thinking={args.thinking_mode}"
             )
             result: dict[str, Any] | None = None
             check_pass: bool | None = None
@@ -238,7 +263,7 @@ def main() -> int:
                     context,
                     float(scenario.get("temperature", suite["default_temperature"])),
                     args.max_output_tokens,
-                    think=None,
+                    think=think_value,
                     deadline=deadline,
                 )
                 check_pass, check_details = core.run_checks(
@@ -263,6 +288,7 @@ def main() -> int:
                 repeat=repeat,
                 context=context,
                 scenario=scenario,
+                thinking_mode=str(args.thinking_mode),
                 status=status,
                 result=result,
                 check_pass=check_pass,
@@ -284,6 +310,7 @@ def main() -> int:
 
     path = _write_evidence(
         runtime_id=runtime_id,
+        thinking_mode=str(args.thinking_mode),
         max_output_tokens=args.max_output_tokens,
         case_timeout_seconds=args.case_timeout_seconds,
         repeats=args.repeats,

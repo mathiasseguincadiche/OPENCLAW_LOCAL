@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Describe 'Calibration Qwen native non promotionnelle' {
+Describe 'Calibration Qwen thinking non promotionnelle' {
     It 'utilise le runtime Python géré et reste indépendante du gate HARD-40M' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Wrapper = Get-Content -Raw -LiteralPath (
@@ -15,22 +15,37 @@ Describe 'Calibration Qwen native non promotionnelle' {
         $Wrapper | Should -Match 'Enable-ClawLocalManagedPython'
         $Wrapper | Should -Match '& \$ManagedPython'
         $Wrapper | Should -Not -Match '&\s+python(?:\.exe)?\b'
+        $Wrapper | Should -Match "ValidateSet\('native', 'off'\)"
+        $Wrapper | Should -Match "--thinking-mode"
         $Runner | Should -Match 'qualification_effect'
         $Runner | Should -Match 'promotion_allowed'
         $Runner | Should -Match 'False'
         $Runner | Should -Match 'MEASURED_WITH_LIMITS'
         $Runner | Should -Match '/api/ps'
+        $Runner | Should -Match 'qwen-thinking-calibration-v2'
     }
 
-    It 'supporte un DryRun sans runtime ni modèle chargé' {
+    It 'supporte un DryRun natif sans runtime ni modèle chargé' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $WrapperPath = Join-Path $TestRepoRoot 'scripts\windows\22_calibrate_qwen_native.ps1'
         $Output = & pwsh -NoLogo -NoProfile -File $WrapperPath -DryRun 2>&1
         $LASTEXITCODE | Should -Be 0
         $Text = $Output -join "`n"
-        $Text | Should -Match 'Calibration Qwen native non promotionnelle'
+        $Text | Should -Match 'Calibration Qwen thinking non promotionnelle'
+        $Text | Should -Match 'thinking=native'
         $Text | Should -Match 'max_out=1536'
         $Text | Should -Match 'timeout=480s'
+        $Text | Should -Match 'Aucune qualification'
+    }
+
+    It 'supporte un DryRun thinking off explicite' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $WrapperPath = Join-Path $TestRepoRoot 'scripts\windows\22_calibrate_qwen_native.ps1'
+        $Output = & pwsh -NoLogo -NoProfile -File $WrapperPath -DryRun -ThinkingMode off 2>&1
+        $LASTEXITCODE | Should -Be 0
+        $Text = $Output -join "`n"
+        $Text | Should -Match 'thinking=off'
+        $Text | Should -Match 'off envoie think=false'
         $Text | Should -Match 'Aucune qualification'
     }
 }
