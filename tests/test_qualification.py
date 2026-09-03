@@ -12,7 +12,7 @@ def policy() -> dict:
                 "max_error_rate": 0.0,
                 "min_check_pass_rate": 0.875,
                 "min_median_tokens_per_second": 6.0,
-                "max_p95_ttft_ms": 12000,
+                "max_p95_first_token_ms": 12000,
                 "per_context_min_check_pass_rate": {"8192": 0.875, "16384": 0.75},
             },
         },
@@ -36,7 +36,8 @@ def _model_cases(alias: str, *, passing: bool = True) -> list[dict]:
                     "check_required": True,
                     "check_passed": passing,
                     "tokens_per_second": 20.0 if passing else 4.0,
-                    "ttft_ms": 500.0,
+                    "first_token_ms": 500.0,
+                    "ttft_ms": 1500.0,
                 }
             )
     return cases
@@ -58,6 +59,7 @@ def test_passing_performance_fleet_requires_manual_qualification() -> None:
     assert report["automatic_promotion"] is False
     assert set(report["required_models"]) == set(REQUIRED_MODELS)
     assert all(report["models"][alias]["required"] for alias in REQUIRED_MODELS)
+    assert all(report["models"][alias]["p95_first_token_ms"] == 500.0 for alias in REQUIRED_MODELS)
     assert report["optional_candidates"]["passed"] == []
     assert report["optional_candidates"]["failed"] == []
 
@@ -116,3 +118,13 @@ def test_api_error_on_qwen_max_fails_gate() -> None:
     report = evaluate_benchmark(payload, policy())
     assert report["models"]["qwen-max"]["automated_gate"] == "fail"
     assert report["automated_gate"] == "fail"
+
+
+def test_reasoning_latency_uses_first_generated_token_not_final_response_ttft() -> None:
+    payload = passing_payload()
+    for case in payload["cases"]:
+        case["first_token_ms"] = 800.0
+        case["ttft_ms"] = 60000.0
+    report = evaluate_benchmark(payload, policy())
+    assert report["automated_gate"] == "pass"
+    assert report["models"]["qwen-max"]["p95_first_token_ms"] == 800.0

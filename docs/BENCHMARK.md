@@ -5,8 +5,8 @@
 Mesurer avant de conclure. Le benchmark complète la qualification en séparant :
 
 1. **fonctionnel** : requêtes réussies et contrôles conformes ;
-2. **performance** : TTFT, débit et durée murale ;
-3. **contexte** : 8K puis 16K ;
+2. **performance** : premier token, débit et durée murale ;
+3. **contexte** : couverture fonctionnelle 8K puis stress ciblé 16K ;
 4. **projet/DevOps** : tâches proches de l'usage réel ;
 5. **agentique** : discipline outil et réparation ;
 6. **backend** : comparaison Ollama/Vulkan et candidats llama.cpp.
@@ -29,7 +29,7 @@ Il n'existe aucun modèle local optionnel dans le runner de qualification.
 
 `scripts/benchmark_local.py` lit `config/v1/qualification_policy.yaml` puis charge la suite versionnée `benchmarks/suites/devops_v2.yaml`.
 
-La suite couvre notamment :
+La suite 8K couvre notamment :
 
 - analyse de Project Intake ;
 - GitLab CI YAML ;
@@ -44,7 +44,14 @@ La suite couvre notamment :
 - réparation après retour d'outil ;
 - contexte synthétique long.
 
-La passe complète représente **72 cas** : 3 modèles × 2 contextes × 12 scénarios. Le mode `-Quick` représente **36 cas** : les mêmes 3 modèles et 12 scénarios, mais uniquement à 8192 tokens de contexte.
+La passe complète optimisée représente **48 cas** :
+
+- **36 cas 8K** : 3 modèles × 12 scénarios, pour conserver la couverture fonctionnelle complète ;
+- **12 cas 16K** : 3 modèles × 4 scénarios ciblés, pour éprouver uniquement les comportements où le contexte étendu apporte une information réelle : `project-intake-analysis`, `kubernetes-root-cause`, `tool-feedback-repair-json` et `long-context-discipline`.
+
+Le mode `-Quick` reste à **36 cas** : les trois modèles et les douze scénarios, uniquement à 8192 tokens de contexte, avec thinking Qwen désactivé.
+
+Cette matrice évite de rejouer à 16K des tâches courtes telles qu'un petit YAML, un diagramme D2 ou un JSON d'intention d'outil, sans retirer le stress 16K ni aucun des trois modèles.
 
 ## Contrôles exécutables
 
@@ -61,33 +68,35 @@ Le runner prend en charge :
 
 ## API d'inférence
 
-Le runner utilise l'endpoint natif Ollama **`/api/chat`**. Ce choix correspond mieux au comportement conversationnel des modèles et permet de séparer proprement `message.thinking` de `message.content`. Les sorties de raisonnement peuvent donc être mesurées sans être confondues avec la réponse finale soumise aux contrôles.
+Le runner utilise l'endpoint natif Ollama **`/api/chat`**. Ce choix permet de séparer `message.thinking` de `message.content`. Les sorties de raisonnement peuvent donc être mesurées sans être confondues avec la réponse finale soumise aux contrôles.
 
 ## Sorties bornées et politique de thinking
 
-Chaque scénario déclare `max_output_tokens` dans `benchmarks/suites/devops_v2.yaml`, avec une valeur par défaut de suite. Le runner transmet une limite à Ollama via `num_predict` : aucune génération n'est laissée avec le comportement non borné du runtime.
+Chaque scénario déclare `max_output_tokens` dans `benchmarks/suites/devops_v2.yaml`. Le runner transmet une limite à Ollama via `num_predict` : aucune génération n'est laissée non bornée.
 
 Deux politiques sont volontairement séparées :
 
-- **Quick** : contexte 8192 uniquement et `think=false` pour la famille Qwen. Cette passe sert au diagnostic rapide des formats, contrôles et performances d'inférence sans payer le coût du raisonnement interne de Qwen3.8 sur chaque cas ;
-- **Complet** : contextes 8192 et 16384, thinking Qwen laissé **natif**. Pour éviter qu'un petit plafond de scénario coupe le raisonnement avant la réponse finale, Qwen dispose alors d'un budget borné de 2048 tokens par cas. Les autres familles conservent le plafond spécifique du scénario.
+- **Quick** : contexte 8192 uniquement et `think=false` pour Qwen ;
+- **Complet optimisé** : Qwen conserve son thinking **natif**, mais son budget est borné à **768 tokens maximum par cas** au lieu de 2048. Les scénarios qui demandent davantage conservent toujours au moins leur propre limite. Gemma utilise `think=false` dans les gates fonctionnels bornés et les autres familles conservent leur limite de scénario.
 
-Le mode complet reste donc la preuve de qualification de référence. Le mode Quick accélère les itérations mais ne remplace pas la passe complète.
+Le plafond de 768 conserve un espace de raisonnement natif tout en empêchant qu'une tâche demandant 96 à 320 tokens de réponse puisse mobiliser jusqu'à 2048 tokens sur chaque cas.
 
-Si Ollama termine un cas pour cause de limite de longueur, ou si `eval_count` atteint le budget `num_predict`, le runner enregistre `output_truncated=true`, ajoute `output_limit:fail` et marque le cas en `status=error`. Avec `max_error_rate: 0`, une sortie tronquée fait donc échouer le gate au lieu d'être absorbée par la tolérance du taux de contrôles.
+Le mode complet optimisé reste la preuve de qualification de référence. Le mode Quick accélère les itérations mais ne remplace pas la couverture 16K ciblée.
 
-Le contenu du raisonnement interne n'est pas persisté dans la preuve. Le runner conserve seulement `thinking_chars` et le temps avant premier token de réponse afin de mesurer le coût du thinking sans stocker sa trace brute.
+Si Ollama termine un cas pour cause de limite de longueur, ou si `eval_count` atteint le budget `num_predict`, le runner enregistre `output_truncated=true`, ajoute `output_limit:fail` et marque le cas en `status=error`. Avec `max_error_rate: 0`, une sortie tronquée fait échouer le gate.
+
+Le contenu du raisonnement interne n'est pas persisté. Le runner conserve seulement `thinking_chars` et les mesures de temps.
 
 ## Exécution
 
-Qualification complète :
+Qualification complète optimisée :
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
-Passe rapide 8K uniquement via le même centre de contrôle :
+Passe rapide 8K uniquement :
 
 ```powershell
 .\menu.ps1 -Action qualification -Quick -DryRun
@@ -101,34 +110,27 @@ Runner direct :
 .\scripts\windows\07_run_qualification.ps1 -Quick
 ```
 
-Runner Python de diagnostic :
-
-```powershell
-python .\scripts\benchmark_local.py --qwen-thinking native
-python .\scripts\benchmark_local.py --context 8192 --qwen-thinking off
-```
-
-La sélection individuelle de candidats n'existe plus dans la qualification : les trois modèles sont obligatoires.
-
-## Source de vérité
-
-Les scripts PowerShell obtiennent les modèles via `scripts/20_list_models.py`, alimenté par `config/v1/model_catalog.yaml`. Une qualification ne peut donc pas utiliser une flotte différente du routage sans modifier explicitement les contrats.
+La sélection individuelle de candidats n'existe pas dans la qualification : les trois modèles sont obligatoires.
 
 ## Mesures et progression
 
-Après chaque cas, le runner affiche une ligne opérateur avec :
+Après chaque cas, le runner affiche :
 
 - `PASS`, `CHECK_FAIL` ou `ERROR` ;
-- durée murale du cas ;
-- TTFT jusqu'au premier token de réponse finale ;
+- durée murale ;
+- `first_tok`, temps jusqu'au **premier token réellement généré** ;
+- `response_ttft`, temps jusqu'au premier token de réponse finale ;
 - tokens/s ;
 - nombre de tokens générés ;
-- volume de thinking observé en caractères, sans en stocker le contenu ;
-- estimation du temps restant fondée sur la moyenne des cas déjà terminés.
+- volume de thinking observé en caractères ;
+- estimation du temps restant.
+
+Pour un modèle reasoning en thinking natif, le premier token de thinking est bien le début réel de génération. Le gate de latence utilise donc `first_token_ms`, et non le délai jusqu'à la première partie de `message.content` après toute la réflexion.
 
 Le JSON de preuve enregistre notamment :
 
 - `first_generation_ms` ;
+- `first_token_ms` ;
 - `ttft_ms` ;
 - `wall_ms` ;
 - `eval_count` ;
@@ -142,16 +144,13 @@ Le JSON de preuve enregistre notamment :
 - `max_output_tokens` réellement appliqué ;
 - contexte demandé ;
 - résultat de chaque contrôle ;
-- durée murale totale ;
-- sortie finale brute dans les preuves locales hors Git.
-
-La comparaison B580 complète ces données avec VRAM, RAM, stabilité, erreurs et tool-calling lorsqu'ils sont réellement observés.
+- durée murale totale.
 
 ## Contextes
 
-- 8K : exigé ;
-- 16K : exigé en passe complète ;
-- 32K ou plus : uniquement après preuve que le coût KV-cache, la mémoire, le TTFT et le débit restent acceptables.
+- 8K : couverture fonctionnelle complète exigée ;
+- 16K : couverture ciblée exigée sur quatre scénarios de stress ;
+- 32K ou plus : uniquement après preuve que le coût KV-cache, la mémoire, le premier token et le débit restent acceptables.
 
 Une capacité théorique annoncée par un modèle n'est pas une capacité opérationnelle qualifiée.
 
@@ -162,7 +161,7 @@ Les seuils sont versionnés dans `config/v1/qualification_policy.yaml` :
 - aucune erreur API tolérée ;
 - taux minimal de contrôles conformes ;
 - débit médian minimal ;
-- plafond p95 du TTFT ;
+- plafond p95 du temps au premier token ;
 - seuils par contexte requis.
 
 Un succès donne au mieux `READY_FOR_MANUAL_QUALIFICATION`. Aucun script ne modifie automatiquement le catalogue ou le backend nominal.
@@ -183,15 +182,4 @@ Avant toute décision V1 ou promotion de backend, vérifier encore :
 
 ## Preuves
 
-Les résultats bruts restent sous `benchmarks/results/` et hors Git. Une synthèse publiable indique au minimum :
-
-- modèle et runtime exact ;
-- backend ;
-- versions OpenClaw/Ollama ;
-- contexte ;
-- politique de thinking appliquée ;
-- pilote GPU ;
-- protocole ;
-- date ;
-- mesures réellement observées ;
-- limites et anomalies.
+Les résultats bruts restent sous `benchmarks/results/` et hors Git. Une synthèse publiable indique au minimum le modèle, le runtime, le backend, les versions, le contexte, la politique de thinking, le pilote GPU, le protocole, la date, les mesures observées et les anomalies.

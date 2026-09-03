@@ -5,10 +5,7 @@ from statistics import median
 from typing import Any
 
 
-def _percentile(
-    values: list[float],
-    percentile: float,
-) -> float | None:
+def _percentile(values: list[float], percentile: float) -> float | None:
     if not values:
         return None
     ordered = sorted(values)
@@ -29,6 +26,15 @@ def _observed_model_aliases(payload: dict[str, Any]) -> list[str]:
         if isinstance(case, dict) and case.get("model_alias"):
             aliases.append(str(case["model_alias"]))
     return list(dict.fromkeys(aliases))
+
+
+def _case_first_token_ms(case: dict[str, Any]) -> float | None:
+    value = case.get("first_token_ms")
+    if value is None:
+        value = case.get("first_generation_ms")
+    if value is None:
+        value = case.get("ttft_ms")
+    return float(value) if value is not None else None
 
 
 def _evaluate_model(
@@ -53,10 +59,10 @@ def _evaluate_model(
         for case in selected
         if case.get("tokens_per_second")
     ]
-    ttft = [
-        float(case["ttft_ms"])
+    first_token = [
+        value
         for case in selected
-        if case.get("ttft_ms") is not None
+        if (value := _case_first_token_ms(case)) is not None
     ]
     observed_contexts = {
         int(case["context"])
@@ -67,7 +73,7 @@ def _evaluate_model(
     error_rate = _ratio(len(errors), len(selected))
     check_pass_rate = _ratio(len(passed), len(checked))
     median_tps = median(tps) if tps else None
-    p95_ttft_ms = _percentile(ttft, 0.95)
+    p95_first_token_ms = _percentile(first_token, 0.95)
     failures: list[str] = []
 
     missing_contexts = sorted(required_contexts - observed_contexts)
@@ -80,9 +86,14 @@ def _evaluate_model(
     minimum_tps = float(thresholds["min_median_tokens_per_second"])
     if median_tps is None or median_tps < minimum_tps:
         failures.append(f"median_tokens_per_second={median_tps}")
-    maximum_ttft = float(thresholds["max_p95_ttft_ms"])
-    if p95_ttft_ms is None or p95_ttft_ms > maximum_ttft:
-        failures.append(f"p95_ttft_ms={p95_ttft_ms}")
+    maximum_first_token = float(
+        thresholds.get(
+            "max_p95_first_token_ms",
+            thresholds.get("max_p95_ttft_ms", 0),
+        )
+    )
+    if p95_first_token_ms is None or p95_first_token_ms > maximum_first_token:
+        failures.append(f"p95_first_token_ms={p95_first_token_ms}")
 
     per_context = thresholds.get("per_context_min_check_pass_rate", {})
     for context_text, minimum in per_context.items():
@@ -99,6 +110,9 @@ def _evaluate_model(
         if not context_cases or rate < float(minimum):
             failures.append(f"context_{context}_check_pass_rate={rate:.3f}")
 
+    rounded_first_token = (
+        round(p95_first_token_ms, 3) if p95_first_token_ms is not None else None
+    )
     return {
         "required": required,
         "cases": len(selected),
@@ -107,9 +121,8 @@ def _evaluate_model(
         "median_tokens_per_second": (
             round(median_tps, 3) if median_tps is not None else None
         ),
-        "p95_ttft_ms": (
-            round(p95_ttft_ms, 3) if p95_ttft_ms is not None else None
-        ),
+        "p95_first_token_ms": rounded_first_token,
+        "p95_ttft_ms": rounded_first_token,
         "observed_contexts": sorted(observed_contexts),
         "automated_gate": "pass" if not failures else "fail",
         "failures": failures,
@@ -180,7 +193,7 @@ def evaluate_benchmark(
 
     ready_verdict = pass_verdict or policy["promotion"]["ready_verdict"]
     return {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "suite": observed_suite,
         "evaluation_mode": evaluation_mode,
         "evaluated_contexts": sorted(required_contexts),

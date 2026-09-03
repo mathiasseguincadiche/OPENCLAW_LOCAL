@@ -59,10 +59,10 @@ def test_qwen_quick_mode_disables_thinking_and_keeps_scenario_limit() -> None:
     assert mode == "off"
 
 
-def test_qwen_native_mode_is_bounded_without_overriding_thinking() -> None:
+def test_qwen_native_mode_is_bounded_to_768_without_disabling_thinking() -> None:
     model = {"family": "qwen"}
     limit, think, mode = BENCHMARK.resolve_generation_policy(model, 192, "native")
-    assert limit == BENCHMARK.MAX_CONFIGURED_OUTPUT_TOKENS
+    assert limit == BENCHMARK.QWEN_NATIVE_MAX_OUTPUT_TOKENS == 768
     assert think is None
     assert mode == "native"
 
@@ -111,6 +111,30 @@ def test_versioned_suite_has_safe_output_limits() -> None:
     for scenario in scenarios:
         limit = BENCHMARK.scenario_output_limit(scenario, suite)
         assert 1 <= limit <= BENCHMARK.MAX_CONFIGURED_OUTPUT_TOKENS
+
+
+def test_full_matrix_keeps_all_8k_and_only_four_targeted_16k_scenarios() -> None:
+    suite = BENCHMARK.load_yaml(ROOT / "benchmarks" / "suites" / "devops_v2.yaml")
+    policy = BENCHMARK.load_yaml(ROOT / "config" / "v1" / "qualification_policy.yaml")
+    scenarios = list(suite["scenarios"])
+    enabled_8k = [
+        scenario
+        for scenario in scenarios
+        if BENCHMARK.scenario_enabled_for_context(scenario, 8192, policy)
+    ]
+    enabled_16k = [
+        scenario
+        for scenario in scenarios
+        if BENCHMARK.scenario_enabled_for_context(scenario, 16384, policy)
+    ]
+    assert len(enabled_8k) == 12
+    assert [str(item["id"]) for item in enabled_16k] == [
+        "project-intake-analysis",
+        "kubernetes-root-cause",
+        "tool-feedback-repair-json",
+        "long-context-discipline",
+    ]
+    assert 3 * (len(enabled_8k) + len(enabled_16k)) == 48
 
 
 def test_format_duration_is_operator_friendly() -> None:

@@ -16,6 +16,7 @@ CONFIG = ROOT / "config" / "v1"
 RESULTS = ROOT / "benchmarks" / "results"
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_CONFIGURED_OUTPUT_TOKENS = 2048
+QWEN_NATIVE_MAX_OUTPUT_TOKENS = 768
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -76,7 +77,6 @@ def run_checks(output: str, checks: list[dict[str, Any]]) -> tuple[bool, list[st
         check_type = str(check["type"])
         values = list(check.get("values", []))
         passed = False
-
         if check_type == "nonempty":
             passed = bool(cleaned.strip())
         elif check_type == "contains_any":
@@ -103,7 +103,6 @@ def run_checks(output: str, checks: list[dict[str, Any]]) -> tuple[bool, list[st
                 passed = False
         else:
             raise ValueError(f"Type de contrôle inconnu: {check_type}")
-
         overall = overall and passed
         details.append(f"{check_type}:{'pass' if passed else 'fail'}")
     return overall, details
@@ -127,10 +126,7 @@ def add_synthetic_context(prompt: str, target_chars: int) -> str:
     return "INVENTAIRE SYNTHÉTIQUE:\n" + "\n".join(rows) + "\n\nCONSIGNE:\n" + prompt
 
 
-def scenario_output_limit(
-    scenario: dict[str, Any],
-    suite: dict[str, Any],
-) -> int:
+def scenario_output_limit(scenario: dict[str, Any], suite: dict[str, Any]) -> int:
     raw = scenario.get(
         "max_output_tokens",
         suite.get("default_max_output_tokens", DEFAULT_MAX_OUTPUT_TOKENS),
@@ -149,6 +145,22 @@ def scenario_output_limit(
     return limit
 
 
+def scenario_enabled_for_context(
+    scenario: dict[str, Any],
+    context: int,
+    policy: dict[str, Any],
+) -> bool:
+    required_contexts = [int(value) for value in policy["required_contexts"]]
+    baseline = min(required_contexts)
+    if context == baseline:
+        return True
+    extended = {
+        str(value)
+        for value in policy["automated_gates"].get("extended_context_scenarios", [])
+    }
+    return str(scenario.get("id")) in extended
+
+
 def resolve_generation_policy(
     model: dict[str, Any],
     scenario_limit: int,
@@ -156,15 +168,16 @@ def resolve_generation_policy(
 ) -> tuple[int, bool | None, str]:
     family = str(model.get("family") or "").casefold()
     if family == "gemma":
-        # Les gates fonctionnels bornent la réponse finale. Gemma 4 possède désormais
-        # un canal thinking configurable qui peut consommer ce budget avant content.
-        # Le raisonnement profond reste couvert par les E2E/projets représentatifs.
         return scenario_limit, False, "off"
     if family != "qwen":
         return scenario_limit, None, "not_applicable"
     if qwen_thinking == "off":
         return scenario_limit, False, "off"
-    return MAX_CONFIGURED_OUTPUT_TOKENS, None, "native"
+    bounded = min(
+        MAX_CONFIGURED_OUTPUT_TOKENS,
+        max(scenario_limit, QWEN_NATIVE_MAX_OUTPUT_TOKENS),
+    )
+    return bounded, None, "native"
 
 
 def generation_payload(
@@ -311,17 +324,14 @@ def parse_args() -> argparse.Namespace:
         choices=("native", "off"),
         default="native",
         help=(
-            "Politique Qwen: native conserve le thinking du modèle; "
+            "Politique Qwen: native conserve un thinking borné; "
             "off le désactive pour les passes rapides."
         ),
     )
     return parser.parse_args()
 
 
-def _selected_aliases(
-    args: argparse.Namespace,
-    policy: dict[str, Any],
-) -> list[str]:
+def _selected_aliases(args: argparse.Namespace, policy: dict[str, Any]) -> list[str]:
     aliases = list(args.models or policy["automated_gates"]["required_models"])
     return list(dict.fromkeys(str(alias) for alias in aliases))
 
@@ -354,7 +364,6 @@ def main() -> int:
     }
     missing: list[str] = []
     selected_models: list[dict[str, Any]] = []
-
     for alias in aliases:
         model = catalog["models"].get(alias)
         if not isinstance(model, dict):
@@ -382,133 +391,154 @@ def main() -> int:
         print(f"KO  configuration benchmark: {exc}")
         return 2
 
+    active_pairs = [
+        (context, scenario)
+        for context in contexts
+        for scenario in scenarios
+        if scenario_enabled_for_context(scenario, context, policy)
+    ]
+    if not active_pairs:
+        print("KO  aucun scénario actif pour les contextes demandés")
+        return 2
+
+    per_context = {
+        context: sum(1 for pair_context, _ in active_pairs if pair_context == context)
+        for context in contexts
+    }
+    total = len(selected_models) * len(active_pairs)
     started_at = datetime.now(UTC)
     run_started = time.perf_counter()
     cases: list[dict[str, Any]] = []
-    total = len(selected_models) * len(contexts) * len(scenarios)
     current = 0
+    context_plan = ",".join(
+        f"{context}:{per_context[context] * len(selected_models)}" for context in contexts
+    )
     print(
         "BENCHMARK_PLAN "
         f"modeles={len(selected_models)} contextes={len(contexts)} "
-        f"scenarios={len(scenarios)} cas={total} "
-        f"qwen_thinking={args.qwen_thinking} gemma_thinking=off"
+        f"scenarios_8k={len(scenarios)} cas={total} context_cases={context_plan} "
+        f"qwen_thinking={args.qwen_thinking} "
+        f"qwen_native_max={QWEN_NATIVE_MAX_OUTPUT_TOKENS} gemma_thinking=off"
     )
 
     for model in selected_models:
-        for context in contexts:
-            for scenario in scenarios:
-                current += 1
-                alias = str(model["alias"])
-                runtime_id = str(model["runtime_id"])
-                scenario_id = str(scenario["id"])
-                scenario_limit = limits[scenario_id]
-                max_output_tokens, think, thinking_mode = resolve_generation_policy(
-                    model,
-                    scenario_limit,
-                    args.qwen_thinking,
+        for context, scenario in active_pairs:
+            current += 1
+            alias = str(model["alias"])
+            runtime_id = str(model["runtime_id"])
+            scenario_id = str(scenario["id"])
+            scenario_limit = limits[scenario_id]
+            max_output_tokens, think, thinking_mode = resolve_generation_policy(
+                model,
+                scenario_limit,
+                args.qwen_thinking,
+            )
+            prompt = add_synthetic_context(
+                str(scenario["prompt"]),
+                int(scenario.get("synthetic_context_chars") or 0),
+            )
+            print(
+                f"[{current}/{total}] {alias} ctx={context} "
+                f"scenario={scenario_id} max_out={max_output_tokens} "
+                f"thinking={thinking_mode}"
+            )
+            base = {
+                "model_alias": alias,
+                "runtime_id": runtime_id,
+                "context": context,
+                "scenario_id": scenario_id,
+                "category": scenario.get("category"),
+                "scenario_max_output_tokens": scenario_limit,
+                "max_output_tokens": max_output_tokens,
+                "thinking_mode": thinking_mode,
+                "check_required": True,
+            }
+            try:
+                result = run_generation(
+                    args.endpoint,
+                    runtime_id,
+                    prompt,
+                    context,
+                    float(scenario.get("temperature", suite["default_temperature"])),
+                    max_output_tokens,
+                    args.timeout,
+                    think=think,
                 )
-                prompt = add_synthetic_context(
-                    str(scenario["prompt"]),
-                    int(scenario.get("synthetic_context_chars") or 0),
+                first_token_ms = (
+                    result["first_generation_ms"]
+                    if thinking_mode == "native"
+                    else result["ttft_ms"]
                 )
+                passed, details = run_checks(
+                    result["output"],
+                    list(scenario.get("checks", [])),
+                )
+                case_status = "ok"
+                if result["output_truncated"]:
+                    passed = False
+                    case_status = "error"
+                    details.append("output_limit:fail")
+                cases.append(
+                    {
+                        **base,
+                        **result,
+                        "first_token_ms": first_token_ms,
+                        "status": case_status,
+                        "check_passed": passed,
+                        "check_details": details,
+                    }
+                )
+                elapsed = time.perf_counter() - run_started
+                average = elapsed / current
+                eta = average * (total - current)
+                verdict = "PASS" if passed else "CHECK_FAIL"
+                limit_flag = " LIMIT" if result["output_truncated"] else ""
                 print(
-                    f"[{current}/{total}] {alias} ctx={context} "
-                    f"scenario={scenario_id} max_out={max_output_tokens} "
-                    f"thinking={thinking_mode}"
+                    f"    {verdict}{limit_flag} "
+                    f"wall={result['wall_ms'] / 1000:.1f}s "
+                    f"first_tok={_metric(first_token_ms, digits=0)}ms "
+                    f"response_ttft={_metric(result['ttft_ms'], digits=0)}ms "
+                    f"tok/s={_metric(result['tokens_per_second'])} "
+                    f"out={result['eval_count']} "
+                    f"think_chars={result['thinking_chars']} "
+                    f"reste~{format_duration(eta)}"
                 )
-                base = {
-                    "model_alias": alias,
-                    "runtime_id": runtime_id,
-                    "context": context,
-                    "scenario_id": scenario_id,
-                    "category": scenario.get("category"),
-                    "scenario_max_output_tokens": scenario_limit,
-                    "max_output_tokens": max_output_tokens,
-                    "thinking_mode": thinking_mode,
-                    "check_required": True,
-                }
-                try:
-                    result = run_generation(
-                        args.endpoint,
-                        runtime_id,
-                        prompt,
-                        context,
-                        float(
-                            scenario.get(
-                                "temperature",
-                                suite["default_temperature"],
-                            )
-                        ),
-                        max_output_tokens,
-                        args.timeout,
-                        think=think,
-                    )
-                    passed, details = run_checks(
-                        result["output"],
-                        list(scenario.get("checks", [])),
-                    )
-                    case_status = "ok"
-                    if result["output_truncated"]:
-                        passed = False
-                        case_status = "error"
-                        details.append("output_limit:fail")
-                    cases.append(
-                        {
-                            **base,
-                            **result,
-                            "status": case_status,
-                            "check_passed": passed,
-                            "check_details": details,
-                        }
-                    )
-                    elapsed = time.perf_counter() - run_started
-                    average = elapsed / current
-                    eta = average * (total - current)
-                    verdict = "PASS" if passed else "CHECK_FAIL"
-                    limit_flag = " LIMIT" if result["output_truncated"] else ""
-                    print(
-                        f"    {verdict}{limit_flag} "
-                        f"wall={result['wall_ms'] / 1000:.1f}s "
-                        f"ttft={_metric(result['ttft_ms'], digits=0)}ms "
-                        f"tok/s={_metric(result['tokens_per_second'])} "
-                        f"out={result['eval_count']} "
-                        f"think_chars={result['thinking_chars']} "
-                        f"reste~{format_duration(eta)}"
-                    )
-                except (
-                    OSError,
-                    urllib.error.URLError,
-                    TimeoutError,
-                    json.JSONDecodeError,
-                ) as exc:
-                    cases.append(
-                        {
-                            **base,
-                            "status": "error",
-                            "error": f"{type(exc).__name__}: {exc}",
-                            "check_passed": False,
-                        }
-                    )
-                    elapsed = time.perf_counter() - run_started
-                    average = elapsed / current
-                    eta = average * (total - current)
-                    print(
-                        f"    ERROR {type(exc).__name__}: {exc} "
-                        f"reste~{format_duration(eta)}"
-                    )
+            except (
+                OSError,
+                urllib.error.URLError,
+                TimeoutError,
+                json.JSONDecodeError,
+            ) as exc:
+                cases.append(
+                    {
+                        **base,
+                        "status": "error",
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "check_passed": False,
+                    }
+                )
+                elapsed = time.perf_counter() - run_started
+                average = elapsed / current
+                eta = average * (total - current)
+                print(
+                    f"    ERROR {type(exc).__name__}: {exc} "
+                    f"reste~{format_duration(eta)}"
+                )
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     finished_at = datetime.now(UTC)
     total_wall_ms = (time.perf_counter() - run_started) * 1000
     payload = {
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "suite": suite["id"],
         "started_at": started_at.isoformat(),
         "finished_at": finished_at.isoformat(),
         "endpoint": args.endpoint,
         "ollama_version": version.get("version"),
         "contexts": contexts,
+        "context_case_counts": per_context,
         "qwen_thinking": args.qwen_thinking,
+        "qwen_native_max_output_tokens": QWEN_NATIVE_MAX_OUTPUT_TOKENS,
         "gemma_thinking": "off",
         "total_wall_ms": total_wall_ms,
         "models": [
@@ -524,10 +554,7 @@ def main() -> int:
         "cases": cases,
     }
     path = RESULTS / f"benchmark_{finished_at.strftime('%Y%m%d_%H%M%S')}.json"
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     errors = sum(case["status"] != "ok" for case in cases)
     checks = sum(case.get("check_passed") is True for case in cases)
     print(f"EVIDENCE={path}")

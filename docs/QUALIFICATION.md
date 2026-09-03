@@ -33,11 +33,9 @@ Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer l
 
 Le parcours complet installe le runtime, configure le stockage local, télécharge les trois modèles, configure OpenClaw et le Gateway puis vérifie le parcours nominal.
 
-Le smoke-test Ollama utilise l'API locale **`/api/chat`** avec `stream=false`. Il ne passe plus par `ollama run`, afin d'éviter les spinners et séquences ANSI dans les transcripts. `/api/chat` sépare aussi explicitement le thinking du contenu final. Pour Qwen3.8 uniquement, le thinking est désactivé pendant ce smoke-test minimal : cette étape vérifie que le runtime répond, pas sa capacité de raisonnement profond.
+Le smoke-test Ollama utilise l'API locale **`/api/chat`** avec `stream=false`. Il ne passe pas par `ollama run`. Pour Qwen3.8 et Gemma4, le thinking est désactivé pendant ce smoke-test minimal : cette étape vérifie que le runtime répond, pas sa capacité de raisonnement profond.
 
-Après le smoke-test, `/api/ps` est interrogé pour afficher la taille réellement chargée en VRAM, la taille totale du modèle et le contexte alloué par Ollama. Cette mesure est plus utile pour diagnostiquer l'offload réel que la seule capacité théorique de la carte graphique.
-
-Après la première installation, fermer puis rouvrir PowerShell.
+Après le smoke-test, `/api/ps` est interrogé pour afficher la taille réellement chargée en VRAM, la taille totale du modèle et le contexte alloué par Ollama.
 
 ## 2. Vérification du runtime
 
@@ -56,7 +54,7 @@ Avant de poursuivre, vérifier notamment :
 
 ### VRAM Windows
 
-`Win32_VideoController.AdapterRAM` est conservé comme information secondaire uniquement : ce champ CIM peut tronquer ou mal représenter la mémoire des GPU modernes. L'audit tente d'abord de lire `HardwareInformation.MemorySize` dans le registre Windows et n'affiche une valeur de VRAM comme fiable que si cette source est disponible. Sinon la VRAM est explicitement marquée comme non déterminée de façon fiable.
+`Win32_VideoController.AdapterRAM` reste une information secondaire. L'audit privilégie `HardwareInformation.qwMemorySize`, champ QWORD 64 bits du registre Windows. Le fallback historique 32 bits n'est jamais présenté comme une mesure fiable sur un GPU moderne de plus de 4 GiB.
 
 ## 3. Gate OpenClaw E2E
 
@@ -68,7 +66,7 @@ Avant de poursuivre, vérifier notamment :
 Le gate E2E doit prouver au minimum :
 
 1. les huit agents via le Gateway ;
-2. `provider=ollama` sur le parcours nominal ;
+2. le routage local attendu ;
 3. un vrai appel d'outil ;
 4. une erreur d'outil contrôlée suivie d'une réparation ;
 5. trois exécutions locales stables ;
@@ -78,16 +76,21 @@ Les preuves sont écrites sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
 
 ## 4. Qualification automatique des trois modèles
 
-### Passe complète de référence
+### Passe complète optimisée de référence
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
-Cette passe couvre **72 cas** : 3 modèles × 2 contextes (8192 et 16384) × 12 scénarios.
+Cette passe couvre **48 cas** :
 
-Pour Qwen3.8, le thinking reste dans son mode **natif**. Le runner ne le désactive pas artificiellement dans la preuve complète. Comme le raisonnement peut consommer une part importante du budget de génération, Qwen reçoit un plafond de 2048 tokens par cas ; la génération reste donc bornée sans être coupée par les petits plafonds fonctionnels de la suite.
+- **36 cas 8K** : 3 modèles × 12 scénarios, pour conserver la couverture fonctionnelle complète ;
+- **12 cas 16K** : 3 modèles × 4 scénarios ciblés : `project-intake-analysis`, `kubernetes-root-cause`, `tool-feedback-repair-json` et `long-context-discipline`.
+
+Les tests 16K ne rejouent donc plus les tâches courtes qui n'apportent aucune information supplémentaire à contexte étendu. Le stress 16K reste obligatoire sur les tâches qui sollicitent réellement analyse, diagnostic, réparation et long contexte.
+
+Pour Qwen3.8, le thinking reste dans son mode **natif** pendant la passe complète, mais son budget est borné à **768 tokens maximum par cas** au lieu de 2048. Les scénarios conservent au minimum leur propre limite fonctionnelle. Une génération qui atteint cette borne est considérée tronquée et fait échouer le gate : le gain de temps ne repose donc pas sur l'acceptation silencieuse d'une réponse coupée.
 
 ### Passe rapide d'itération
 
@@ -96,9 +99,9 @@ Pour Qwen3.8, le thinking reste dans son mode **natif**. Le runner ne le désact
 .\menu.ps1 -Action qualification -Quick
 ```
 
-Cette passe couvre **36 cas** : les mêmes 3 modèles et 12 scénarios, uniquement à 8192 tokens. Elle désactive explicitement le thinking de Qwen3.8 afin de vérifier rapidement les formats, contrôles et performances d'inférence sans payer son raisonnement interne sur chaque scénario.
+Cette passe couvre **36 cas** : les mêmes 3 modèles et 12 scénarios, uniquement à 8192 tokens. Elle désactive le thinking de Qwen3.8 afin de vérifier rapidement formats, contrôles et performances d'inférence.
 
-Le mode Quick sert au diagnostic et aux itérations courantes ; il **ne remplace pas** la passe complète pour une décision de qualification. Un Quick réussi retourne `QUICK_DIAGNOSTIC_PASS`, jamais `READY_FOR_MANUAL_QUALIFICATION`.
+Le mode Quick sert au diagnostic et aux itérations courantes ; il **ne remplace pas** la passe complète optimisée pour une décision de qualification. Un Quick réussi retourne `QUICK_DIAGNOSTIC_PASS`, jamais `READY_FOR_MANUAL_QUALIFICATION`.
 
 Ou directement :
 
@@ -107,8 +110,6 @@ Ou directement :
 .\scripts\windows\07_run_qualification.ps1 -Quick
 ```
 
-Le runner PowerShell accepte uniquement `-DryRun` et `-Quick`. Les anciens switches de sélection de classes ou de candidats ne font plus partie du contrat.
-
 Le parcours enchaîne :
 
 1. audit host/runtime ;
@@ -116,18 +117,19 @@ Le parcours enchaîne :
 3. smoke test API de chacun ;
 4. inventaire matériel/runtime ;
 5. benchmark via `/api/chat` selon `qualification_policy.yaml` ;
-6. contextes 8K et 16K en passe complète ;
+6. couverture complète 8K et stress ciblé 16K ;
 7. évaluation des seuils versionnés.
 
 Chaque scénario possède un plafond fonctionnel `max_output_tokens`. Une génération qui atteint le budget appliqué est enregistrée comme tronquée, marquée `status=error` et fait échouer le gate puisque la politique impose `max_error_rate: 0`.
 
-Après chaque scénario, l'opérateur voit le statut, la durée, le TTFT, les tokens/s, le nombre de tokens générés, le volume de thinking observé sans son contenu, et une estimation du temps restant.
+Après chaque scénario, l'opérateur voit le statut, la durée, le temps au premier token réellement généré, le délai jusqu'à la réponse finale, les tokens/s, le nombre de tokens générés, le volume de thinking observé sans son contenu et une estimation du temps restant.
 
 ## 5. Mesures à collecter
 
 Pour chaque modèle/backend pertinent :
 
-- TTFT ;
+- temps au premier token réellement généré ;
+- délai jusqu'au premier token de réponse finale ;
 - tokens/s ;
 - durée murale ;
 - VRAM fiable ou explicitement inconnue ;
@@ -141,7 +143,9 @@ Pour chaque modèle/backend pertinent :
 - réparation après retour d'outil ;
 - comportement multimodal PDF/image lorsqu'il s'applique.
 
-Les mesures absentes restent absentes : elles ne sont jamais inventées. La trace brute du thinking n'est pas conservée par le benchmark ; seul son volume est comptabilisé.
+Pour un modèle reasoning, le gate de latence utilise le **premier token réellement généré**, y compris un token du canal thinking. Le temps jusqu'au premier token de réponse finale reste enregistré séparément mais n'est pas confondu avec la TTFT d'inférence.
+
+Les mesures absentes restent absentes : elles ne sont jamais inventées. La trace brute du thinking n'est pas conservée ; seul son volume est comptabilisé.
 
 ## 6. Comparaison des backends Intel Arc
 
@@ -151,15 +155,7 @@ Le contrat déclare :
 - `llama-cpp-sycl` — candidat ;
 - `llama-cpp-vulkan` — candidat.
 
-Comparer autant que possible le même modèle et la même quantification. Le choix doit reposer sur le compromis réel entre :
-
-- TTFT ;
-- débit ;
-- VRAM/RAM ;
-- stabilité ;
-- contexte soutenable ;
-- compatibilité OpenClaw/tool-calling ;
-- simplicité d'exploitation.
+Comparer autant que possible le même modèle et la même quantification. Le choix doit reposer sur le compromis réel entre premier token, débit, VRAM/RAM, stabilité, contexte soutenable, compatibilité OpenClaw/tool-calling et simplicité d'exploitation.
 
 Aucun backend n'est auto-promu.
 
@@ -181,7 +177,7 @@ INTAKE_READY
 -> COMPLETE
 ```
 
-Le scénario doit idéalement contenir plusieurs formats (PDF/images/Office/code) et une dépendance entre tâches permettant de vérifier l'Artifact Exchange et la resynchronisation.
+Le scénario doit idéalement contenir plusieurs formats et une dépendance entre tâches permettant de vérifier l'Artifact Exchange et la resynchronisation.
 
 ## Verdicts
 
