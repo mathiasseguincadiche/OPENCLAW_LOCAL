@@ -3,9 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
-
-from clawlocal.model_identity import capture_candidate, check_qualified, promote_candidate
 
 
 def default_root() -> Path:
@@ -17,6 +16,22 @@ def default_root() -> Path:
     return Path(os.environ.get("LOCALAPPDATA", ".")) / "OpenClawLocal"
 
 
+def _activate_repository_runtime(platform_root: Path) -> None:
+    if os.name == "nt":
+        managed = platform_root / "runtime" / "venv" / "Scripts" / "python.exe"
+        if managed.is_file() and Path(sys.executable).resolve() != managed.resolve():
+            os.execv(
+                str(managed),
+                [str(managed), str(Path(__file__).resolve()), *sys.argv[1:]],
+            )
+
+    repo_root = Path(__file__).resolve().parents[1]
+    src = repo_root / "src"
+    src_text = str(src)
+    if src_text not in sys.path:
+        sys.path.insert(0, src_text)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Verrouille l'identité exacte des modèles qualifiés."
@@ -25,6 +40,13 @@ def main() -> int:
     parser.add_argument("--action", choices=["capture", "promote", "check"], required=True)
     parser.add_argument("--allow-unqualified", action="store_true")
     args = parser.parse_args()
+
+    _activate_repository_runtime(args.root)
+    from clawlocal.model_identity import (
+        capture_candidate,
+        check_qualified,
+        promote_candidate,
+    )
 
     if args.action == "capture":
         path = capture_candidate(args.root)

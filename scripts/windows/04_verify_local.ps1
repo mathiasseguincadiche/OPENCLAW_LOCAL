@@ -12,6 +12,12 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
 $ModelIdentity = Join-Path $RepoRoot 'scripts\48_model_identity_lock.py'
 $OllamaEndpoint = 'http://127.0.0.1:11434'
+$PythonRuntime = Join-Path $PSScriptRoot 'lib\python_runtime.ps1'
+
+if (-not (Test-Path -LiteralPath $PythonRuntime)) {
+    throw "Helper runtime Python géré introuvable: $PythonRuntime"
+}
+. $PythonRuntime
 
 function Get-PlatformRoot {
     if ($env:OPENCLAW_LOCAL_ROOT) {
@@ -25,8 +31,21 @@ function Get-PlatformRoot {
 
 $PlatformRoot = Get-PlatformRoot
 
+if ($DryRun) {
+    $DisplayModel = if ($Model) { $Model } else { '<required model from catalog>' }
+    Write-Host ('[DRY-RUN] Managed OPENCLAW_LOCAL Python is mandatory for catalog and model identity checks.')
+    Write-Host ('[DRY-RUN] Verify Ollama and run /api/chat smoke test with {0}.' -f $DisplayModel)
+    Write-Host '[DRY-RUN] Disable thinking for the minimal runtime smoke test.'
+    Write-Host '[DRY-RUN] Read /api/ps to expose the actual VRAM-loaded share.'
+    Write-Host '[DRY-RUN] Check digest, format and quantization against qualified identity.'
+    exit 0
+}
+
+$ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
+Write-Host "OK  Runtime Python géré: $ManagedPython"
+
 if (-not $Model) {
-    $RequiredModels = @(& python $ListModels --provider ollama --required)
+    $RequiredModels = @(& $ManagedPython $ListModels --provider ollama --required)
     if ($LASTEXITCODE -ne 0) {
         throw 'Unable to read model_catalog.yaml.'
     }
@@ -35,14 +54,6 @@ if (-not $Model) {
         throw 'No required Ollama model found in model_catalog.yaml.'
     }
     $Model = $RequiredModels[0]
-}
-
-if ($DryRun) {
-    Write-Host ('[DRY-RUN] Verify Ollama and run /api/chat smoke test with {0}.' -f $Model)
-    Write-Host '[DRY-RUN] Disable thinking for the minimal runtime smoke test.'
-    Write-Host '[DRY-RUN] Read /api/ps to expose the actual VRAM-loaded share.'
-    Write-Host '[DRY-RUN] Check digest, format and quantization against qualified identity.'
-    exit 0
 }
 
 $TagRequest = @{
@@ -166,7 +177,7 @@ catch {
     Write-Host ('INFO Ollama memory metrics unavailable for {0}.' -f $Model)
 }
 
-& python $ModelIdentity --root $PlatformRoot --action check --allow-unqualified
+& $ManagedPython $ModelIdentity --root $PlatformRoot --action check --allow-unqualified
 if ($LASTEXITCODE -ne 0) {
     throw 'Qualified model identity is INVALIDATED; full qualification is required.'
 }
