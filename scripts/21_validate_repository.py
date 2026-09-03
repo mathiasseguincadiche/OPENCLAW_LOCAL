@@ -24,6 +24,7 @@ REQUIRED = {
     "config/v1/model_routing.yaml",
     "config/v1/escalation_policy.yaml",
     "config/v1/qualification_policy.yaml",
+    "config/v1/release_readiness.yaml",
     "config/v1/role_matrix.yaml",
     "config/v1/security.yaml",
     "config/v1/tool_policy.yaml",
@@ -95,6 +96,7 @@ REQUIRED = {
     "scripts/windows/10_test_openclaw_e2e.ps1",
     "scripts/windows/11_install_full.ps1",
     "src/clawlocal/versioning.py",
+    "src/clawlocal/release_readiness.py",
     "src/clawlocal/openclaw_config.py",
     "src/clawlocal/runtime.py",
     "src/clawlocal/routing.py",
@@ -119,6 +121,7 @@ REQUIRED = {
     "tests/test_finops.py",
     "tests/test_sbom.py",
     "tests/test_versioning.py",
+    "tests/test_release_readiness.py",
     "tests/powershell/Repository.Tests.ps1",
 }
 
@@ -179,6 +182,7 @@ def main() -> int:
     print("OK  Project Orchestrator fail-closed présent")
     print("OK  Project/Web/FinOps/backends/diagrammes présents")
     print("OK  Intake/Pédagogie/Accessibilité/Publication/Télémétrie présents")
+    print("OK  V1 Release Readiness fail-closed présent")
     print("Verdict: CONFORME")
     return 0
 
