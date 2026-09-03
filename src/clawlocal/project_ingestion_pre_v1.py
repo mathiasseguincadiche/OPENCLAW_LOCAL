@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import mimetypes
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +13,10 @@ from clawlocal.safe_archive import safe_extract_zip
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     temporary.replace(path)
 
 
@@ -39,7 +41,7 @@ def _member_manifest_digest(members: list[dict[str, Any]]) -> str:
             (
                 f"{member['member_path']}\0{member['sha256']}\0{member['size']}\0"
                 f"{member['kind']}\n"
-            ).encode("utf-8")
+            ).encode()
         )
     return digest.hexdigest()
 
@@ -71,7 +73,11 @@ def ensure_secure_generic_zip_ingestion(project: Path) -> Path:
         manifest_path = document_root / "archive_manifest.json"
         guide_path = document_root / "archive.md"
 
-        if raw.get("kind") == "zip" and manifest_path.is_file() and extraction_root.is_dir():
+        if (
+            raw.get("kind") == "zip"
+            and manifest_path.is_file()
+            and extraction_root.is_dir()
+        ):
             continue
         if extraction_root.exists():
             import shutil
@@ -81,7 +87,9 @@ def ensure_secure_generic_zip_ingestion(project: Path) -> Path:
         enriched: list[dict[str, Any]] = []
         for member in members:
             item = dict(member)
-            member_path = extraction_root / Path(*str(member["member_path"]).split("/"))
+            member_path = extraction_root / Path(
+                *str(member["member_path"]).split("/")
+            )
             item["derived_path"] = member_path.relative_to(project).as_posix()
             enriched.append(item)
 
@@ -105,14 +113,22 @@ def ensure_secure_generic_zip_ingestion(project: Path) -> Path:
             f"- Digest du manifeste membres : `{manifest['members_sha256']}`",
             "- Archives imbriquées : inventoriées mais jamais extraites récursivement.",
             "",
-            "Les membres sont des représentations dérivées. L'archive originale reste la source de vérité.",
+            (
+                "Les membres sont des représentations dérivées. "
+                "L'archive originale reste la source de vérité."
+            ),
             "",
             "| Membre | Type | Taille | SHA-256 |",
             "|---|---|---:|---|",
         ]
         for member in enriched:
             lines.append(
-                f"| `{member['member_path']}` | {member['kind']} | {member['size']} | `{member['sha256']}` |"
+                "| `{path}` | {kind} | {size} | `{digest}` |".format(
+                    path=member["member_path"],
+                    kind=member["kind"],
+                    size=member["size"],
+                    digest=member["sha256"],
+                )
             )
         guide_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -174,13 +190,18 @@ def validate_source_coverage_pre_v1(
         if document_id in normalized:
             raise ValueError(f"source_coverage: document dupliqué: {document_id}")
         if status not in allowed_statuses:
-            raise ValueError(f"source_coverage: statut invalide pour {document_id}: {status}")
+            raise ValueError(
+                f"source_coverage: statut invalide pour {document_id}: {status}"
+            )
         if method not in allowed_methods:
-            raise ValueError(f"source_coverage: méthode invalide pour {document_id}: {method}")
+            raise ValueError(
+                f"source_coverage: méthode invalide pour {document_id}: {method}"
+            )
         expected_method = _expected_method(expected[document_id])
         if method != expected_method:
             raise ValueError(
-                f"source_coverage: méthode {method} incompatible avec {document_id}; attendu: {expected_method}"
+                f"source_coverage: méthode {method} incompatible avec {document_id}; "
+                f"attendu: {expected_method}"
             )
         normalized[document_id] = {
             "document_id": document_id,
@@ -198,8 +219,11 @@ def validate_source_coverage_pre_v1(
         if item["status"] != "UNREADABLE":
             continue
         source_path = item["path"]
-        if document_id.casefold() not in missing_text and source_path.casefold() not in missing_text:
+        document_missing = document_id.casefold() in missing_text
+        source_missing = source_path.casefold() in missing_text
+        if not document_missing and not source_missing:
             raise ValueError(
-                f"source_coverage: {document_id} UNREADABLE doit aussi apparaître dans missing_information"
+                f"source_coverage: {document_id} UNREADABLE doit aussi apparaître "
+                "dans missing_information"
             )
     return [normalized[key] for key in sorted(normalized)]
