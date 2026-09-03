@@ -39,7 +39,9 @@ jobs:
         run: python scripts/45_validate_model_fleet.py
       - name: Validate transversal pedagogy
         run: python scripts/46_validate_transversal_pedagogy.py
-      - name: Validate SemVer tag
+      - name: Validate pre-V1 hardening
+        run: python scripts/47_validate_pre_v1_hardening.py
+      - name: Validate SemVer tag and V1 readiness
         run: python scripts/24_validate_release.py --tag "${GITHUB_REF_NAME}"
       - name: Ruff
         run: ruff check src tests scripts
@@ -66,7 +68,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1 # v7
       - name: Install PowerShell quality modules
         shell: pwsh
         run: |
