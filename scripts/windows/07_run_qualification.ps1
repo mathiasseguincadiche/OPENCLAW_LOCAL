@@ -13,6 +13,17 @@ $Inventory = Join-Path $PSScriptRoot '06_collect_inventory.ps1'
 $Benchmark = Join-Path $PSScriptRoot '05_benchmark.ps1'
 $Evaluate = Join-Path $RepoRoot 'scripts\23_evaluate_benchmark.py'
 $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
+. (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
+
+function Get-PlatformRoot {
+    if ($env:OPENCLAW_LOCAL_ROOT) {
+        return $env:OPENCLAW_LOCAL_ROOT
+    }
+    if (Test-Path -LiteralPath 'E:\') {
+        return 'E:\AI\OpenClawLocal'
+    }
+    return (Join-Path $env:LOCALAPPDATA 'OpenClawLocal')
+}
 
 function Assert-ExitCode([string]$Step) {
     if ($LASTEXITCODE -ne 0) {
@@ -22,6 +33,7 @@ function Assert-ExitCode([string]$Step) {
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Qualification locale stricte, sans appel cloud :'
+    Write-Host '  runtime Python: environnement géré OPENCLAW_LOCAL avec PyYAML vérifié'
     Write-Host '  1. audit host avec VRAM fiable si HardwareInformation.qwMemorySize est disponible'
     Write-Host '  2. smoke tests API sans spinner des trois modèles required du catalogue'
     Write-Host '  3. inventaire matériel/runtime'
@@ -39,11 +51,15 @@ if ($DryRun) {
     exit 0
 }
 
+$PlatformRoot = Get-PlatformRoot
+$ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
+Write-Host "OK  Runtime Python géré: $ManagedPython"
+
 & $Audit
 Assert-ExitCode 'Audit host'
 
 $Models = @(
-    & python $ListModels --provider ollama --required
+    & $ManagedPython $ListModels --provider ollama --required
 )
 Assert-ExitCode 'Lecture du catalogue modèles'
 $Models = @($Models | Where-Object { $_ -and $_.Trim() })
@@ -63,13 +79,13 @@ Assert-ExitCode 'Inventaire'
 Assert-ExitCode 'Benchmark local'
 
 if ($Quick) {
-    & python $Evaluate --quick
+    & $ManagedPython $Evaluate --quick
     Assert-ExitCode 'Évaluation diagnostic rapide 8K'
     Write-Host 'VERDICT: QUICK_DIAGNOSTIC_PASS; PASSE COMPLETE 8K+16K ENCORE REQUISE POUR QUALIFICATION.'
     exit 0
 }
 
-& python $Evaluate
+& $ManagedPython $Evaluate
 Assert-ExitCode 'Évaluation automatique complète'
 
 Write-Host 'VERDICT: GATE AUTOMATIQUE PASSÉ POUR LES TROIS MODÈLES; QUALIFICATION MANUELLE ENCORE REQUISE.'

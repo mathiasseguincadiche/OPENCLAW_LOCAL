@@ -19,6 +19,20 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Verify | Should -Not -Match '& ollama run'
     }
 
+    It 'exécute benchmark et évaluation avec le Python géré OPENCLAW_LOCAL' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        foreach ($RelativePath in @(
+            'scripts\windows\05_benchmark.ps1',
+            'scripts\windows\07_run_qualification.ps1'
+        )) {
+            $Script = Get-Content -Raw -LiteralPath (Join-Path $TestRepoRoot $RelativePath)
+            $Script | Should -Match 'python_runtime\.ps1'
+            $Script | Should -Match 'Enable-ClawLocalManagedPython'
+            $Script | Should -Match '& \$ManagedPython'
+            $Script | Should -Not -Match '&\s+python(?:\.exe)?\b'
+        }
+    }
+
     It 'transmet Quick au benchmark depuis le menu' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $TestRepoRoot 'menu.ps1') `
@@ -28,6 +42,7 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Text | Should -Match '--context 8192'
         $Text | Should -Match '--qwen-thinking off'
         $Text | Should -Match '36 cas'
+        $Text | Should -Match 'Python géré OPENCLAW_LOCAL'
     }
 
     It 'transmet Quick à la qualification depuis le menu' {
@@ -39,6 +54,7 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Text | Should -Match 'mode QUICK'
         $Text | Should -Match 'thinking Qwen désactivé'
         $Text | Should -Match '36 cas'
+        $Text | Should -Match 'environnement géré OPENCLAW_LOCAL'
     }
 }
 

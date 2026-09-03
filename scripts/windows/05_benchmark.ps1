@@ -8,6 +8,17 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Benchmark = Join-Path $RepoRoot 'scripts\benchmark_local.py'
+. (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
+
+function Get-PlatformRoot {
+    if ($env:OPENCLAW_LOCAL_ROOT) {
+        return $env:OPENCLAW_LOCAL_ROOT
+    }
+    if (Test-Path -LiteralPath 'E:\') {
+        return 'E:\AI\OpenClawLocal'
+    }
+    return (Join-Path $env:LOCALAPPDATA 'OpenClawLocal')
+}
 
 $BenchmarkArgs = @($Benchmark)
 if ($Quick) {
@@ -18,7 +29,7 @@ else {
 }
 
 if ($DryRun) {
-    Write-Host "[DRY-RUN] python $($BenchmarkArgs -join ' ')"
+    Write-Host "[DRY-RUN] Python géré OPENCLAW_LOCAL -> $($BenchmarkArgs -join ' ')"
     Write-Host '[DRY-RUN] Les trois modèles requis et la suite sont lus depuis les contrats YAML.'
     Write-Host '[DRY-RUN] Chaque scénario borne sa sortie avec max_output_tokens.'
     Write-Host '[DRY-RUN] Gemma 4: thinking désactivé pour préserver le budget de réponse finale des gates fonctionnels.'
@@ -32,7 +43,11 @@ if ($DryRun) {
     exit 0
 }
 
-& python @BenchmarkArgs
+$PlatformRoot = Get-PlatformRoot
+$ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
+Write-Host "OK  Runtime Python géré: $ManagedPython"
+
+& $ManagedPython @BenchmarkArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Benchmark local en échec (code $LASTEXITCODE)."
 }
