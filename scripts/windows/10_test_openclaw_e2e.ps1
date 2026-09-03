@@ -24,7 +24,7 @@ $AgentIds = @(
     'architecte-solutions',
     'redacteur-technique',
     'auditeur-qualite',
-    # Devstral reste résident pour les probes outils qui suivent.
+    # Qwen Coder reste résident pour les probes outils qui suivent.
     'ingenieur-devops'
 )
 $ToolAgentId = 'ingenieur-devops'
@@ -380,9 +380,9 @@ if ($DryRun) {
         "probes ciblés ${TimeoutSeconds}s; réparation multi-outils ${RepairTimeoutSeconds}s."
     )
     Write-Host '[DRY-RUN] échec applicatif: payload JSON sauvegardé immédiatement dans proofs.'
-    Write-Host '[DRY-RUN] smokes groupés par modèle; Devstral en dernier pour rester résident avant tool-calling.'
+    Write-Host '[DRY-RUN] smokes groupés par modèle; Qwen Coder en dernier pour rester résident avant tool-calling.'
     if ($Backend -eq 'b580-hybrid') {
-        Write-Host '[DRY-RUN] Qwen -> Ollama; Gemma/Devstral -> intel-vulkan; tool-call Devstral/Vulkan obligatoire.'
+        Write-Host '[DRY-RUN] Qwen 3.5 -> Ollama; Gemma 3/Qwen Coder -> intel-vulkan; tool-call Qwen Coder/Vulkan obligatoire.'
     }
     Write-Host '[DRY-RUN] tool-calling via le modèle primaire réellement routé pour ingenieur-devops.'
     Write-Host '[DRY-RUN] compatibilité CLI OpenClaw 2026.7.1-2: agent --agent/--model/--message.'
@@ -478,7 +478,7 @@ Write-Host "E2E  Modèle outils=$ToolModelRef provider=$ToolProvider"
 Write-Host "E2E  Scratch borné=$ScratchRoot"
 
 if ($Backend -eq 'b580-hybrid') {
-    $ExpectedHybridToolRef = 'intel-vulkan/devstral-small-2:24B'
+    $ExpectedHybridToolRef = 'intel-vulkan/qwen2.5-coder:14b-instruct-q4_K_M'
     if ($ToolModelRef -ne $ExpectedHybridToolRef) {
         throw (
             'Routage hybride inattendu pour ingenieur-devops. ' +
@@ -505,7 +505,7 @@ if (-not $GatewayReadiness.ready) {
 Write-Host 'E2E  PASS  Gateway readiness'
 
 $Evidence = [ordered]@{
-    schema_version = '1.5.0'
+    schema_version = '1.6.0'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     platform_root = $PlatformRoot
     backend = $Backend
@@ -661,7 +661,7 @@ Ne fais aucune vérification supplémentaire.
         $null = Write-OpenClawFailureEvidence -Payload $VulkanResult `
             -Description 'Tool-calling OpenClaw/intel-vulkan marqueur absent' `
             -FailureEvidenceRoot $ProofsRoot
-        throw "Devstral/Vulkan n'a pas créé vulkan-tool-ok.txt. Réponse modèle=$VulkanText"
+        throw "Qwen Coder/Vulkan n'a pas créé vulkan-tool-ok.txt. Réponse modèle=$VulkanText"
     }
     if ((Get-Content -Raw -LiteralPath $VulkanMarker).Trim() -ne 'VULKAN_TOOL_OK') {
         throw 'Le contenu de vulkan-tool-ok.txt est incorrect.'
