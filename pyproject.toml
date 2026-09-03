@@ -12,8 +12,8 @@ dependencies = ["PyYAML>=6.0.2,<7"]
 [project.optional-dependencies]
 dev = [
   "mypy>=1.15,<3",
-  "pytest>=8.3,<9",
-  "pytest-cov>=6,<7",
+  "pytest>=8.3,<10",
+  "pytest-cov>=6,<8",
   "ruff>=0.9,<1",
   "types-PyYAML>=6.0.12,<7",
 ]
