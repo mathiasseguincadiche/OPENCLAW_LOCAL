@@ -28,6 +28,8 @@ EXPECTED_PRIMARY = {
     "auditeur-qualite": "gemma-deep",
 }
 
+# Matching is deliberately case-insensitive below so llama.cpp-normalized IDs
+# such as :27B/:26B/:24B cannot bypass the retired-runtime gate.
 FORBIDDEN_ACTIVE_RUNTIME_IDS = (
     "qwen3.8:27b",
     "gemma4:26b",
@@ -105,6 +107,18 @@ def read_required(path: str, failures: list[str]) -> str:
         failures.append(f"fichier actif attendu absent: {path}")
         return ""
     return target.read_text(encoding="utf-8")
+
+
+def active_model_contract_files() -> tuple[str, ...]:
+    files = list(ACTIVE_MODEL_TEXT_FILES)
+    pester_root = ROOT / "tests" / "powershell"
+    if not pester_root.is_dir():
+        return tuple(files)
+    files.extend(
+        path.relative_to(ROOT).as_posix()
+        for path in sorted(pester_root.glob("*.ps1"))
+    )
+    return tuple(files)
 
 
 def main() -> int:
@@ -228,10 +242,11 @@ def main() -> int:
     if 'model.get("nominal_context_tokens", 8192)' not in openclaw_source:
         failures.append("OpenClaw: contexte nominal par modèle non câblé")
 
-    for relative in ACTIVE_MODEL_TEXT_FILES:
+    for relative in active_model_contract_files():
         text = read_required(relative, failures)
+        folded_text = text.casefold()
         for runtime_id in FORBIDDEN_ACTIVE_RUNTIME_IDS:
-            if runtime_id in text:
+            if runtime_id.casefold() in folded_text:
                 failures.append(f"{relative}: ancien modèle local encore actif: {runtime_id}")
 
     for relative in DOCUMENTATION_FILES:
@@ -292,7 +307,7 @@ def main() -> int:
     print("- Gemma 3 12B Q4_K_M: architecture/rédaction/audit/multimodal")
     print("- Qwen 2.5 Coder 14B Q4_K_M: DevOps/software engineering")
     print("- contexte nominal 8K; 16K reste soumis à qualification matérielle")
-    print("- aucun runtime legacy dans les surfaces actives")
+    print("- aucun runtime legacy dans les surfaces actives ou tests Pester")
     print("- aucune commande de qualification legacy dans la documentation active")
     print("- OLLAMA_MODELS est câblé vers la racine gérée")
     print("- sauvegarde/restauration opérationnelles documentées")
