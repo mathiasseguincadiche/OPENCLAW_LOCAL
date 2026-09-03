@@ -25,20 +25,33 @@ def _load_json(path: Path) -> dict[str, Any]:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     temporary.replace(path)
 
 
 def _text(value: Any) -> str:
     if isinstance(value, dict):
-        for key in ("statement", "description", "text", "objective", "name", "title"):
+        for key in (
+            "statement",
+            "description",
+            "text",
+            "objective",
+            "name",
+            "title",
+        ):
             candidate = str(value.get(key, "")).strip()
             if candidate:
                 return candidate
     return str(value).strip()
 
 
-def normalize_analysis_requirements(project: Path, payload: dict[str, Any]) -> dict[str, Any]:
+def normalize_analysis_requirements(
+    project: Path,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
     normalized = dict(payload)
     index = load_ingestion_index(project)
     known_documents = {
@@ -54,7 +67,9 @@ def normalize_analysis_requirements(project: Path, payload: dict[str, Any]) -> d
         assert isinstance(raw_requirements, list)
         for position, raw in enumerate(raw_requirements, start=1):
             if not isinstance(raw, dict):
-                raise ValueError("analyse: requirements doit contenir uniquement des objets")
+                raise ValueError(
+                    "analyse: requirements doit contenir uniquement des objets"
+                )
             requirement_id = str(raw.get("id") or f"REQ-{position:03d}").upper().strip()
             if not _REQ_RE.fullmatch(requirement_id):
                 raise ValueError(f"analyse: requirement id invalide: {requirement_id}")
@@ -66,8 +81,12 @@ def normalize_analysis_requirements(project: Path, payload: dict[str, Any]) -> d
             if not isinstance(source_document_ids, list) or any(
                 not isinstance(item, str) for item in source_document_ids
             ):
-                raise ValueError(f"analyse: {requirement_id}.source_document_ids invalide")
-            if not isinstance(source_refs, list) or any(not isinstance(item, str) for item in source_refs):
+                raise ValueError(
+                    f"analyse: {requirement_id}.source_document_ids invalide"
+                )
+            if not isinstance(source_refs, list) or any(
+                not isinstance(item, str) for item in source_refs
+            ):
                 raise ValueError(f"analyse: {requirement_id}.source_refs invalide")
             unknown_documents = sorted(set(source_document_ids) - known_documents)
             if unknown_documents:
@@ -79,7 +98,8 @@ def normalize_analysis_requirements(project: Path, payload: dict[str, Any]) -> d
                 {
                     "id": requirement_id,
                     "statement": statement,
-                    "type": str(raw.get("type", "functional")).strip() or "functional",
+                    "type": str(raw.get("type", "functional")).strip()
+                    or "functional",
                     "priority": str(raw.get("priority", "must")).strip() or "must",
                     "source_document_ids": sorted(set(source_document_ids)),
                     "source_refs": list(dict.fromkeys(source_refs)),
@@ -104,7 +124,9 @@ def normalize_analysis_requirements(project: Path, payload: dict[str, Any]) -> d
                         "type": category.rstrip("s"),
                         "priority": "must",
                         "source_document_ids": [],
-                        "source_refs": [f"project_analysis.{category}[{position - 1}]"],
+                        "source_refs": [
+                            f"project_analysis.{category}[{position - 1}]"
+                        ],
                         "acceptance_hint": "",
                     }
                 )
@@ -119,7 +141,9 @@ def normalize_analysis_requirements(project: Path, payload: dict[str, Any]) -> d
         raise ValueError("analyse: aucune exigence traçable n'a pu être établie")
 
     normalized["requirements"] = requirements
-    normalized["requirements_origin"] = "explicit" if explicit else "derived_compatibility"
+    normalized["requirements_origin"] = (
+        "explicit" if explicit else "derived_compatibility"
+    )
     normalized["requirements_schema_version"] = "1.0.0"
     return normalized
 
@@ -140,18 +164,23 @@ def validate_plan_requirement_links(project: Path, plan: dict[str, Any]) -> None
         if not isinstance(task, dict):
             continue
         refs = task.get("requirement_ids", [])
-        if not isinstance(refs, list) or any(not isinstance(item, str) for item in refs):
+        if not isinstance(refs, list) or any(
+            not isinstance(item, str) for item in refs
+        ):
             raise ValueError(f"plan: {task.get('id', '?')}.requirement_ids invalide")
         unknown = sorted(set(refs) - known)
         if unknown:
             raise ValueError(
-                f"plan: {task.get('id', '?')} référence des exigences inconnues: " + ", ".join(unknown)
+                f"plan: {task.get('id', '?')} référence des exigences inconnues: "
+                + ", ".join(unknown)
             )
         mapped.update(refs)
     if analysis.get("requirements_origin") == "explicit":
         missing = sorted(known - mapped)
         if missing:
-            raise ValueError("plan: exigences non affectées à une tâche: " + ", ".join(missing))
+            raise ValueError(
+                "plan: exigences non affectées à une tâche: " + ", ".join(missing)
+            )
 
 
 def _latest_results(project: Path) -> dict[str, dict[str, Any]]:
@@ -167,7 +196,9 @@ def _latest_results(project: Path) -> dict[str, dict[str, Any]]:
         if not task_id:
             continue
         previous = latest.get(task_id)
-        if previous is None or int(raw.get("attempt", 0)) >= int(previous.get("attempt", 0)):
+        if previous is None or int(raw.get("attempt", 0)) >= int(
+            previous.get("attempt", 0)
+        ):
             latest[task_id] = raw
     return latest
 
@@ -177,7 +208,11 @@ def refresh_traceability_matrix(project: Path) -> Path:
     plan_path = project / "context" / "project_plan.json"
     plan = _load_json(plan_path) if plan_path.is_file() else {"tasks": []}
     assignments_path = project / "context" / "task_assignments.json"
-    assignments = _load_json(assignments_path) if assignments_path.is_file() else {"tasks": []}
+    assignments = (
+        _load_json(assignments_path)
+        if assignments_path.is_file()
+        else {"tasks": []}
+    )
     task_status = {
         str(item.get("task_id")): str(item.get("status", "PENDING"))
         for item in assignments.get("tasks", [])
@@ -191,7 +226,11 @@ def refresh_traceability_matrix(project: Path) -> Path:
         if not isinstance(requirement, dict):
             continue
         requirement_id = str(requirement.get("id", ""))
-        linked = [task for task in tasks if requirement_id in task.get("requirement_ids", [])]
+        linked = [
+            task
+            for task in tasks
+            if requirement_id in task.get("requirement_ids", [])
+        ]
         linked_ids = [str(task.get("id", "")) for task in linked]
         outputs: list[str] = []
         acceptance: list[str] = []
@@ -201,13 +240,17 @@ def refresh_traceability_matrix(project: Path) -> Path:
         for task in linked:
             task_id = str(task.get("id", ""))
             outputs.extend(str(value) for value in task.get("expected_outputs", []))
-            acceptance.extend(str(value) for value in task.get("acceptance_criteria", []))
+            acceptance.extend(
+                str(value) for value in task.get("acceptance_criteria", [])
+            )
             statuses[task_id] = task_status.get(task_id, "PENDING")
             result = latest.get(task_id, {})
             evidence_file = str(result.get("evidence_file", "")).strip()
             if evidence_file:
                 evidence.append(evidence_file)
-            observed_outputs.extend(str(value) for value in result.get("collected_outputs", []))
+            observed_outputs.extend(
+                str(value) for value in result.get("collected_outputs", [])
+            )
         if not linked:
             verdict = "UNMAPPED"
         elif any(status == "FAIL" for status in statuses.values()):
@@ -236,13 +279,21 @@ def refresh_traceability_matrix(project: Path) -> Path:
 
     validation_path = project / "evidence" / "validation_report.json"
     review_path = project / "evidence" / "review_report.json"
+    validation_verdict = (
+        _load_json(validation_path).get("verdict")
+        if validation_path.is_file()
+        else None
+    )
+    review_verdict = (
+        _load_json(review_path).get("verdict") if review_path.is_file() else None
+    )
     payload = {
         "schema_version": "1.0.0",
         "generated_at": _now(),
         "requirements_origin": analysis.get("requirements_origin", "unknown"),
         "rows": rows,
-        "validation_verdict": _load_json(validation_path).get("verdict") if validation_path.is_file() else None,
-        "review_verdict": _load_json(review_path).get("verdict") if review_path.is_file() else None,
+        "validation_verdict": validation_verdict,
+        "review_verdict": review_verdict,
     }
     target = project / "context" / "traceability" / "requirements_matrix.json"
     _write_json(target, payload)
@@ -263,7 +314,8 @@ def refresh_traceability_matrix(project: Path) -> Path:
                 verdict=str(row["verdict"]),
             )
         )
-    (target.parent / "REQUIREMENTS_TRACEABILITY.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    report = target.parent / "REQUIREMENTS_TRACEABILITY.md"
+    report.write_text("\n".join(md) + "\n", encoding="utf-8")
     return target
 
 
@@ -281,5 +333,7 @@ def traceability_failures(project: Path, *, require_completed: bool) -> list[str
         if verdict == "UNMAPPED":
             failures.append(f"{requirement_id}: aucune tâche associée")
         if require_completed and verdict != "PASS":
-            failures.append(f"{requirement_id}: verdict de traçabilité {verdict}, PASS requis")
+            failures.append(
+                f"{requirement_id}: verdict de traçabilité {verdict}, PASS requis"
+            )
     return failures
