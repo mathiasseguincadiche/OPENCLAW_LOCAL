@@ -35,7 +35,7 @@ if ($DryRun) {
     $DisplayModel = if ($Model) { $Model } else { '<required model from catalog>' }
     Write-Host ('[DRY-RUN] Managed OPENCLAW_LOCAL Python is mandatory for catalog and model identity checks.')
     Write-Host ('[DRY-RUN] Verify Ollama and run /api/chat smoke test with {0}.' -f $DisplayModel)
-    Write-Host '[DRY-RUN] Disable thinking for the minimal runtime smoke test.'
+    Write-Host '[DRY-RUN] Disable Qwen thinking for the minimal runtime smoke test.'
     Write-Host '[DRY-RUN] Read /api/ps to expose the actual VRAM-loaded share.'
     Write-Host '[DRY-RUN] Check digest, format and quantization against qualified identity.'
     exit 0
@@ -94,7 +94,7 @@ $RequestBody = [ordered]@{
         num_predict = 64
     }
 }
-if ($Model -like 'qwen3.8:*' -or $Model -like 'gemma4:*') {
+if ($Model -like 'qwen3.5:*') {
     $RequestBody.think = $false
 }
 $Body = $RequestBody | ConvertTo-Json -Depth 6 -Compress
