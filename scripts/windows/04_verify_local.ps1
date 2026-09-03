@@ -10,36 +10,51 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
+$ModelIdentity = Join-Path $RepoRoot 'scripts\48_model_identity_lock.py'
 $OllamaEndpoint = 'http://127.0.0.1:11434'
 
+function Get-PlatformRoot {
+    if ($env:OPENCLAW_LOCAL_ROOT) {
+        return $env:OPENCLAW_LOCAL_ROOT
+    }
+    if (Test-Path -LiteralPath 'E:\') {
+        return 'E:\AI\OpenClawLocal'
+    }
+    return (Join-Path $env:LOCALAPPDATA 'OpenClawLocal')
+}
+
+$PlatformRoot = Get-PlatformRoot
+
 if (-not $Model) {
-    $RequiredModels = @(
-        & python $ListModels --provider ollama --required
-    )
+    $RequiredModels = @(& python $ListModels --provider ollama --required)
     if ($LASTEXITCODE -ne 0) {
-        throw 'Impossible de lire model_catalog.yaml.'
+        throw 'Unable to read model_catalog.yaml.'
     }
     $RequiredModels = @($RequiredModels | Where-Object { $_ -and $_.Trim() })
     if ($RequiredModels.Count -eq 0) {
-        throw 'Aucun modèle required Ollama dans model_catalog.yaml.'
+        throw 'No required Ollama model found in model_catalog.yaml.'
     }
     $Model = $RequiredModels[0]
 }
 
 if ($DryRun) {
-    Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test /api/chat sans spinner avec $Model."
-    Write-Host '[DRY-RUN] Thinking désactivé pour les modèles de raisonnement pendant ce smoke runtime minimal.'
-    Write-Host '[DRY-RUN] Lire ensuite /api/ps pour exposer la part réellement chargée en VRAM.'
+    Write-Host ('[DRY-RUN] Verify Ollama and run /api/chat smoke test with {0}.' -f $Model)
+    Write-Host '[DRY-RUN] Disable thinking for the minimal runtime smoke test.'
+    Write-Host '[DRY-RUN] Read /api/ps to expose the actual VRAM-loaded share.'
+    Write-Host '[DRY-RUN] Check digest, format and quantization against qualified identity.'
     exit 0
 }
 
+$TagRequest = @{
+    Method = 'Get'
+    Uri = $OllamaEndpoint + '/api/tags'
+    TimeoutSec = 5
+}
 try {
-    $Tags = Invoke-RestMethod -Method Get `
-        -Uri "$OllamaEndpoint/api/tags" `
-        -TimeoutSec 5
+    $Tags = Invoke-RestMethod @TagRequest
 }
 catch {
-    throw "API Ollama inaccessible sur loopback: $($_.Exception.Message)"
+    throw ('Ollama API unavailable on loopback: {0}' -f $_.Exception.Message)
 }
 
 $AvailableModels = @(
@@ -48,10 +63,10 @@ $AvailableModels = @(
         Where-Object { $_ -and $_.Trim() }
 )
 if ($AvailableModels -notcontains $Model) {
-    throw "Modèle Ollama absent localement: $Model. Aucun téléchargement implicite n'est autorisé."
+    throw ('Required Ollama model is not installed locally: {0}' -f $Model)
 }
 
-$Prompt = 'Réponds uniquement avec le texte LOCAL_OK, sans ponctuation ni explication.'
+$Prompt = 'Reply only with LOCAL_OK, without punctuation or explanation.'
 $RequestBody = [ordered]@{
     model = $Model
     messages = @(
@@ -69,22 +84,21 @@ $RequestBody = [ordered]@{
     }
 }
 if ($Model -like 'qwen3.8:*' -or $Model -like 'gemma4:*') {
-    # Ce smoke vérifie le runtime et la capacité à produire une réponse finale,
-    # pas le raisonnement profond. Un budget trop court peut sinon être consommé
-    # par le canal thinking avant que message.content ne soit produit.
     $RequestBody.think = $false
 }
 $Body = $RequestBody | ConvertTo-Json -Depth 6 -Compress
-
+$ChatRequest = @{
+    Method = 'Post'
+    Uri = $OllamaEndpoint + '/api/chat'
+    ContentType = 'application/json'
+    Body = $Body
+    TimeoutSec = $TimeoutSeconds
+}
 try {
-    $Response = Invoke-RestMethod -Method Post `
-        -Uri "$OllamaEndpoint/api/chat" `
-        -ContentType 'application/json' `
-        -Body $Body `
-        -TimeoutSec $TimeoutSeconds
+    $Response = Invoke-RestMethod @ChatRequest
 }
 catch {
-    throw "Inférence Ollama API en échec pour $Model : $($_.Exception.Message)"
+    throw ('Ollama inference failed for {0}: {1}' -f $Model, $_.Exception.Message)
 }
 
 $Output = ([string]$Response.message.content).Trim()
@@ -93,22 +107,16 @@ if ($Output -notmatch 'LOCAL_OK') {
     if ($Response.message.PSObject.Properties['thinking']) {
         $ThinkingLength = ([string]$Response.message.thinking).Length
     }
-    $DoneReason = if ($Response.PSObject.Properties['done_reason']) {
-        [string]$Response.done_reason
+    $DoneReason = ''
+    if ($Response.PSObject.Properties['done_reason']) {
+        $DoneReason = [string]$Response.done_reason
     }
-    else {
-        ''
+    $EvalCount = 0
+    if ($Response.PSObject.Properties['eval_count']) {
+        $EvalCount = [int]$Response.eval_count
     }
-    $EvalCount = if ($Response.PSObject.Properties['eval_count']) {
-        [int]$Response.eval_count
-    }
-    else {
-        0
-    }
-    throw (
-        "Smoke test inattendu pour $Model. Réponse reçue: '$Output'. " +
-        "thinking_chars=$ThinkingLength done_reason=$DoneReason eval_count=$EvalCount"
-    )
+    $FailureMessage = 'Unexpected smoke result for {0}. output={1}; thinking_chars={2}; done_reason={3}; eval_count={4}' -f $Model, $Output, $ThinkingLength, $DoneReason, $EvalCount
+    throw $FailureMessage
 }
 
 $EvalCount = 0
@@ -124,13 +132,19 @@ if ($EvalCount -gt 0 -and $EvalDuration -gt 0) {
     $TokensPerSecond = [math]::Round($EvalCount / $EvalDuration * 1000000000, 2)
 }
 
-$Metric = if ($null -ne $TokensPerSecond) { " ($TokensPerSecond tok/s)" } else { '' }
-Write-Host "OK  Inférence locale validée avec $Model via API Ollama$Metric."
+$Metric = ''
+if ($null -ne $TokensPerSecond) {
+    $Metric = ' ({0} tok/s)' -f $TokensPerSecond
+}
+Write-Host ('OK local inference with {0} via Ollama API{1}.' -f $Model, $Metric)
 
+$PsRequest = @{
+    Method = 'Get'
+    Uri = $OllamaEndpoint + '/api/ps'
+    TimeoutSec = 5
+}
 try {
-    $Running = Invoke-RestMethod -Method Get `
-        -Uri "$OllamaEndpoint/api/ps" `
-        -TimeoutSec 5
+    $Running = Invoke-RestMethod @PsRequest
     $Loaded = $Running.models |
         Where-Object { $_.name -eq $Model -or $_.model -eq $Model } |
         Select-Object -First 1
@@ -139,21 +153,22 @@ try {
         $VramBytes = [double]$Loaded.size_vram
         $SizeGiB = [math]::Round($SizeBytes / 1GB, 2)
         $VramGiB = [math]::Round($VramBytes / 1GB, 2)
-        $GpuPercent = if ($SizeBytes -gt 0) {
-            [math]::Round(($VramBytes / $SizeBytes) * 100, 1)
-        }
-        else {
-            0
+        $GpuPercent = 0
+        if ($SizeBytes -gt 0) {
+            $GpuPercent = [math]::Round(($VramBytes / $SizeBytes) * 100, 1)
         }
         $ContextLength = $Loaded.context_length
-        Write-Host (
-            "INFO Ollama mémoire $Model : VRAM=$VramGiB/$SizeGiB GiB " +
-            "(~$GpuPercent% GPU), contexte alloué=$ContextLength."
-        )
+        $MemoryMessage = 'INFO Ollama memory {0}: VRAM={1}/{2} GiB (~{3}% GPU), context={4}.' -f $Model, $VramGiB, $SizeGiB, $GpuPercent, $ContextLength
+        Write-Host $MemoryMessage
     }
 }
 catch {
-    Write-Host "INFO Ollama mémoire $Model : métrique /api/ps indisponible."
+    Write-Host ('INFO Ollama memory metrics unavailable for {0}.' -f $Model)
+}
+
+& python $ModelIdentity --root $PlatformRoot --action check --allow-unqualified
+if ($LASTEXITCODE -ne 0) {
+    throw 'Qualified model identity is INVALIDATED; full qualification is required.'
 }
 
 exit 0

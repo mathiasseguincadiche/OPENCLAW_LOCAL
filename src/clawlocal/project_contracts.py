@@ -85,6 +85,7 @@ _TASK_FIELDS = {
     "assumptions",
     "unknowns",
     "required_evidence",
+    "requirement_ids",
     "producer",
     "reviewer",
     "human_decisions",
@@ -99,6 +100,7 @@ _TASK_LIST_FIELDS = {
     "assumptions",
     "unknowns",
     "required_evidence",
+    "requirement_ids",
     "human_decisions",
 }
 

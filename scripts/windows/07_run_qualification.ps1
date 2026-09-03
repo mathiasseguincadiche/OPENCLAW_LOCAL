@@ -13,6 +13,7 @@ $Inventory = Join-Path $PSScriptRoot '06_collect_inventory.ps1'
 $Benchmark = Join-Path $PSScriptRoot '05_benchmark.ps1'
 $Evaluate = Join-Path $RepoRoot 'scripts\23_evaluate_benchmark.py'
 $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
+$ModelIdentity = Join-Path $RepoRoot 'scripts\48_model_identity_lock.py'
 . (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
 
 $QualificationMaxWallSeconds = 2400
@@ -34,7 +35,10 @@ function Assert-ExitCode([string]$Step) {
     }
 }
 
-function Assert-QualificationBudget([System.Diagnostics.Stopwatch]$Watch, [string]$Step) {
+function Assert-QualificationBudget(
+    [System.Diagnostics.Stopwatch]$Watch,
+    [string]$Step
+) {
     if ($Watch.Elapsed.TotalSeconds -ge $QualificationMaxWallSeconds) {
         throw "HARD_TIMEOUT qualification > 40 min pendant/après $Step."
     }
@@ -43,6 +47,7 @@ function Assert-QualificationBudget([System.Diagnostics.Stopwatch]$Watch, [strin
 if ($DryRun) {
     Write-Host '[DRY-RUN] Qualification locale stricte, sans appel cloud :'
     Write-Host '  runtime Python: environnement géré OPENCLAW_LOCAL avec PyYAML vérifié'
+    Write-Host '  aucune promotion automatique; toute promotion exige une qualification complète PASS'
     Write-Host '  1. audit host + VRAM fiable'
     if ($Quick) {
         Write-Host '  2. smoke tests API des trois modèles required'
@@ -51,14 +56,16 @@ if ($DryRun) {
         Write-Host '  2. préflight catalogue uniquement; les smokes redondants sont couverts par le benchmark réel'
     }
     Write-Host '  3. inventaire matériel/runtime'
-    Write-Host '  4. benchmark borné des trois modèles selon qualification_policy.yaml'
-    Write-Host '  5. progression avec durée, premier token, tokens/s et estimation du restant'
+    Write-Host '  4. capture identité runtime: digest + format + paramètres + quantification'
+    Write-Host '  5. benchmark borné des trois modèles selon qualification_policy.yaml'
+    Write-Host '  6. progression avec durée, premier token, tokens/s et estimation du restant'
     if ($Quick) {
-        Write-Host '  6. diagnostic automatique 8K uniquement; aucune qualification/promotion'
+        Write-Host '  7. diagnostic automatique 8K uniquement; aucune qualification/promotion'
         Write-Host '  mode QUICK: contexte 8192, 36 cas, thinking Qwen désactivé'
+        Write-Host '  identité modèle jamais promue par un diagnostic QUICK'
     }
     else {
-        Write-Host '  6. évaluation complète des seuils; aucune promotion automatique'
+        Write-Host '  7. évaluation complète puis promotion identité uniquement si tout est PASS'
         Write-Host '  mode COMPLET HARD-40M: 24 cas 8K + 6 cas 16K = 30 cas'
         Write-Host '  8 scénarios 8K par modèle; couverture collective des 12 scénarios'
         Write-Host '  2 scénarios 16K ciblés par modèle'
@@ -75,7 +82,9 @@ Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 & $Audit
 Assert-ExitCode 'Audit host'
-if (-not $Quick) { Assert-QualificationBudget $QualificationWatch 'audit host' }
+if (-not $Quick) {
+    Assert-QualificationBudget $QualificationWatch 'audit host'
+}
 
 $Models = @(
     & $ManagedPython $ListModels --provider ollama --required
@@ -98,7 +107,9 @@ else {
 
 & $Inventory
 Assert-ExitCode 'Inventaire'
-if (-not $Quick) { Assert-QualificationBudget $QualificationWatch 'inventaire' }
+if (-not $Quick) {
+    Assert-QualificationBudget $QualificationWatch 'inventaire'
+}
 
 if ($Quick) {
     & $Benchmark -Quick
@@ -109,15 +120,25 @@ if ($Quick) {
     exit 0
 }
 
+& $ManagedPython $ModelIdentity --root $PlatformRoot --action capture
+Assert-ExitCode 'Capture identité exacte des modèles'
+Assert-QualificationBudget $QualificationWatch 'capture identité modèles'
+
 $ElapsedSeconds = [int][Math]::Ceiling($QualificationWatch.Elapsed.TotalSeconds)
-$BenchmarkBudgetSeconds = $QualificationMaxWallSeconds - $ElapsedSeconds - $EvaluationReserveSeconds
+$BenchmarkBudgetSeconds = (
+    $QualificationMaxWallSeconds - $ElapsedSeconds - $EvaluationReserveSeconds
+)
 if ($BenchmarkBudgetSeconds -le 0) {
     throw 'HARD_TIMEOUT: budget de qualification épuisé avant le benchmark.'
 }
-Write-Host (
-    "QUALIFICATION_BUDGET total={0}s elapsed={1}s benchmark={2}s reserve_eval={3}s" -f 
-    $QualificationMaxWallSeconds, $ElapsedSeconds, $BenchmarkBudgetSeconds, $EvaluationReserveSeconds
+$BudgetMessage = (
+    'QUALIFICATION_BUDGET total={0}s elapsed={1}s benchmark={2}s reserve_eval={3}s' -f
+    $QualificationMaxWallSeconds,
+    $ElapsedSeconds,
+    $BenchmarkBudgetSeconds,
+    $EvaluationReserveSeconds
 )
+Write-Host $BudgetMessage
 
 & $Benchmark -MaxWallSeconds $BenchmarkBudgetSeconds
 Assert-ExitCode 'Benchmark local HARD-40M'
@@ -127,9 +148,13 @@ Assert-QualificationBudget $QualificationWatch 'benchmark'
 Assert-ExitCode 'Évaluation automatique complète'
 Assert-QualificationBudget $QualificationWatch 'évaluation automatique'
 
+& $ManagedPython $ModelIdentity --root $PlatformRoot --action promote
+Assert-ExitCode 'Promotion identité modèles qualifiés'
+Assert-QualificationBudget $QualificationWatch 'promotion identité modèles'
+
 Write-Host (
     'VERDICT: GATE AUTOMATIQUE PASSÉ POUR LES TROIS MODÈLES; ' +
-    'QUALIFICATION MANUELLE ENCORE REQUISE.'
+    'IDENTITÉ DIGEST/QUANTIFICATION VERROUILLÉE; QUALIFICATION MANUELLE ENCORE REQUISE.'
 )
-Write-Host ("QUALIFICATION_DURATION={0:N1}s" -f $QualificationWatch.Elapsed.TotalSeconds)
+Write-Host ('QUALIFICATION_DURATION={0:N1}s' -f $QualificationWatch.Elapsed.TotalSeconds)
 exit 0

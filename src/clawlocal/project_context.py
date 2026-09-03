@@ -10,6 +10,11 @@ from clawlocal.safe_fs import (
     iter_regular_files_no_links,
     secure_path_within,
 )
+from clawlocal.workspace_guard import (
+    allowed_output_kinds,
+    validate_workspace_guard,
+    write_workspace_guard,
+)
 
 AGENT_IDS = (
     "chef-operations",
@@ -25,6 +30,20 @@ AGENT_IDS = (
 _CONTEXT_DIRS = ("intake", "sources", "context")
 _OUTPUT_DIRS = ("work", "deliverables", "evidence", "diagrams")
 _SNAPSHOT_MARKER = ".openclaw-local-project-snapshot"
+
+
+def _workspace_guard_reference(
+    platform_root: Path,
+    project_id: str,
+    agent_id: str,
+) -> Path:
+    return (
+        platform_root
+        / "state"
+        / "workspace-guards"
+        / project_id
+        / f"{agent_id}.json"
+    )
 
 
 def sync_project_context(
@@ -70,6 +89,8 @@ def sync_project_context(
             destination.mkdir()
 
     assert_no_link_like(target, label="snapshot agent")
+    reference = _workspace_guard_reference(platform_root, normalized, agent_id)
+    write_workspace_guard(target, agent_id, reference_path=reference)
     return target
 
 
@@ -121,14 +142,28 @@ def collect_agent_outputs(
     )
     marker = workspace_project / _SNAPSHOT_MARKER
     secure_path_within(marker, workspace_project, require_file=True, label="snapshot agent")
+    reference = _workspace_guard_reference(platform_root, normalized, agent_id)
+    validate_workspace_guard(
+        workspace_project,
+        agent_id,
+        reference_path=reference,
+    )
 
     project = platform_root / "projects" / normalized
     secure_path_within(project / "project.json", project, require_file=True, label="projet")
 
     collected: list[str] = []
+    allowed_kinds = allowed_output_kinds(agent_id)
     for kind in _OUTPUT_DIRS:
         source = workspace_project / kind / normalized_task
         if not source.exists():
+            continue
+        if kind not in allowed_kinds:
+            files = list(iter_regular_files_no_links(source, label=f"sortie interdite {kind}"))
+            if files:
+                raise PermissionError(
+                    f"{agent_id}: sortie hors collect_scopes interdite: {kind}/{normalized_task}"
+                )
             continue
         secure_path_within(source, workspace_project, require_dir=True, label="sortie tâche")
         files = list(iter_regular_files_no_links(source, label=f"sortie agent {kind}"))

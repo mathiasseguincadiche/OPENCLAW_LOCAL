@@ -9,6 +9,7 @@ from clawlocal.project_ingestion import (
     ingest_project_documents,
     validate_ingestion_index,
 )
+from clawlocal.project_ingestion_pre_v1 import ensure_secure_generic_zip_ingestion
 from clawlocal.project_intake import validate_project_id
 
 
@@ -41,6 +42,7 @@ def main() -> int:
         if index.exists() and not args.force:
             raise FileExistsError("ingestion déjà présente; utiliser --force pour la reconstruire")
         ingest_project_documents(project, force=args.force)
+    ensure_secure_generic_zip_ingestion(project)
     payload = validate_ingestion_index(project)
     print(
         json.dumps(
