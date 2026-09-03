@@ -20,10 +20,13 @@ Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer l
 - aucun téléchargement implicite pendant le benchmark ;
 - exactement trois modèles évalués ;
 - aucun seuil modifié pour faire passer artificiellement un modèle ;
-- aucune promotion automatique ;
+- aucune promotion automatique de backend, de catalogue ou de verdict V1 ;
+- le fingerprint exact des modèles peut être promu vers l'état `QUALIFIED` **uniquement après un gate complet PASS** ;
 - preuves brutes conservées hors Git ;
 - toute dérive de modèle, backend, OpenClaw, Ollama ou pilote GPU invalide la réutilisation automatique d'une preuve précédente ;
 - **la qualification complète ne doit jamais dépasser 40 minutes de temps mural**.
+
+La promotion d'identité modèle n'est pas une promotion de backend ni une validation V1 : elle enregistre seulement le digest, le format, la famille, la taille de paramètres et la quantification réellement observés pendant une qualification complète réussie.
 
 ## 1. Installation propre
 
@@ -51,7 +54,10 @@ Avant de poursuivre, vérifier notamment :
 - Ollama sur loopback ;
 - trois modèles présents ;
 - huit agents configurés ;
-- aucun cloud requis.
+- aucun cloud requis ;
+- identité modèle actuelle compatible avec l'état qualifié lorsqu'il existe.
+
+Sous Windows, les chemins de vérification utilisent le runtime Python géré OPENCLAW_LOCAL et ne doivent pas retomber silencieusement sur un Python système ambigu.
 
 ### VRAM Windows
 
@@ -105,7 +111,7 @@ Le thinking Qwen n'est plus activé sur tous les cas. Il reste **natif sur trois
 16384 long-context-discipline
 ```
 
-Ces probes sont bornés à **640 tokens**. Tous les autres cas Qwen utilisent `think=false` et leur plafond de scénario normal. On conserve donc une preuve réelle du reasoning sans payer son coût sur les tâches courtes de formatage ou de contrôle.
+Ces probes sont bornés à **768 tokens**. Tous les autres cas Qwen utilisent `think=false` et leur plafond de scénario normal. On conserve donc une preuve réelle du reasoning sans payer son coût sur les tâches courtes de formatage ou de contrôle.
 
 Une génération qui atteint sa borne est considérée tronquée et fait échouer le gate. Le gain de temps ne repose pas sur l'acceptation silencieuse de réponses coupées.
 
@@ -117,14 +123,22 @@ Une génération qui atteint sa borne est considérée tronquée et fait échoue
 qualification complète : 2400 s maximum
 réserve évaluation      :   60 s
 benchmark direct        : 2100 s par défaut
-cas individuel          :  150 s maximum
+cas individuel          :  210 s maximum
 ```
 
-`scripts/windows/07_run_qualification.ps1` démarre un chronomètre au début du parcours. Après audit et inventaire, il retire le temps déjà consommé et réserve 60 secondes pour l'évaluation finale. Le budget restant est transmis au benchmark.
+`scripts/windows/07_run_qualification.ps1` démarre un chronomètre au début du parcours. Après audit, inventaire et capture de l'identité exacte des modèles, il retire le temps déjà consommé et réserve 60 secondes pour l'évaluation finale. Le budget restant est transmis au benchmark.
 
-`scripts/benchmark_qualification_40m.py` applique ensuite son propre deadline mural. Une erreur API, un timeout ou une sortie tronquée déclenche un **fail-fast**, puisque `max_error_rate: 0.0` rend déjà le gate impossible.
+`scripts/benchmark_qualification_40m_v2.py` applique ensuite son propre deadline mural. Une erreur API, un timeout ou une sortie tronquée déclenche un **fail-fast**, puisque `max_error_rate: 0.0` rend déjà le gate impossible.
 
 Si le budget de 40 minutes est atteint, le verdict est `FAIL/HARD_TIMEOUT` : le script ne continue pas au-delà de la limite.
+
+### Verrouillage de l'identité des modèles
+
+Avant le benchmark complet, la qualification capture l'identité runtime des trois modèles dans `state/qualification/candidate_model_identity.json`. Cette identité contient notamment le `runtime_id`, le digest, le format, la famille, la taille de paramètres et la quantification.
+
+Après un gate complet PASS et seulement dans ce cas, cette même identité est promue vers `qualified_model_identity.json`. Si l'identité change pendant le run, la promotion est refusée. Si elle change ultérieurement, `verify` marque l'état qualifié `INVALIDATED` et impose une nouvelle qualification complète.
+
+Le mode `-Quick` ne promeut jamais l'identité modèle.
 
 ### Suppression des smokes redondants en mode complet
 
@@ -155,10 +169,12 @@ Le parcours complet enchaîne :
 1. audit host/runtime et VRAM ;
 2. lecture des trois modèles `required` ;
 3. inventaire matériel/runtime ;
-4. benchmark HARD-40M via `/api/chat` ;
-5. matrice 30 cas 8K/16K ;
-6. évaluation des seuils versionnés ;
-7. contrôle final que la durée totale reste inférieure à 2400 s.
+4. capture de l'identité exacte des trois modèles ;
+5. benchmark HARD-40M via `/api/chat` ;
+6. matrice 30 cas 8K/16K ;
+7. évaluation des seuils versionnés ;
+8. promotion du fingerprint modèle uniquement après PASS complet ;
+9. contrôle final que la durée totale reste inférieure à 2400 s.
 
 Après chaque scénario, l'opérateur voit le statut, la durée, le temps au premier token réellement généré, le délai jusqu'à la réponse finale, les tokens/s, le nombre de tokens générés, le volume de thinking sans son contenu, le budget restant et une estimation du temps restant.
 
@@ -217,6 +233,8 @@ INTAKE_READY
 
 Le scénario doit idéalement contenir plusieurs formats et une dépendance entre tâches permettant de vérifier l'Artifact Exchange et la resynchronisation.
 
+Les cinq golden projects pré-V1 complètent cette preuve, mais ne remplacent pas le projet représentatif final ni sa revue humaine.
+
 ## Verdicts
 
 ### `NOT_READY`
@@ -229,7 +247,7 @@ La workstation ne termine pas la qualification dans le budget opérationnel de 4
 
 ### `READY_FOR_MANUAL_QUALIFICATION`
 
-Les gates automatiques sont passés **et le parcours s'est terminé sous 40 minutes**. Ce verdict ne signifie pas V1 qualifiée. Il reste à valider les preuves E2E, les performances, la stabilité, les backends et le projet représentatif.
+Les gates automatiques sont passés **et le parcours s'est terminé sous 40 minutes**. Ce verdict ne signifie pas V1 qualifiée. Il reste à valider les preuves E2E, les performances, la stabilité, les backends, les golden projects et le projet représentatif.
 
 ## Preuves minimales pour la décision V1
 
@@ -238,12 +256,14 @@ Les gates automatiques sont passés **et le parcours s'est terminé sous 40 minu
 - pilote GPU ;
 - inventaire matériel ;
 - protocole `qualification-hard-40m-v1` ;
+- identité exacte/digest/quantification des trois modèles ;
 - durée totale de qualification ;
 - résultats des trois modèles ;
 - politique de thinking réellement utilisée ;
 - E2E OpenClaw ;
 - comparaison backend ;
 - test multimodal ;
+- golden projects ;
 - projet complet ;
 - limites observées ;
 - revue humaine.
@@ -262,7 +282,9 @@ La CI peut donc prouver la **conformité logicielle**, jamais inventer une quali
 2. `audit` et `verify` réussis ;
 3. E2E réel réussi ;
 4. qualification HARD-40M des trois modèles ;
-5. comparaison des backends prévue ;
-6. au moins un projet complet ;
-7. limites documentées ;
-8. validation humaine finale.
+5. identité modèle verrouillée par le PASS complet ;
+6. comparaison des backends prévue ;
+7. golden projects exécutés et revus ;
+8. au moins un projet complet ;
+9. limites documentées ;
+10. validation humaine finale.
