@@ -66,6 +66,28 @@ automated_gates:
       "8192": 0.875
       "16384": 0.75
 
+model_selection_challenger:
+  required_before_manual_model_selection: true
+  incumbent_alias: gemma-deep
+  challenger_alias: ministral-tool-calling
+  challenger_runtime_id: ministral-3:14b-instruct-2512-q4_K_M
+  context_tokens: 8192
+  repetitions: 3
+  protocol: native_tool_calling_v1
+  required_capabilities:
+    - native_tool_calling
+    - tool_feedback_repair
+  comparison_metrics:
+    - tool_intent_pass_rate
+    - tool_repair_pass_rate
+    - protocol_error_count
+    - median_wall_ms
+    - tokens_per_second
+    - b580_vram_fit
+  automatic_promotion: false
+  human_decision_required: true
+  evidence_required: true
+
 promotion:
   automatic_promotion: false
   ready_verdict: READY_FOR_MANUAL_QUALIFICATION
@@ -85,6 +107,7 @@ supported_fleet:
   all_models_required: true
   allow_optional_local_models: false
   allow_unsupported_local_fallback: false
+  benchmark_challengers_count_as_routed_models: false
 
 runtime_comparison:
   required_for_intel_arc_promotion: true
