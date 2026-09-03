@@ -40,22 +40,14 @@ OpenClaw expose alors simultanément un provider `ollama` et un provider `intel-
 
 Le choix conserve Qwen sur Ollama et Gemma/Qwen Coder sur Vulkan comme **hypothèse d'exploitation à requalifier**, pas comme résultat déjà démontré pour la nouvelle flotte.
 
-## Mesures historiques de l'ancienne flotte
+## Mesures historiques de la flotte retirée
 
-Des mesures B580 ont été obtenues auparavant avec :
-
-```text
-qwen3.8:27b
-gemma4:26b
-devstral-small-2:24b
-```
-
-Elles ont servi à montrer deux choses utiles :
+Des mesures B580 ont été obtenues auparavant avec une flotte constituée de modèles de classe **24–27B**. Elles ont servi à montrer deux choses utiles :
 
 1. un backend unique n'est pas nécessairement optimal pour tous les modèles ;
-2. des modèles 24–27B peuvent provoquer une pression mémoire/offload excessive sur une B580 12 Go.
+2. cette classe de taille peut provoquer une pression mémoire/offload excessive sur une B580 12 Go.
 
-Ces mesures sont désormais **historiques seulement**. Elles ne doivent pas être copiées dans une attestation de qualification de la flotte actuelle et ne permettent pas de promouvoir `b580-hybrid` avec les nouveaux runtimes.
+Ces mesures sont désormais **historiques seulement**. Elles ne doivent pas être copiées dans une attestation de qualification de la flotte actuelle et ne permettent pas de promouvoir `b580-hybrid` avec les nouveaux runtimes. Les IDs retirés restent consultables dans l'historique Git et les anciennes preuves, pas dans les surfaces actives.
 
 ## Ollama/Vulkan
 
@@ -91,7 +83,7 @@ Le chemin SYCL reste géré et qualifiable :
 - contexte 8192 ;
 - unload explicite entre modèles.
 
-Les trois modèles actuels doivent être chargés et mesurés avec leurs identités/quantifications exactes. Un résultat produit avec un ancien GGUF ne qualifie pas le runtime actuel.
+Les trois modèles actuels doivent être chargés et mesurés avec leurs identités/quantifications exactes. Un résultat produit avec un ancien artefact ne qualifie pas le runtime actuel.
 
 ## llama.cpp/Vulkan géré
 
