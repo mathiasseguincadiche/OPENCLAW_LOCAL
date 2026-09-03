@@ -49,7 +49,9 @@ def main() -> int:
     if archive.get("method") != "local_safe_archive_extract":
         failures.append("ZIP générique: local_safe_archive_extract requis")
     if archive.get("recursive_nested_archives") is not False:
-        failures.append("ZIP générique: extraction récursive des archives imbriquées interdite")
+        failures.append(
+            "ZIP générique: extraction récursive des archives imbriquées interdite"
+        )
     generic = ingestion.get("extraction", {}).get("generic_archive_safety", {})
     for key in (
         "max_archive_bytes_mb",
@@ -146,7 +148,12 @@ def main() -> int:
     identity_cli = read("scripts/48_model_identity_lock.py", failures)
     qualification = read("scripts/windows/07_run_qualification.ps1", failures)
     verify = read("scripts/windows/04_verify_local.ps1", failures)
-    for marker in ("fingerprint_sha256", "INVALIDATED", "quantization_level", "/api/tags"):
+    for marker in (
+        "fingerprint_sha256",
+        "INVALIDATED",
+        "quantization_level",
+        "/api/tags",
+    ):
         if marker not in identity_source:
             failures.append(f"identité modèles exécutable incomplète: {marker}")
     for marker in ("--action capture", "--action promote"):
@@ -154,7 +161,8 @@ def main() -> int:
             failures.append(f"qualification non reliée à l'identité: {marker}")
     if "--action check --allow-unqualified" not in verify:
         failures.append("verify: contrôle de qualification modèle absent")
-    if "capture" not in identity_cli or "promote" not in identity_cli or "check" not in identity_cli:
+    identity_actions = ("capture", "promote", "check")
+    if any(action not in identity_cli for action in identity_actions):
         failures.append("CLI identité modèles incomplète")
 
     enforcement = tools.get("write_enforcement", {})
@@ -168,18 +176,31 @@ def main() -> int:
     protected = set(enforcement.get("protected_inputs", []))
     if protected != {"intake", "sources", "context/exchange"}:
         failures.append("permissions: périmètre protégé inattendu")
-    writer_scopes = set(tools.get("agents", {}).get("redacteur-technique", {}).get("collect_scopes", []))
-    release_scopes = set(tools.get("agents", {}).get("ingenieur-release-forges", {}).get("collect_scopes", []))
+    agents = tools.get("agents", {})
+    writer_scopes = set(
+        agents.get("redacteur-technique", {}).get("collect_scopes", [])
+    )
+    release_scopes = set(
+        agents.get("ingenieur-release-forges", {}).get("collect_scopes", [])
+    )
     if writer_scopes != {"work", "deliverables", "evidence", "diagrams"}:
         failures.append("Rédacteur: collect_scopes explicites requis")
     if release_scopes != {"work", "deliverables", "evidence"}:
         failures.append("Release/Forges: collect_scopes doit exclure diagrams")
     guard_source = read("src/clawlocal/workspace_guard.py", failures)
     context_source = read("src/clawlocal/project_context.py", failures)
-    for marker in ("write_workspace_guard", "validate_workspace_guard", "aggregate_sha256"):
+    for marker in (
+        "write_workspace_guard",
+        "validate_workspace_guard",
+        "aggregate_sha256",
+    ):
         if marker not in guard_source:
             failures.append(f"workspace guard incomplet: {marker}")
-    for marker in ("write_workspace_guard", "validate_workspace_guard", "allowed_output_kinds"):
+    for marker in (
+        "write_workspace_guard",
+        "validate_workspace_guard",
+        "allowed_output_kinds",
+    ):
         if marker not in context_source:
             failures.append(f"collecteur central non durci: {marker}")
 
@@ -197,7 +218,11 @@ def main() -> int:
         failures.append("golden projects: cloud doit être interdit")
     golden_source = read("src/clawlocal/golden_projects.py", failures)
     golden_runner = read("scripts/49_run_golden_projects.py", failures)
-    for marker in (*expected_scenarios, "PROMPT_INJECTION_SUCCEEDED", "execute_golden_project"):
+    for marker in (
+        *expected_scenarios,
+        "PROMPT_INJECTION_SUCCEEDED",
+        "execute_golden_project",
+    ):
         if marker not in golden_source:
             failures.append(f"golden projects exécutable incomplet: {marker}")
     if "--execute" not in golden_runner or "--evaluate" not in golden_runner:
