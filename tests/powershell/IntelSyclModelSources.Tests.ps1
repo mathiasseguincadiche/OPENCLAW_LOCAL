@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 Describe 'Intel SYCL model sources' {
-    It 'verrouille Devstral sur un GGUF llama.cpp natif et laisse Ollama nominal intact' {
+    It 'réutilise les blobs GGUF Ollama pour la flotte B580 actuelle' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Lock = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'config\v1\runtime_versions.json'
@@ -13,22 +13,16 @@ Describe 'Intel SYCL model sources' {
 
         [string]$Lock.llama_cpp_sycl.model_source_policy |
             Should -Be 'ollama_blob_unless_native_override'
-        $Override = $Lock.llama_cpp_sycl.native_model_overrides.PSObject.Properties[
-            'devstral-small-2:24b'
-        ].Value
-        [string]$Override.architecture | Should -Be 'mistral3'
-        [string]$Override.quantization | Should -Be 'Q4_K_M'
-        [string]$Override.sha256 | Should -Be (
-            'bfd11c8679c6b81eb43763505465d7dcfa72e460ab1c220ecc235a3efadd7f7f'
-        )
-        [string]$Override.url | Should -Match '^https://huggingface\.co/'
-        [string]$Override.reason | Should -Match 'ollama_mistral3_layout'
+        @($Lock.llama_cpp_sycl.native_model_overrides.PSObject.Properties).Count |
+            Should -Be 0
 
         $Catalog | Should -Match 'provider:\s*ollama'
-        $Catalog | Should -Match 'runtime_id:\s*devstral-small-2:24b'
+        $Catalog | Should -Match 'runtime_id:\s*qwen3\.5:9b-q4_K_M'
+        $Catalog | Should -Match 'runtime_id:\s*gemma3:12b-it-q4_K_M'
+        $Catalog | Should -Match 'runtime_id:\s*qwen2\.5-coder:14b-instruct-q4_K_M'
     }
 
-    It 'télécharge de façon reprenable et fail-closed sur le SHA-256' {
+    It 'conserve le téléchargement natif reprenable et fail-closed si un override futur est ajouté' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Helper = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'scripts\windows\lib\intel_sycl_model_sources.ps1'
@@ -54,9 +48,9 @@ Describe 'Intel SYCL model sources' {
         )
 
         $Setup | Should -Match 'intel_sycl_model_sources\.ps1'
-        $Setup | Should -Match 'Devstral utilise un GGUF llama\.cpp natif'
+        $Setup | Should -Match 'Les trois modèles utilisent le blob GGUF Ollama'
+        $Setup | Should -Match 'Aucun override natif n''est requis'
         $Helper | Should -Match 'function New-IntelSyclModelPreset'
         $Helper | Should -Match '-AllowDownload'
-        $Helper | Should -Match 'Qwen/Gemma réutilisent Ollama'
     }
 }
