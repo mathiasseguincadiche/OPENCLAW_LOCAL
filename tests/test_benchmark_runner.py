@@ -24,7 +24,7 @@ BENCHMARK = load_benchmark_module()
 
 def test_generation_payload_bounds_output_and_matches_chat_contract() -> None:
     payload = BENCHMARK.generation_payload(
-        "qwen3.8:27b",
+        "qwen3.5:9b-q4_K_M",
         "test",
         8192,
         0.1,
@@ -41,7 +41,7 @@ def test_generation_payload_bounds_output_and_matches_chat_contract() -> None:
 
 def test_generation_payload_can_explicitly_disable_thinking() -> None:
     payload = BENCHMARK.generation_payload(
-        "qwen3.8:27b",
+        "qwen3.5:9b-q4_K_M",
         "test",
         8192,
         0.1,
@@ -76,7 +76,7 @@ def test_gemma_disables_thinking_for_bounded_functional_gates() -> None:
 
 
 def test_non_reasoning_models_keep_scenario_limit_and_native_behavior() -> None:
-    model = {"family": "mistral"}
+    model = {"family": "qwen2-coder"}
     limit, think, mode = BENCHMARK.resolve_generation_policy(model, 320, "off")
     assert limit == 320
     assert think is None
