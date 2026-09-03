@@ -22,7 +22,14 @@ SPEC.loader.exec_module(CALIBRATION)
 def test_calibration_defaults_leave_qualification_contract_untouched() -> None:
     assert CALIBRATION.DEFAULT_MAX_OUTPUT_TOKENS == 1536
     assert CALIBRATION.DEFAULT_CASE_TIMEOUT_SECONDS == 480.0
+    assert CALIBRATION.DEFAULT_THINKING_MODE == "native"
+    assert CALIBRATION.THINKING_MODES == ("native", "off")
     assert CALIBRATION.QWEN_ALIAS == "qwen-max"
+
+
+def test_thinking_modes_map_to_ollama_contract() -> None:
+    assert CALIBRATION._thinking_value("native") is None
+    assert CALIBRATION._thinking_value("off") is False
 
 
 def test_native_plan_uses_exact_policy_probes() -> None:
@@ -47,6 +54,7 @@ def test_case_record_hashes_output_without_persisting_raw_text() -> None:
         repeat=1,
         context=8192,
         scenario={"id": "project-intake-analysis"},
+        thinking_mode="off",
         status="COMPLETE",
         result={
             "output": output,
@@ -58,7 +66,7 @@ def test_case_record_hashes_output_without_persisting_raw_text() -> None:
             "tokens_per_second": 7.0,
             "load_duration_ns": 1,
             "prompt_eval_count": 2,
-            "thinking_chars": 3,
+            "thinking_chars": 0,
             "done_reason": "stop",
             "output_truncated": False,
         },
@@ -68,5 +76,6 @@ def test_case_record_hashes_output_without_persisting_raw_text() -> None:
         ps_snapshot=None,
     )
     assert "output" not in record
+    assert record["thinking_mode"] == "off"
     assert record["output_chars"] == len(output)
     assert record["output_sha256"] == hashlib.sha256(output.encode("utf-8")).hexdigest()
