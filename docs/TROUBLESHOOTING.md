@@ -1,396 +1,342 @@
-# Troubleshooting OPENCLAW_LOCAL
+# Troubleshooting
 
-Ce runbook suit une règle simple : **diagnostiquer le parcours local avant toute escalade cloud**. Un défaut local ne doit jamais être masqué par un fallback distant.
+## Principe
 
-## Ordre de diagnostic
+Diagnostiquer `OPENCLAW_LOCAL` dans l'ordre : **code/configuration → runtime → modèles → Gateway/OpenClaw → backend GPU → E2E → qualification**. Ne jamais activer le cloud pour masquer une panne locale.
 
-Commencer par afficher les derniers logs et preuves :
+## Flotte active de référence
+
+```text
+qwen-max          -> qwen3.5:9b-q4_K_M
+gemma-deep        -> gemma3:12b-it-q4_K_M
+devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+```
+
+Le nom `devstral-devops` est un alias de compatibilité. Le runtime réel est Qwen 2.5 Coder 14B.
+
+Le contexte nominal OpenClaw est **8192 tokens**. Le 16K n'est pas un contexte nominal garanti ; il reste une cible de qualification.
+
+## 1. Vérification minimale
+
+Depuis la racine du dépôt :
+
+```powershell
+.\menu.ps1 -Action logs
+.\menu.ps1 -Action audit
+.\menu.ps1 -Action verify
+openclaw config validate --json
+openclaw agents list --json
+openclaw gateway status --require-rpc --json
+```
+
+Si un de ces contrôles échoue, corriger cette couche avant de lancer une qualification complète.
+
+## 2. Mauvaise flotte après `git pull`
+
+Symptômes :
+
+- `ollama list` montre seulement les anciens 24–27B ;
+- OpenClaw référence un ancien runtime ;
+- `verify` signale un modèle requis absent ;
+- le fingerprint qualifié est `INVALIDATED`.
+
+Correction :
+
+```powershell
+.\menu.ps1 -Action models -DryRun
+.\menu.ps1 -Action models
+.\menu.ps1 -Action configure-openclaw -DryRun
+.\menu.ps1 -Action configure-openclaw
+.\menu.ps1 -Action audit
+.\menu.ps1 -Action verify
+```
+
+Ne recopier jamais un ancien `qualified_model_identity.json` vers la nouvelle flotte. Une migration de runtime impose de nouvelles preuves.
+
+Les anciens modèles peuvent être supprimés ultérieurement avec les outils Ollama après vérification que rien ne les référence encore. La migration ne doit pas détruire automatiquement des preuves ou artefacts historiques.
+
+## 3. `OLLAMA_MODELS` pointe au mauvais endroit
+
+Afficher :
+
+```powershell
+$env:OPENCLAW_LOCAL_ROOT
+$env:OLLAMA_MODELS
+```
+
+Le stockage géré attendu est :
+
+```text
+<OPENCLAW_LOCAL_ROOT>\models\ollama
+```
+
+Reconfigurer :
+
+```powershell
+.\menu.ps1 -Action configure-local
+```
+
+Puis rouvrir PowerShell si une variable utilisateur vient d'être modifiée.
+
+## 4. Ollama n'est pas joignable
+
+Tester le loopback :
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:11434/api/tags
+```
+
+Si l'API échoue :
+
+1. vérifier que le processus Ollama existe ;
+2. vérifier le port local ;
+3. vérifier les variables d'environnement ;
+4. exécuter `audit` puis `configure-local` ;
+5. ne pas lancer la qualification tant que `/api/tags` ne répond pas.
+
+## 5. Un modèle requis est absent
+
+```powershell
+ollama list
+.\menu.ps1 -Action models
+```
+
+Les trois runtimes attendus sont exactement ceux du catalogue. Aucun quatrième fallback local n'est requis.
+
+Si `ollama pull` échoue, conserver l'erreur réseau/disque et corriger la cause ; ne pas modifier le catalogue pour contourner le téléchargement.
+
+## 6. OpenClaw utilise encore un ancien modèle
+
+Régénérer la configuration :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -DryRun
+.\menu.ps1 -Action configure-openclaw
+openclaw config validate --json
+openclaw agents list --json
+```
+
+Le patch est généré depuis `config/v1/model_catalog.yaml` et `model_routing.yaml`. Ne pas corriger manuellement `openclaw.json` comme solution durable.
+
+## 7. Gateway indisponible
+
+```powershell
+openclaw gateway status --require-rpc --json
+```
+
+Puis examiner :
 
 ```powershell
 .\menu.ps1 -Action logs
 ```
 
-Puis :
+Le E2E exige le transport Gateway réel. Un fallback vers un transport embedded n'est pas considéré comme une réussite.
+
+## 8. `verify` répond mais la VRAM semble étrange
+
+`verify` peut afficher la taille totale du modèle et la partie réellement chargée en VRAM via `/api/ps`.
+
+Sur la B580 12 Go, ne conclure ni à un full-offload ni à une panne uniquement à partir du nombre de paramètres. Vérifier la mesure effective :
 
 ```powershell
-.\menu.ps1 -Action audit
-.\menu.ps1 -Action verify
-openclaw config validate --json
-openclaw agents list --json
-openclaw gateway status --deep --json
-ollama list
+Invoke-RestMethod http://127.0.0.1:11434/api/ps
 ```
 
-Ensuite seulement : benchmark, E2E, inventaire et qualification.
+L'objectif de la nouvelle flotte Q4_K_M est de réduire la pression mémoire observée avec les anciens 24–27B. Cette amélioration doit néanmoins être mesurée, pas supposée.
 
-## Logs automatiques et diagnostic en temps réel
+## 9. Le spécialiste DevOps ne traite pas directement une image
 
-Toute action **réelle** exécutée via `menu.ps1` crée automatiquement un transcript sous :
+C'est normal. `devstral-devops` / Qwen 2.5 Coder 14B est text-only.
+
+Le parcours attendu est :
 
 ```text
-<OPENCLAW_LOCAL_ROOT>\proofs\logs\
+PDF/image
+ -> ingestion + Qwen/Gemma multimodal
+ -> représentation textuelle/provenance
+ -> handoff
+ -> spécialiste DevOps
 ```
 
-Le fichier est horodaté par action, par exemple :
+Si une tâche demande au spécialiste d'interpréter directement une image, corriger le workflow plutôt que d'ajouter artificiellement `image` à son contrat.
+
+## 10. E2E agent ou tool-calling en échec
+
+```powershell
+.\menu.ps1 -Action e2e -DryRun
+.\menu.ps1 -Action e2e
+```
+
+Le script écrit un diagnostic JSON dans `proofs` lorsqu'un payload applicatif est incohérent.
+
+Vérifier :
+
+- modèle primaire réellement configuré ;
+- provider attendu ;
+- absence de fallback transport/provider ;
+- permissions du workspace ;
+- disponibilité de `write/read` ou du mécanisme de découverte d'outils ;
+- timeout de l'appel ;
+- contenu exact du marqueur attendu.
+
+Ne considérer aucune réponse textuelle « ça a marché » comme preuve si le fichier ou l'artefact attendu n'existe pas réellement.
+
+## 11. Backend SYCL ne charge pas un modèle
+
+Prévisualiser puis installer :
+
+```powershell
+.\menu.ps1 -Action intel-sycl-setup -DryRun
+.\menu.ps1 -Action intel-sycl-setup
+.\menu.ps1 -Action intel-sycl-verify
+```
+
+Pour isoler un modèle :
+
+```powershell
+.\menu.ps1 -Action intel-sycl-diagnose -Model qwen3.5:9b-q4_K_M
+```
+
+ou :
+
+```powershell
+.\menu.ps1 -Action intel-sycl-diagnose -Model gemma3:12b-it-q4_K_M
+.\menu.ps1 -Action intel-sycl-diagnose -Model qwen2.5-coder:14b-instruct-q4_K_M
+```
+
+Le diagnostic distingue notamment full-offload, auto-offload et CPU-only. Conserver stdout/stderr et le JSON de preuve.
+
+## 12. Backend Vulkan géré ne charge pas Gemma/Qwen Coder
+
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup -DryRun
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+```
+
+Le profil géré attend exactement les deux modèles textuels routés vers Vulkan dans `runtime_versions.json`.
+
+Avant Vulkan, le serveur SYCL suivi est arrêté pour éviter une contention de VRAM. Si un autre processus GPU consomme la mémoire, l'identifier avant de conclure à un défaut du modèle.
+
+## 13. Profil hybride incohérent
+
+Routage attendu :
 
 ```text
-20260828_142530123_install-full.log
-20260828_151004772_audit.log
-20260828_151115904_verify.log
-20260828_153812441_qualification.log
+qwen-max        -> ollama/qwen3.5:9b-q4_K_M
+gemma-deep      -> intel-vulkan/gemma3:12b-it-q4_K_M
+devstral-devops -> intel-vulkan/qwen2.5-coder:14b-instruct-q4_K_M
 ```
-
-Le chemin courant est affiché immédiatement avec `LOG=<chemin>`. À la fin, le transcript contient `ACTION_RESULT=PASS` ou `ACTION_RESULT=FAIL` et le menu affiche `LOG_SAVED=<chemin>`.
-
-Pour récupérer le dernier transcript :
-
-```powershell
-$latest = Get-ChildItem "$env:OPENCLAW_LOCAL_ROOT\proofs\logs\*.log" |
-  Sort-Object LastWriteTime -Descending |
-  Select-Object -First 1
-$latest.FullName
-Get-Content -LiteralPath $latest.FullName -Tail 100
-```
-
-Pour le suivre depuis une deuxième fenêtre PowerShell pendant une installation ou une qualification :
-
-```powershell
-Get-Content -LiteralPath $latest.FullName -Tail 50 -Wait
-```
-
-Les `-DryRun` ne créent pas de transcript automatique afin de rester sans mutation. Une action réelle peut exceptionnellement être lancée sans transcript avec `-NoLog`.
-
-Si la journalisation elle-même échoue, l'action opérationnelle n'est pas bloquée : le menu affiche un avertissement et continue. Si un transcript PowerShell externe est déjà actif, conserver ce transcript comme preuve plutôt que relancer une installation uniquement pour produire un second log.
-
-Les transcripts ne remplacent pas les preuves structurées :
-
-- E2E : `<OPENCLAW_LOCAL_ROOT>\proofs\openclaw_e2e_*.json` ;
-- inventaire/benchmark : `<REPO>\benchmarks\results\*.json` ;
-- console et erreurs : `<OPENCLAW_LOCAL_ROOT>\proofs\logs\*.log`.
-
-Avant de partager un log, vérifier qu'aucun secret saisi ou affiché par un outil externe n'y apparaît. Ne jamais transmettre `.env`, `OPENROUTER_API_KEY`, token Gateway ou document privé.
-
-## Variables et stockage
-
-```powershell
-$env:OPENCLAW_LOCAL_ROOT
-$env:OPENCLAW_STATE_DIR
-$env:OLLAMA_MODELS
-```
-
-Avec le réglage par défaut sur `E:` :
-
-```text
-E:\AI\OpenClawLocal\
-├── runtime\
-├── models\ollama\
-├── projects\
-├── workspaces\
-├── state\
-└── proofs\
-    └── logs\
-```
-
-Si `OLLAMA_MODELS` ne pointe pas vers `<OPENCLAW_LOCAL_ROOT>\models\ollama`, exécuter :
-
-```powershell
-.\menu.ps1 -Action configure-local
-```
-
-Le script persiste la variable et redémarre le serveur Ollama lorsqu'un changement d'emplacement l'exige.
-
-## PowerShell ou commandes introuvables
-
-```powershell
-$PSVersionTable.PSVersion
-Get-Command python -ErrorAction SilentlyContinue
-Get-Command ollama -ErrorAction SilentlyContinue
-Get-Command openclaw -ErrorAction SilentlyContinue
-```
-
-Après une première installation, fermer puis rouvrir PowerShell pour récupérer le PATH utilisateur.
-
-## Runtime différent du lock
-
-La source de vérité est `config/v1/runtime_versions.json`.
-
-```powershell
-Get-Content .\config\v1\runtime_versions.json
-python --version
-ollama --version
-openclaw --version
-```
-
-`-AllowRuntimeDrift` est un choix explicite. Il ne transforme jamais une version différente en version qualifiée : benchmark, E2E et qualification doivent être refaits.
-
-## Ollama ne répond pas
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:11434/api/tags
-ollama list
-```
-
-Puis :
-
-```powershell
-.\menu.ps1 -Action configure-local
-```
-
-Ne pas remplacer l'URL native par `/v1` : le projet utilise l'API Ollama native.
-
-## Modèles stockés sur le mauvais disque
-
-1. vérifier `$env:OLLAMA_MODELS` ;
-2. exécuter `configure-local` ;
-3. vérifier que le serveur Ollama a été redémarré si la valeur a changé ;
-4. télécharger les modèles uniquement après cette configuration :
-
-```powershell
-.\menu.ps1 -Action models
-```
-
-Ne pas déplacer manuellement un répertoire de modèles pendant qu'Ollama fonctionne.
-
-## Modèle absent
-
-```powershell
-ollama list
-.\menu.ps1 -Action models -DryRun
-.\menu.ps1 -Action models
-```
-
-La flotte attendue contient exactement trois modèles : Qwen 3.8 27B, Gemma 4 26B et Devstral Small 2 24B. Ne pas substituer silencieusement un autre runtime.
-
-## OpenClaw invalide
-
-```powershell
-openclaw config file
-openclaw config validate --json
-openclaw doctor
-```
-
-Puis :
-
-```powershell
-.\menu.ps1 -Action configure-openclaw -DryRun
-.\menu.ps1 -Action configure-openclaw
-```
-
-Le patch est validé en dry-run avant application.
-
-## Gateway indisponible
-
-```powershell
-openclaw gateway status --deep --json
-openclaw gateway start --json
-openclaw gateway status --require-rpc --json
-```
-
-Si aucun service n'est installé :
-
-```powershell
-openclaw gateway install --runtime node --force --json
-openclaw gateway start --json
-```
-
-La configuration gérée impose le mode local et le bind loopback.
-
-## Agent absent ou mauvais workspace
-
-```powershell
-openclaw agents list --json
-.\menu.ps1 -Action deploy-agents -DryRun
-.\menu.ps1 -Action deploy-agents
-.\menu.ps1 -Action configure-openclaw
-```
-
-Un workspace existant sans marqueur `.openclaw-local-managed` n'est pas écrasé. Sauvegarder ou déplacer manuellement les données concernées avant de reprendre.
-
-## Projet incohérent entre agents
-
-Le projet central est la source de vérité. Ne pas corriger directement plusieurs workspaces.
 
 Vérifier :
 
 ```powershell
+.\menu.ps1 -Action intel-vulkan-verify
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Rollback immédiat :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
+.\menu.ps1 -Action intel-vulkan-stop
+```
+
+## 14. Qualification HARD-40M échoue
+
+La qualification reste fail-closed. Ne modifier ni les seuils ni le nombre de cas pour transformer un échec en succès.
+
+Conserver :
+
+- transcript de qualification ;
+- `benchmark_*.json` ;
+- inventaire ;
+- identité candidate des modèles ;
+- version du pilote ;
+- commit Git exact.
+
+Classer l'échec :
+
+- API/runtime ;
+- timeout individuel ;
+- sortie tronquée ;
+- check sémantique ;
+- débit/TTFT ;
+- budget global 40 min ;
+- dérive d'identité.
+
+Le 16K est un stress qualifiant. Un échec 16K ne doit pas conduire à configurer OpenClaw nominalement en 16K.
+
+## 15. Qwen native thinking atteint la limite
+
+Les trois probes Qwen natifs restent bornés à 1024 tokens dans le protocole actif. Atteindre la borne reste une troncature et un échec.
+
+Si cela arrive avec la nouvelle flotte, inspecter la sortie, `done_reason`, `eval_count`, temps mural et volume de thinking. Ne relever pas automatiquement la limite sans diagnostic et justification.
+
+## 16. Anciennes preuves après migration
+
+Les preuves produites avec les anciens modèles 24–27B sont conservées comme historique de la décision de right-sizing. Elles peuvent expliquer pourquoi la flotte a changé, mais elles ne valent pas :
+
+- qualification des nouveaux modèles ;
+- promotion du backend hybride ;
+- preuve de contexte 16K ;
+- attestation V1.
+
+Toute nouvelle attestation doit référencer les nouveaux digests/quantifications.
+
+## 17. Projet bloqué
+
+Afficher l'état :
+
+```powershell
 python .\scripts\32_orchestrate_project.py --project <id> --action status
-python .\scripts\43_project_exchange.py --project <id>
 ```
 
-Puis resynchroniser si nécessaire :
+Vérifier les phases, clarifications, tentatives, `source_coverage`, Artifact Exchange et preuves de validation. Une clarification humaine ne doit pas être contournée par une réponse inventée.
 
-```powershell
-python .\scripts\31_sync_project_context.py --project <id> --agent all
-```
+## 18. Document illisible ou ingestion incomplète
 
-Un changement amont validé doit être propagé via l'Artifact Exchange et les dépendances du plan, pas par copie manuelle entre agents.
+Un document `UNREADABLE`, un index périmé ou une `source_coverage` incomplète bloque l'analyse. Corriger l'ingestion ou déclarer explicitement l'information manquante.
 
-## Tool-calling en échec
+Ne jamais présenter un PDF scanné comme « lu » si seule une extraction vide a été obtenue.
 
-Distinguer :
+## 19. Cloud refusé
 
-1. Ollama répond-il à une inférence simple ?
-2. OpenClaw obtient-il un vrai appel d'outil ?
-3. le rôle possède-t-il l'autorisation correspondante ?
+Un refus est normal si une précondition manque. Vérifier :
 
-```powershell
-.\menu.ps1 -Action verify
-.\menu.ps1 -Action e2e
-```
+- `OPENCLAW_LOCAL_CLOUD_ENABLED` ;
+- motif versionné ;
+- rôle autorisé ;
+- tentative Web locale si requise ;
+- budget ;
+- approbation humaine si requise ;
+- clé locale disponible.
 
-`tools.exec.mode=ask` exige une approbation hors allowlist. Sécurité et Audit refusent les mutations par conception.
+Le cloud n'est pas un mécanisme de haute disponibilité automatique.
 
-## Réparation après erreur d'outil en échec
+## 20. Collecter un support bundle
 
-Le gate E2E provoque volontairement une erreur contrôlée.
+Utiliser les scripts de support du dépôt et joindre uniquement les preuves nécessaires après redaction des secrets. Les prompts, réponses et documents privés ne doivent pas être inclus par défaut.
 
-```powershell
-Get-ChildItem "$env:OPENCLAW_LOCAL_ROOT\proofs" | Sort-Object LastWriteTime -Descending
-```
+## 21. Ordre de reprise recommandé
 
-Conserver l'échec comme preuve. Ne pas affaiblir la politique de qualification pour le masquer.
-
-## GPU Intel Arc non utilisé ou débit anormal
-
-```powershell
-.\menu.ps1 -Action inventory
-.\menu.ps1 -Action benchmark
-```
-
-Comparer : pilote, backend, runtime exact, contexte, TTFT, tokens/s, VRAM/RAM lorsque réellement mesurées. Le nom de la carte détectée ne prouve pas l'accélération effective.
-
-## VRAM insuffisante / contexte trop grand
-
-Si 16K échoue :
-
-- ne pas augmenter le contexte ;
-- collecter la preuve ;
-- fermer les processus GPU inutiles ;
-- tester 8K ;
-- conserver `NOT_READY` si les seuils requis échouent.
-
-32K et plus restent hors qualification nominale tant qu'ils ne sont pas prouvés.
-
-## Cloud refusé
-
-Le refus est normal si un élément manque :
-
-```text
-OPENCLAW_LOCAL_CLOUD_ENABLED=true
-motif versionné
-rôle autorisé
-préconditions du motif
-budget disponible
-OPENROUTER_API_KEY pour --execute
-approbation humaine si requise
-```
-
-Une exécution réelle crée en plus une réservation FinOps atomique juste avant l'appel.
-
-## Réservation FinOps bloquée
-
-Vérifier le ledger :
-
-```text
-<OPENCLAW_LOCAL_ROOT>\state\finops\cloud-costs.jsonl
-```
-
-Une réservation active compte dans les limites. Elle est clôturée par `settlement` ou `release`, ou cesse de bloquer après son TTL. Ne pas éditer manuellement le ledger pour contourner une limite.
-
-## Rotation de la clé OpenRouter
-
-```powershell
-Remove-Item Env:OPENROUTER_API_KEY -ErrorAction SilentlyContinue
-$env:OPENROUTER_API_KEY = '<nouvelle-cle>'
-```
-
-La clé ne doit jamais entrer dans Git, les prompts publiables ou les preuves.
-
-## Sauvegarde avant maintenance
-
-Sauvegarder au minimum les données non reconstruisibles :
-
-```powershell
-$root = $env:OPENCLAW_LOCAL_ROOT
-$stamp = Get-Date -Format yyyyMMdd-HHmmss
-$backup = Join-Path $root "backup\$stamp"
-New-Item -ItemType Directory -Path $backup -Force | Out-Null
-
-foreach ($name in @('projects', 'state', 'proofs')) {
-  $source = Join-Path $root $name
-  if (Test-Path -LiteralPath $source) {
-    Copy-Item $source (Join-Path $backup $name) -Recurse
-  }
-}
-```
-
-`runtime/` et `workspaces/` sont reconstruisibles. Les modèles peuvent être retéléchargés ; les sauvegarder est optionnel selon le coût de téléchargement et l'espace disponible.
-
-## Test de restauration
-
-Une sauvegarde doit être restaurable.
-
-1. utiliser une copie de test ou une fenêtre de maintenance ;
-2. restaurer `projects/`, `state/` et les preuves nécessaires ;
-3. réparer le runtime depuis le commit/tag connu plutôt que restaurer un runtime incompatible ;
-4. resynchroniser les workspaces ;
-5. exécuter :
+Après correction d'un incident de modèle/backend :
 
 ```powershell
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
+.\menu.ps1 -Action configure-openclaw -DryRun
+.\menu.ps1 -Action configure-openclaw
 .\menu.ps1 -Action e2e
 ```
 
-6. vérifier un projet critique avec `--action status` et l'Artifact Exchange.
-
-## Mise à jour
-
-1. sauvegarder `projects/`, `state/`, `proofs/` ;
-2. `git pull` ;
-3. lire `CHANGELOG.md` et `runtime_versions.json` ;
-4. `install-core -DryRun` ;
-5. `install-core` ;
-6. `configure-local` ;
-7. `configure-openclaw` ;
-8. `verify` ;
-9. `e2e` ;
-10. benchmark/qualification si runtime, modèle, backend ou pilote a changé.
-
-## Rollback
-
-1. conserver les logs et preuves de l'échec ;
-2. revenir au commit/tag Git connu ;
-3. utiliser le runtime lock correspondant ;
-4. réinstaller/réparer le runtime ;
-5. restaurer `state/` uniquement si le format est compatible ;
-6. resynchroniser les workspaces ;
-7. refaire `audit`, `verify` et `e2e`.
-
-Ne jamais écraser les projets centraux avec un ancien snapshot de workspace.
-
-## Désinstallation
+Puis seulement si le runtime est sain :
 
 ```powershell
-openclaw gateway stop --force --json
-openclaw gateway uninstall --json
+.\menu.ps1 -Action qualification -DryRun
+.\menu.ps1 -Action qualification
 ```
 
-Sauvegarder ensuite les données à conserver avant de supprimer volontairement `<OPENCLAW_LOCAL_ROOT>`. La suppression de l'état utilisateur n'est pas automatisée.
-
-## Preuves à joindre à un diagnostic
-
-Sans secrets :
-
-- dernier transcript `proofs\logs\*.log` ;
-- commit Git ;
-- runtime lock ;
-- inventaire ;
-- benchmark/evaluation ;
-- preuve E2E ;
-- versions OpenClaw/Ollama/Python/PowerShell ;
-- pilote GPU ;
-- backend ;
-- message d'erreur exact.
-
-Ne jamais joindre `.env`, clés API, tokens Gateway ou documents privés.
+Une qualification réussie conduit au maximum au verdict automatique prévu par le contrat ; V1 reste soumise aux autres preuves et à l'approbation humaine.
