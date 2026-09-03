@@ -14,8 +14,12 @@ HASH = "a" * 64
 COMMIT = "b" * 40
 
 
+def _manifest_path(root: Path) -> Path:
+    return root / "config" / "v1" / "release_readiness.yaml"
+
+
 def _write_manifest(root: Path, payload: dict) -> None:
-    path = root / "config" / "v1" / "release_readiness.yaml"
+    path = _manifest_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
 
@@ -54,6 +58,14 @@ def test_development_versions_do_not_require_v1_attestation(tmp_path: Path) -> N
 
 def test_v1_is_fail_closed_without_manifest(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="manifeste"):
+        validate_v1_release_readiness(tmp_path, "1.0.0")
+
+
+def test_v1_rejects_malformed_yaml_as_controlled_failure(tmp_path: Path) -> None:
+    path = _manifest_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("qualification: [unterminated\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="YAML invalide"):
         validate_v1_release_readiness(tmp_path, "1.0.0")
 
 
