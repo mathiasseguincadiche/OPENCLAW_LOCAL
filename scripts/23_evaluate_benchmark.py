@@ -32,9 +32,7 @@ def latest_benchmark() -> Path:
         key=lambda path: path.stat().st_mtime,
     )
     if not candidates:
-        raise FileNotFoundError(
-            "aucun benchmark trouvé dans benchmarks/results"
-        )
+        raise FileNotFoundError("aucun benchmark trouvé dans benchmarks/results")
     return candidates[-1]
 
 
@@ -73,7 +71,7 @@ def main() -> int:
             f"{alias}: gate={model['automated_gate']} "
             f"pass={model['check_pass_rate']:.3f} "
             f"tps={model['median_tokens_per_second']} "
-            f"p95_ttft_ms={model['p95_ttft_ms']}"
+            f"p95_first_token_ms={model['p95_first_token_ms']}"
         )
         for failure in model["failures"]:
             print(f"  KO  {failure}")
