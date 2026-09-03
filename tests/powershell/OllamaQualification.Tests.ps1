@@ -19,9 +19,10 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Verify | Should -Not -Match '& ollama run'
     }
 
-    It 'exécute benchmark et évaluation avec le Python géré OPENCLAW_LOCAL' {
+    It 'exécute verify benchmark et qualification avec le Python géré OPENCLAW_LOCAL' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         foreach ($RelativePath in @(
+            'scripts\windows\04_verify_local.ps1',
             'scripts\windows\05_benchmark.ps1',
             'scripts\windows\07_run_qualification.ps1'
         )) {
@@ -31,6 +32,24 @@ Describe 'Qualification Ollama lisible et bornée' {
             $Script | Should -Match '& \$ManagedPython'
             $Script | Should -Not -Match '&\s+python(?:\.exe)?\b'
         }
+    }
+
+    It 'auto-active le runtime géré dans les CLI Python sensibles sous Windows' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        foreach ($RelativePath in @(
+            'scripts\20_list_models.py',
+            'scripts\48_model_identity_lock.py'
+        )) {
+            $Script = Get-Content -Raw -LiteralPath (Join-Path $TestRepoRoot $RelativePath)
+            $Script | Should -Match 'runtime.*venv.*Scripts.*python\.exe'
+            $Script | Should -Match 'os\.execv'
+            $Script | Should -Match 'sys\.executable'
+        }
+        $ListModels = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\20_list_models.py'
+        )
+        $ListModels | Should -Match 'E:/AI/OpenClawLocal'
+        $ListModels | Should -Match 'LOCALAPPDATA'
     }
 
     It 'transmet Quick au benchmark depuis le menu' {
