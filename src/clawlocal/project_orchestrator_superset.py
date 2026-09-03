@@ -19,12 +19,18 @@ from clawlocal.project_governance import (
     record_criticality_gate,
     required_criticality_gates,
 )
-from clawlocal.project_ingestion import (
-    ingest_project_documents,
-    validate_ingestion_index,
-    validate_source_coverage,
+from clawlocal.project_ingestion import ingest_project_documents, validate_ingestion_index
+from clawlocal.project_ingestion_pre_v1 import (
+    ensure_secure_generic_zip_ingestion,
+    validate_source_coverage_pre_v1,
 )
 from clawlocal.project_integrity import snapshot_integrity
+from clawlocal.project_traceability import (
+    normalize_analysis_requirements,
+    refresh_traceability_matrix,
+    traceability_failures,
+    validate_plan_requirement_links,
+)
 from clawlocal.project_web_evidence import (
     project_web_evidence_failures,
     task_web_evidence_failures,
@@ -36,8 +42,6 @@ open_blocking_clarifications = base.open_blocking_clarifications
 project_path = base.project_path
 resolve_clarification = base.resolve_clarification
 store_clarifications_from_analysis = base.store_clarifications_from_analysis
-store_review_report = base.store_review_report
-store_validation_report = base.store_validation_report
 
 
 def load_project_manifest(project: Path) -> dict[str, Any]:
@@ -107,25 +111,56 @@ def _web_verification_context(phase: str, task_id: str | None = None) -> str:
     return ""
 
 
+def _traceability_context(phase: str) -> str:
+    if phase == "analyze":
+        return (
+            " Produis aussi requirements[]: une exigence atomique et vérifiable par entrée, avec "
+            "{id,statement,type,priority,source_document_ids[],source_refs[],acceptance_hint}. "
+            "Utilise des identifiants stables REQ-001, REQ-002, etc. source_document_ids doit "
+            "référencer les document_id de context/ingestion/index.json; source_refs peut pointer "
+            "vers une section, page, chemin source ou décision humaine. Ne fusionne pas deux "
+            "exigences indépendantes sous un même REQ."
+        )
+    if phase == "plan":
+        return (
+            " Chaque tâche doit contenir requirement_ids[] avec les REQ qu'elle contribue à "
+            "satisfaire. Toutes les exigences explicites doivent être couvertes par au moins une "
+            "tâche; une tâche purement support peut avoir requirement_ids vide. Les "
+            "acceptance_criteria et required_evidence doivent rendre cette couverture vérifiable."
+        )
+    if phase in {"validate", "review"}:
+        return (
+            " Consulte context/traceability/requirements_matrix.json et audite la chaîne "
+            "REQ -> tâche -> sortie observée -> preuve -> verdict. Une exigence non mappée, sans "
+            "preuve observable ou dont une tâche est en échec est bloquante."
+        )
+    return ""
+
+
 def build_phase_prompt(project_id: str, phase: str, *, task_id: str | None = None) -> str:
     prompt = base.build_phase_prompt(project_id, phase, task_id=task_id)
     prompt += _pedagogy_phase_context(phase)
     prompt += _web_verification_context(phase, task_id)
+    prompt += _traceability_context(phase)
     if phase == "analyze":
         return prompt + (
             " Lis aussi context/ingestion/index.json avant de conclure. Pour chaque document "
             "indexé, utilise derived_path quand status=READY_TEXT/PARTIAL_TEXT; utilise l'outil "
-            "pdf sur source_path pour un PDF et view_image pour une image. Un PDF long doit être "
-            "parcouru par tranches jusqu'à couvrir le document utile; le fallback PDF local peut "
-            "rendre les pages scannées en images. Ajoute source_coverage[] avec exactement une "
-            "entrée par document: {document_id,status,method,notes}; status vaut READ, PARTIAL ou "
-            "UNREADABLE, et method vaut local_text_extract, local_zip_xml_extract, pdf, view_image "
-            "ou raw_file. Tout UNREADABLE doit aussi être expliqué dans missing_information[]."
+            "pdf sur source_path pour un PDF et view_image pour une image. Pour kind=zip avec "
+            "status=READY_ARCHIVE, lis archive.md et archive_manifest.json puis inspecte les "
+            "membres dérivés pertinents; les archives imbriquées restent opaques. Utilise pdf ou "
+            "view_image sur un membre dérivé si son type l'exige. Un PDF long doit être parcouru "
+            "par tranches jusqu'à couvrir le document utile. Ajoute source_coverage[] avec "
+            "exactement une entrée par document: {document_id,status,method,notes}; status vaut "
+            "READ, PARTIAL ou UNREADABLE, et method vaut local_text_extract, "
+            "local_zip_xml_extract, local_safe_archive_extract, pdf, view_image ou raw_file. "
+            "Tout UNREADABLE doit aussi être expliqué dans missing_information[]."
         )
     if phase == "plan":
         return prompt + (
-            " Utilise context/ingestion/index.json et source_coverage de project_analysis.json. "
-            "Une source PARTIAL/UNREADABLE ne peut pas être silencieusement considérée comme lue."
+            " Utilise context/ingestion/index.json, source_coverage et requirements de "
+            "project_analysis.json. Une source PARTIAL/UNREADABLE ne peut pas être silencieusement "
+            "considérée comme lue."
         )
     if phase == "execute" and task_id is not None:
         return prompt + (
@@ -149,6 +184,7 @@ def store_analysis(project: Path, payload: dict[str, Any]) -> Path:
     ingestion_index = project / "context" / "ingestion" / "index.json"
     if not ingestion_index.is_file():
         ingest_project_documents(project)
+    ensure_secure_generic_zip_ingestion(project)
     validate_ingestion_index(project)
     coverage = payload.get("source_coverage", [])
     missing_information = payload.get("missing_information", [])
@@ -156,18 +192,17 @@ def store_analysis(project: Path, payload: dict[str, Any]) -> Path:
         raise ValueError("analyse: source_coverage doit être une liste")
     if not isinstance(missing_information, list):
         raise ValueError("analyse: missing_information doit être une liste")
-    payload = dict(payload)
-    payload["source_coverage"] = validate_source_coverage(
-        project,
-        coverage,
-        missing_information,
+    normalized = dict(payload)
+    normalized["source_coverage"] = validate_source_coverage_pre_v1(
+        project, coverage, missing_information
     )
-    path = base.store_analysis(project, payload)
-    for value in payload.get("risks", []):
+    normalized = normalize_analysis_requirements(project, normalized)
+    path = base.store_analysis(project, normalized)
+    for value in normalized.get("risks", []):
         text = str(value.get("description") if isinstance(value, dict) else value).strip()
         if text:
             append_risk(project, risk=text)
-    for value in payload.get("decisions_required", []):
+    for value in normalized.get("decisions_required", []):
         text = str(value.get("description") if isinstance(value, dict) else value).strip()
         if text:
             append_decision(
@@ -180,7 +215,11 @@ def store_analysis(project: Path, payload: dict[str, Any]) -> Path:
 
 
 def store_plan(project: Path, payload: dict[str, Any]) -> Path:
-    return base.store_plan(project, normalize_plan_payload(payload))
+    normalized = normalize_plan_payload(payload)
+    validate_plan_requirement_links(project, normalized)
+    path = base.store_plan(project, normalized)
+    refresh_traceability_matrix(project)
+    return path
 
 
 def pending_tasks(project: Path) -> list[dict[str, Any]]:
@@ -236,6 +275,7 @@ def record_task_result(
         status=status,
         collected_outputs=collected_outputs,
     )
+    refresh_traceability_matrix(project)
 
     platform_root = project.resolve().parents[1]
     if (platform_root / "workspaces").is_dir():
@@ -247,6 +287,18 @@ def record_task_result(
                 include_outputs=False,
             )
     return assignment
+
+
+def store_validation_report(project: Path, payload: dict[str, Any]) -> Path:
+    path = base.store_validation_report(project, payload)
+    refresh_traceability_matrix(project)
+    return path
+
+
+def store_review_report(project: Path, payload: dict[str, Any]) -> Path:
+    path = base.store_review_report(project, payload)
+    refresh_traceability_matrix(project)
+    return path
 
 
 def _record_automatic_gate_evidence(
@@ -271,15 +323,37 @@ def _record_automatic_gate_evidence(
             actor=actor,
             evidence="validation.json: verdict PASS avant REVIEW",
         )
-    if target == "COMPLETE" and "human_final_approval_required" in required:
-        if human_approved:
-            record_criticality_gate(
-                project,
-                "human_final_approval_required",
-                actor="human",
-                evidence="approbation humaine finale avant COMPLETE",
-                human_approved=True,
-            )
+    if target == "COMPLETE" and "human_final_approval_required" in required and human_approved:
+        record_criticality_gate(
+            project,
+            "human_final_approval_required",
+            actor="human",
+            evidence="approbation humaine finale avant COMPLETE",
+            human_approved=True,
+        )
+
+
+def _assert_pre_v1_gates(project: Path, target: str) -> None:
+    if target not in {"VALIDATING", "REVIEW", "PACKAGING", "COMPLETE"}:
+        return
+    failures = validate_exchange_completeness(project)
+    if failures:
+        raise PermissionError(
+            f"transition vers {target} bloquée; artifact exchange incomplet: "
+            + "; ".join(failures)
+        )
+    web_failures = project_web_evidence_failures(project)
+    if web_failures:
+        raise PermissionError(
+            f"transition vers {target} bloquée; preuves Web invalides: "
+            + "; ".join(web_failures)
+        )
+    trace_failures = traceability_failures(project, require_completed=True)
+    if trace_failures:
+        raise PermissionError(
+            f"transition vers {target} bloquée; traçabilité exigences incomplète: "
+            + "; ".join(trace_failures)
+        )
 
 
 def transition_project(
@@ -291,19 +365,7 @@ def transition_project(
     human_approved: bool = False,
 ) -> dict[str, Any]:
     validate_project_manifest(base.load_project_manifest(project))
-    if target in {"VALIDATING", "REVIEW", "PACKAGING", "COMPLETE"}:
-        failures = validate_exchange_completeness(project)
-        if failures:
-            raise PermissionError(
-                f"transition vers {target} bloquée; artifact exchange incomplet: "
-                + "; ".join(failures)
-            )
-        web_failures = project_web_evidence_failures(project)
-        if web_failures:
-            raise PermissionError(
-                f"transition vers {target} bloquée; preuves Web invalides: "
-                + "; ".join(web_failures)
-            )
+    _assert_pre_v1_gates(project, target)
     base._assert_transition_gates(project, target, human_approved=human_approved)
     _record_automatic_gate_evidence(
         project,
@@ -326,14 +388,7 @@ def transition_project(
 
 
 def package_project(project: Path) -> tuple[Path, Path]:
-    failures = validate_exchange_completeness(project)
-    if failures:
-        details = "; ".join(failures)
-        raise PermissionError(f"packaging bloqué; artifact exchange incomplet: {details}")
-    web_failures = project_web_evidence_failures(project)
-    if web_failures:
-        details = "; ".join(web_failures)
-        raise PermissionError(f"packaging bloqué; preuves Web invalides: {details}")
+    _assert_pre_v1_gates(project, "PACKAGING")
     for name in ("deliverables", "diagrams", "context"):
         root = project / name
         if root.exists():
