@@ -2,35 +2,43 @@
 
 ## But
 
-Ce document décrit le chemin spécialisé Intel de `OPENCLAW_LOCAL` pour la **Intel Arc B580 12 Go**.
+Ce document décrit les chemins d'inférence locaux spécialisés de `OPENCLAW_LOCAL` pour l'**Intel Arc B580 12 Go**. L'objectif est d'utiliser des backends LLM mesurables et réversibles, pas d'activer toutes les API Intel disponibles.
 
-L'objectif n'est pas de cocher toutes les API Intel disponibles. L'objectif est d'utiliser un backend LLM capable d'exploiter la carte de façon pertinente, mesurable et réversible :
+## Flotte actuelle
+
+```text
+qwen-max          -> qwen3.5:9b-q4_K_M
+gemma-deep        -> gemma3:12b-it-q4_K_M
+devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+```
+
+La flotte a été redimensionnée après observation d'une pression mémoire/offload excessive avec la précédente classe 24–27B. Les nouveaux modèles restent **non qualifiés matériellement** tant qu'une nouvelle campagne B580 n'a pas produit ses preuves.
+
+Le contexte nominal est 8192 tokens ; le 16K reste un stress de qualification.
+
+## Chemins locaux
 
 ```text
 OpenClaw
-   │
-   ├── texte ─────> provider intel-sycl
-   │                  │
-   │                  v
-   │              llama-server
-   │                  │
-   │                  v
-   │                 SYCL
-   │                  │
-   │                  v
-   │              Level Zero
-   │                  │
-   │                  v
-   │            Intel Arc B580 / XMX
-   │
-   └── image/PDF --> Ollama/Vulkan (tant que mmproj SYCL non qualifié)
+   |
+   +--> Ollama / Vulkan (nominal et rollback)
+   |
+   +--> llama.cpp / SYCL / Level Zero (candidat)
+   |
+   +--> llama.cpp / Vulkan (candidat)
+   |
+   +--> profil b580-hybrid
+          qwen-max        -> Ollama
+          gemma-deep      -> llama.cpp/Vulkan
+          devstral-devops -> llama.cpp/Vulkan
+          image/PDF       -> Ollama
 ```
+
+Qwen et Gemma portent le parcours multimodal. Qwen 2.5 Coder est text-only et reçoit un handoff textuel/structuré lorsque la source initiale est visuelle.
 
 ## Pourquoi SYCL/Level Zero
 
-La B580 expose des moteurs matriciels XMX et plusieurs API de calcul. Pour les LLM GGUF de cette plateforme, le chemin spécialisé choisi est le backend **SYCL de llama.cpp**, contraint au GPU via **Level Zero**.
-
-OpenCL, OpenVINO et IPEX ne sont pas ajoutés au runtime LLM principal simplement parce qu'ils existent : ils répondent à d'autres charges ou frameworks. Ils pourront être évalués séparément si un besoin concret le justifie.
+Pour les LLM GGUF, le chemin Intel spécialisé est le backend **SYCL de llama.cpp**, contraint au GPU via **Level Zero**. OpenCL, OpenVINO ou d'autres frameworks ne sont pas ajoutés au runtime principal sans besoin concret et protocole dédié.
 
 ## Runtime verrouillé
 
@@ -44,108 +52,93 @@ device     : SYCL0
 selector   : level_zero:gpu
 endpoint   : http://127.0.0.1:8080/v1
 models-max : 1
+parallel   : 1
+context    : 8192
+GPU layers : auto
 ```
 
 L'archive n'est jamais exécutée avant validation de son SHA-256 versionné.
 
-## Réutilisation des modèles Ollama
+## Sources modèles
 
-La plateforme ne duplique pas automatiquement les dizaines de Go de poids.
+Le contrat actuel réutilise les sources GGUF effectives exposées par le stockage local lorsque cela est compatible. Toute source native alternative doit être explicitement verrouillée dans `runtime_versions.json` avec intégrité vérifiable ; aucun téléchargement implicite d'un autre modèle n'est accepté pendant un benchmark.
 
-Pour chacun des trois modèles requis, le setup exécute :
-
-```powershell
-ollama show <model> --modelfile
-```
-
-La ligne `FROM` doit pointer vers un fichier local existant. Ce fichier GGUF devient la source du preset llama.cpp. Si ce contrat n'est pas satisfait, le setup échoue au lieu de télécharger silencieusement un autre modèle.
-
-## Installation et démarrage
+## Installation SYCL
 
 ```powershell
 .\menu.ps1 -Action intel-sycl-setup -DryRun
 .\menu.ps1 -Action intel-sycl-setup
 ```
 
-Cette action :
+Le setup :
 
 1. lit le runtime verrouillé ;
-2. télécharge uniquement l'archive binaire si elle manque ;
+2. télécharge uniquement le binaire géré si nécessaire ;
 3. vérifie son SHA-256 ;
-4. extrait le runtime dans un répertoire versionné ;
-5. exécute `llama-server --list-devices` sous `ONEAPI_DEVICE_SELECTOR=level_zero:gpu` ;
-6. exige `SYCL0` et une Intel Arc B580 ;
-7. résout les trois GGUF Ollama ;
-8. génère le preset multi-modèles ;
-9. lance le serveur en loopback, offline, `models-max=1`, `gpu-layers=all` ;
-10. vérifie `/v1/models` ;
-11. exécute un smoke-test `/v1/chat/completions` pour les trois modèles ;
-12. conserve une preuve JSON.
+4. vérifie B580, `SYCL0` et Level Zero ;
+5. résout les trois modèles requis ;
+6. génère un preset mono-modèle actif (`models-max=1`) ;
+7. démarre en loopback/offline, `parallel=1`, `gpu-layers=auto` ;
+8. vérifie l'API ;
+9. exécute des smokes déterministes ;
+10. décharge explicitement entre modèles ;
+11. conserve une preuve JSON.
 
-Une erreur à n'importe quelle étape arrête le serveur candidat.
+Une erreur arrête le serveur candidat et interdit toute promotion.
 
 ## Pourquoi `models-max=1`
 
-Les trois modèles sont de l'ordre de 24 à 27B. La B580 possède 12 Go de VRAM.
+Même redimensionnée, la flotte ne doit pas garder trois modèles simultanément en VRAM sur une carte 12 Go. La politique est donc :
 
-La politique choisie est donc :
+- un modèle actif à la fois sur les routeurs llama.cpp ;
+- chargement/déchargement explicite ;
+- orchestration séquentielle par défaut ;
+- mesure des temps de changement de modèle ;
+- aucune affirmation de résidence complète avant preuve.
 
-- un seul modèle lourd actif à la fois ;
-- chargement/déchargement par le routeur llama-server ;
-- aucune tentative de garder simultanément les trois modèles en mémoire ;
-- orchestration séquentielle par défaut conservée.
-
-Cette politique limite la pression VRAM/RAM et correspond au contrat actuel du Project Orchestrator (`max_parallel_tasks=1`).
-
-## Vérification
+## Vérification SYCL
 
 ```powershell
 .\menu.ps1 -Action intel-sycl-verify
 ```
 
-Le contrôle exige :
-
-- runtime présent ;
-- binaire exécutable ;
-- B580 visible sous SYCL/Level Zero ;
-- processus serveur suivi ;
-- API locale disponible ;
-- trois modèles annoncés ;
-- trois smoke-tests réussis.
-
-Une preuve est écrite dans :
+Le contrôle exige runtime, binaire, B580, processus suivi, API locale, trois modèles annoncés et smokes réussis. Les preuves sont conservées sous :
 
 ```text
-<OPENCLAW_LOCAL_ROOT>\proofs\intel-sycl\verify_*.json
+<OPENCLAW_LOCAL_ROOT>\proofs\intel-sycl\
 ```
 
-## Comparaison avec Ollama/Vulkan
+## Diagnostic direct SYCL
 
-Diagnostic rapide :
+```powershell
+.\menu.ps1 -Action intel-sycl-diagnose -Model qwen3.5:9b-q4_K_M
+.\menu.ps1 -Action intel-sycl-diagnose -Model gemma3:12b-it-q4_K_M
+.\menu.ps1 -Action intel-sycl-diagnose -Model qwen2.5-coder:14b-instruct-q4_K_M
+```
+
+Le diagnostic isole full/auto offload, comportement `fit` et CPU-only sans modifier automatiquement OpenClaw.
+
+## Comparaison Ollama / SYCL
 
 ```powershell
 .\menu.ps1 -Action intel-sycl-compare -Quick
-```
-
-Comparaison complète :
-
-```powershell
 .\menu.ps1 -Action intel-sycl-compare
 ```
 
-Le protocole utilise :
+Comparer le même modèle effectif et la même quantification avec :
 
-- mêmes runtime IDs ;
-- même contexte 8192 ;
-- température 0 ;
-- Qwen thinking désactivé uniquement pour rendre la comparaison backend plus comparable ;
+- contexte 8192 pour la baseline ;
+- température déterministe ;
+- thinking désactivé lorsque le protocole de comparaison l'exige ;
 - mêmes prompts ;
 - durée murale ;
+- TTFT ;
 - prompt tok/s ;
 - génération tok/s ;
-- répétitions versionnées dans la preuve.
+- chargement/déchargement ;
+- mémoire observée si disponible.
 
-Le rapport indique toujours :
+Le rapport conserve :
 
 ```text
 PROMOTION_ALLOWED=false
@@ -153,54 +146,67 @@ PROMOTION_ALLOWED=false
 
 La vitesse seule ne suffit pas.
 
-## Basculer OpenClaw
+## Backend llama.cpp/Vulkan
 
-Après setup, verify et comparaison :
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup -DryRun
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+```
+
+Le runtime géré Vulkan écoute sur `127.0.0.1:8081/v1`, utilise `models-max=1`, `parallel=1`, `gpu-layers=auto`, `fit=on`, contexte 8192 et reste offline.
+
+Dans le profil hybride, il gère Gemma 3 12B et Qwen 2.5 Coder 14B. Le serveur SYCL suivi est arrêté avant Vulkan afin de ne pas créer une contention artificielle de VRAM.
+
+## Basculer OpenClaw vers un candidat
+
+SYCL :
 
 ```powershell
 .\menu.ps1 -Action configure-openclaw -Backend llama-cpp-sycl -DryRun
 .\menu.ps1 -Action configure-openclaw -Backend llama-cpp-sycl
-.\menu.ps1 -Action e2e
+.\menu.ps1 -Action e2e -Backend llama-cpp-sycl
 ```
 
-Les modèles texte des huit agents passent alors au provider `intel-sycl`.
+Hybride :
 
-Les modèles image/PDF restent sur Ollama. Cette séparation est volontaire tant que la chaîne multimodale llama.cpp/SYCL n'a pas ses propres preuves matérielles.
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Les images/PDF restent sur Ollama tant qu'un parcours multimodal llama.cpp n'est pas qualifié.
 
 ## Rollback
 
-Configuration :
-
 ```powershell
 .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
-```
-
-Arrêt du serveur candidat :
-
-```powershell
+.\menu.ps1 -Action intel-vulkan-stop
 .\menu.ps1 -Action intel-sycl-stop
 ```
 
-Le setup Intel ne modifie jamais OpenClaw de lui-même.
+Les setups candidats ne modifient jamais automatiquement la sélection OpenClaw.
 
-## Ce qui constitue une vraie validation XMX
+## Ce qui constitue une vraie validation B580
 
-Le projet ne prétend pas mesurer directement le taux d'occupation de chaque unité XMX. Une validation opérationnelle exige au minimum :
+Une promotion exige au minimum :
 
-- B580 vue par le backend SYCL sous Level Zero ;
-- kernels GPU réellement utilisables sans fallback d'échec ;
-- performance mesurée par rapport à Vulkan ;
+- B580 et pilote exact enregistrés ;
+- identité/digest/quantification des trois modèles ;
+- modèle réellement chargé sur le backend attendu ;
+- benchmark reproductible ;
+- VRAM/RAM et offload observés lorsque disponibles ;
 - stabilité de chargement/déchargement ;
 - OpenClaw E2E ;
 - tool-calling ;
 - réparation après retour d'outil ;
 - trois exécutions stables ;
+- contexte soutenable ;
 - revue humaine.
 
-Le terme « optimisé B580 » ne doit être utilisé qu'après ces preuves, pas à partir des seuls TOPS théoriques.
+Le terme « optimisé B580 » ne doit être utilisé qu'après ces preuves. La CI valide les contrats logiciels ; elle ne remplace pas la qualification matérielle.
 
-## Limite actuelle importante
+## État pré-V1
 
-Le routeur multi-modèles change de modèle à la demande. Avant promotion, le test E2E doit donc inclure des appels successifs entre agents utilisant des modèles différents et vérifier qu'aucun changement de modèle n'interrompt une requête active.
-
-C'est précisément la raison pour laquelle `llama-cpp-sycl` reste **candidat** même après son installation réussie.
+`ollama-vulkan` reste le nominal/rollback. SYCL, Vulkan et `b580-hybrid` restent des candidats jusqu'aux nouvelles mesures de cette flotte. Les anciennes preuves 24–27B restent historiques et ne peuvent pas être réutilisées comme attestation V1.
