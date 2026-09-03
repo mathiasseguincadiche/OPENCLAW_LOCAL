@@ -264,15 +264,49 @@ Les gates automatiques sont passés **et le parcours s'est terminé sous 40 minu
 - comparaison backend ;
 - test multimodal ;
 - golden projects ;
+- télémétrie réelle ;
 - projet complet ;
 - limites observées ;
 - revue humaine.
+
+## 8. Attestation de release V1
+
+Les preuves brutes restent hors Git. Après exécution et revue de tous les contrôles ci-dessus, calculer leur SHA-256 et reporter les empreintes dans `config/v1/release_readiness.yaml`.
+
+Sous PowerShell :
+
+```powershell
+Get-FileHash -Algorithm SHA256 <chemin-preuve>
+```
+
+Pour une version `>=1.0.0`, le manifeste doit cibler exactement `VERSION` et relier la release aux preuves suivantes :
+
+- identité exacte des modèles qualifiés ;
+- qualification automatique HARD-40M ;
+- OpenClaw E2E ;
+- comparaison des backends Intel Arc ;
+- golden projects ;
+- multimodalité réelle ;
+- télémétrie réelle ;
+- package du projet représentatif.
+
+Le manifeste exige également `limits_documented: true`, `no_cloud_fallback_confirmed: true`, le commit source de la qualification et une approbation humaine datée en UTC.
+
+`approved: true` et le verdict `APPROVED_FOR_V1` ne doivent être renseignés **qu'après** inspection humaine des fichiers de preuve correspondant aux SHA-256. Le hash lie l'attestation au fichier ; il ne remplace pas la revue.
+
+Le validateur final est :
+
+```powershell
+python .\scripts\24_validate_release.py --tag v<VERSION>
+```
+
+Sur une version `0.x`, le V1 Release Readiness Gate est volontairement non applicable. Sur une version `>=1`, toute attestation absente, incomplète, visant une autre version ou dépourvue d'approbation humaine fait échouer la release avant le job `publish`.
 
 ## Pourquoi GitHub Actions ne suffit pas
 
 La CI valide le code, les contrats, la compatibilité Python/PowerShell, les tests de sécurité et les invariants documentaires. Elle ne possède ni la workstation cible, ni son pilote, ni sa VRAM, ni les modèles réellement chargés.
 
-La CI peut donc prouver la **conformité logicielle**, jamais inventer une qualification matérielle.
+La CI peut donc prouver la **conformité logicielle**, jamais inventer une qualification matérielle. Le V1 Release Readiness Gate vérifie l'existence et la cohérence de l'attestation hashée ; il ne prétend pas reproduire les tests matériels dans GitHub Actions.
 
 ## Critère V1.0.0
 
@@ -285,6 +319,8 @@ La CI peut donc prouver la **conformité logicielle**, jamais inventer une quali
 5. identité modèle verrouillée par le PASS complet ;
 6. comparaison des backends prévue ;
 7. golden projects exécutés et revus ;
-8. au moins un projet complet ;
-9. limites documentées ;
-10. validation humaine finale.
+8. multimodalité et télémétrie réelles vérifiées ;
+9. au moins un projet complet ;
+10. limites documentées ;
+11. preuves hashées dans `release_readiness.yaml` ;
+12. validation humaine finale et verdict `APPROVED_FOR_V1`.
