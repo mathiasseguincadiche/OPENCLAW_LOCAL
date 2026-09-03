@@ -17,6 +17,7 @@ from clawlocal.project_orchestrator_superset import (
     open_blocking_clarifications,
     resolve_clarification,
 )
+from clawlocal.safe_fs import iter_regular_files_no_links
 
 SCENARIOS: dict[str, dict[str, Any]] = {
     "vague-devops-pdf": {
@@ -360,8 +361,11 @@ def evaluate_golden_project(project: Path, scenario_id: str) -> list[str]:
             root = project / root_name
             if not root.exists():
                 continue
-            for path in root.rglob("*"):
-                if not path.is_file() or path.suffix.casefold() not in text_extensions:
+            for path in iter_regular_files_no_links(
+                root,
+                label=f"golden output {root_name}",
+            ):
+                if path.suffix.casefold() not in text_extensions:
                     continue
                 text = path.read_text(encoding="utf-8", errors="ignore")
                 if forbidden in text:
