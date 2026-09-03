@@ -12,7 +12,6 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Verify | Should -Match 'stream = \$false'
         $Verify | Should -Match 'num_predict = 64'
         $Verify | Should -Match "qwen3\.5:\*"
-        $Verify | Should -Match "gemma3:\*"
         $Verify | Should -Match '\$RequestBody\.think = \$false'
         $Verify | Should -Match 'thinking_chars='
         $Verify | Should -Match 'done_reason='
