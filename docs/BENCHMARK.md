@@ -104,7 +104,9 @@ Pour Qwen, le thinking natif n'est plus payé sur chaque cas. Il est conservé s
 16384 long-context-discipline
 ```
 
-Ces trois probes disposent d'un plafond de **768 tokens**. Tous les autres cas Qwen utilisent `think=false` et conservent la limite propre au scénario. Cette séparation préserve une preuve réelle de la capacité reasoning sans multiplier le coût de réflexion sur des tâches courtes de formatage JSON/YAML ou de contrôle simple.
+Ces trois probes disposent désormais d'un plafond de **1024 tokens**. Cette marge est fondée sur une exécution B580 réelle où `kubernetes-root-cause` a atteint exactement l'ancienne borne de 768 tokens tout en restant nettement sous le timeout de 210 s. Tous les autres cas Qwen utilisent `think=false` et conservent la limite propre au scénario. Cette séparation préserve une preuve réelle de la capacité reasoning sans multiplier le coût de réflexion sur des tâches courtes de formatage JSON/YAML ou de contrôle simple.
+
+Atteindre 1024 tokens reste considéré comme une sortie tronquée et fait échouer le gate : la marge augmente, mais le comportement fail-closed ne change pas.
 
 ## Budget temps dur
 
