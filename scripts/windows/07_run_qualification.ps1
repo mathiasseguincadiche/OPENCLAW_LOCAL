@@ -47,7 +47,8 @@ function Assert-QualificationBudget(
 if ($DryRun) {
     Write-Host '[DRY-RUN] Qualification locale stricte, sans appel cloud :'
     Write-Host '  runtime Python: environnement géré OPENCLAW_LOCAL avec PyYAML vérifié'
-    Write-Host '  aucune promotion automatique; toute promotion exige une qualification complète PASS'
+    Write-Host '  aucune promotion automatique de backend/catalogue/verdict V1'
+    Write-Host '  fingerprint modèle promu uniquement après un gate complet PASS'
     Write-Host '  1. audit host + VRAM fiable'
     if ($Quick) {
         Write-Host '  2. smoke tests API des trois modèles required'
