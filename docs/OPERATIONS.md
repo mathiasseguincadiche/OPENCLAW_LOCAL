@@ -12,11 +12,21 @@ Ce runbook couvre l'exploitation quotidienne de `OPENCLAW_LOCAL` sur Windows 11.
 openclaw gateway status --require-rpc --json
 ```
 
-Résultat attendu : runtime conforme, Ollama local, trois modèles présents, huit agents configurés, Gateway joignable.
+Résultat attendu : runtime conforme, Ollama local, exactement trois modèles présents, huit agents configurés et Gateway joignable.
+
+## Flotte active
+
+```text
+qwen-max          -> qwen3.5:9b-q4_K_M
+gemma-deep        -> gemma3:12b-it-q4_K_M
+devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+```
+
+`devstral-devops` reste le nom d'alias du spécialiste DevOps ; son runtime est désormais Qwen 2.5 Coder 14B. Le contexte nominal OpenClaw est 8192 tokens. Le 16K reste réservé à la qualification tant qu'il n'est pas démontré soutenable sur la B580.
 
 ## Racine et stockage
 
-Afficher la racine active :
+Afficher les variables actives :
 
 ```powershell
 $env:OPENCLAW_LOCAL_ROOT
@@ -37,34 +47,40 @@ E:\AI\OpenClawLocal\
     └── logs\
 ```
 
-`projects/` est la source de vérité des projets. `workspaces/` contient des snapshots gérés et reconstruisibles.
+`projects/` est la source de vérité. `workspaces/` contient des snapshots gérés et reconstruisibles.
 
-## Logs opérationnels automatiques
+## Installation ou migration de flotte
 
-Toute action **réelle** lancée via `menu.ps1` est journalisée automatiquement dans :
+Après mise à jour de Git :
+
+```powershell
+.\menu.ps1 -Action models -DryRun
+.\menu.ps1 -Action models
+.\menu.ps1 -Action configure-openclaw -DryRun
+.\menu.ps1 -Action configure-openclaw
+.\menu.ps1 -Action audit
+.\menu.ps1 -Action verify
+```
+
+`models` lit directement `config/v1/model_catalog.yaml`. Aucun quatrième modèle n'est téléchargé implicitement.
+
+Une ancienne identité qualifiée devient invalide dès qu'un runtime/digest ne correspond plus à la flotte active. Ne recopier aucun hash d'une ancienne qualification vers la nouvelle.
+
+## Logs opérationnels
+
+Toute action réelle via `menu.ps1` est journalisée sous :
 
 ```text
 <OPENCLAW_LOCAL_ROOT>\proofs\logs\
 ```
 
-Le nom est horodaté et inclut l'action :
-
-```text
-20260828_142530123_install-full.log
-20260828_151004772_audit.log
-20260828_151115904_verify.log
-20260828_153812441_qualification.log
-```
-
-Au démarrage, le menu affiche `LOG=<chemin>`. À la fin il inscrit `ACTION_RESULT=PASS` ou `ACTION_RESULT=FAIL`, arrête le transcript puis affiche `LOG_SAVED=<chemin>`.
-
-Lister les derniers transcripts et les emplacements des preuves structurées :
+Lister les derniers transcripts :
 
 ```powershell
 .\menu.ps1 -Action logs
 ```
 
-Afficher les 100 dernières lignes du dernier transcript :
+Afficher la fin du dernier log :
 
 ```powershell
 $latest = Get-ChildItem "$env:OPENCLAW_LOCAL_ROOT\proofs\logs\*.log" |
@@ -73,21 +89,72 @@ $latest = Get-ChildItem "$env:OPENCLAW_LOCAL_ROOT\proofs\logs\*.log" |
 Get-Content -LiteralPath $latest.FullName -Tail 100
 ```
 
-Suivre ce transcript depuis une seconde console :
+Les transcripts complètent les preuves structurées ; ils ne les remplacent pas. Avant partage, retirer tout secret, token, `.env` ou document privé.
+
+## E2E après changement de modèle ou backend
 
 ```powershell
-Get-Content -LiteralPath $latest.FullName -Tail 50 -Wait
+.\menu.ps1 -Action e2e -DryRun
+.\menu.ps1 -Action e2e
 ```
 
-Les `-DryRun` ne créent pas de transcript afin de conserver le contrat sans mutation. `-NoLog` permet de désactiver explicitement la journalisation automatique d'une action réelle.
+Le E2E doit prouver :
 
-Les transcripts complètent les preuves structurées ; ils ne les remplacent pas :
+- huit agents ;
+- provider et modèle attendus ;
+- Gateway réellement utilisé ;
+- tool-calling du spécialiste DevOps ;
+- réparation après erreur d'outil ;
+- trois runs stables ;
+- aucun fallback cloud silencieux.
 
-- E2E : `<OPENCLAW_LOCAL_ROOT>\proofs\openclaw_e2e_*.json` ;
-- inventaire/benchmark : `<REPO>\benchmarks\results\*.json` ;
-- console de l'action : `<OPENCLAW_LOCAL_ROOT>\proofs\logs\*.log`.
+Le spécialiste DevOps est text-only. Les PDF/images sont ingérés par les modèles multimodaux Qwen/Gemma puis transmis sous forme textuelle/structurée au spécialiste.
 
-Avant partage, relire le transcript et ne jamais transmettre clé API, token Gateway, `.env` ou document privé.
+## Qualification après migration
+
+```powershell
+.\menu.ps1 -Action qualification -DryRun
+.\menu.ps1 -Action qualification
+```
+
+La migration vers les nouveaux modèles impose une **nouvelle qualification complète**. Les preuves des anciens 24–27B restent utiles comme historique de diagnostic, mais ne qualifient ni les nouveaux modèles ni leur backend.
+
+Les seuils HARD-40M ne sont pas abaissés : les trois modèles doivent réellement passer le protocole actif.
+
+## Backends Intel Arc
+
+Chemins disponibles :
+
+```text
+ollama-vulkan    : nominal / rollback
+llama-cpp-sycl   : candidat
+llama-cpp-vulkan : candidat
+b580-hybrid      : Qwen/Ollama + Gemma/Qwen Coder Vulkan
+```
+
+Cycle candidat :
+
+```powershell
+.\menu.ps1 -Action intel-sycl-setup
+.\menu.ps1 -Action intel-sycl-verify
+.\menu.ps1 -Action intel-sycl-compare -Quick
+
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Aucun résultat de l'ancienne flotte ne doit être utilisé pour promouvoir automatiquement `b580-hybrid` avec la nouvelle flotte.
+
+Rollback :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
+.\menu.ps1 -Action intel-vulkan-stop
+.\menu.ps1 -Action intel-sycl-stop
+```
 
 ## Prendre en charge un projet
 
@@ -100,56 +167,14 @@ python .\scripts\28_create_project.py `
   --deliverable README
 ```
 
-Puis :
-
-```powershell
-python .\scripts\31_sync_project_context.py `
-  --project p5-devops `
-  --agent all
-```
-
-Le projet central est sous :
-
-```text
-<OPENCLAW_LOCAL_ROOT>\projects\p5-devops
-```
-
-Les snapshots agents sont sous :
-
-```text
-<OPENCLAW_LOCAL_ROOT>\workspaces\<agent-id>\projects\p5-devops
-```
-
-## Exécuter un projet
-
-Voir l'état :
+Voir l'état puis exécuter :
 
 ```powershell
 python .\scripts\32_orchestrate_project.py --project p5-devops --action status
+python .\scripts\32_orchestrate_project.py --project p5-devops --action run --execute
 ```
 
-Lancer le parcours :
-
-```powershell
-python .\scripts\32_orchestrate_project.py `
-  --project p5-devops `
-  --action run `
-  --execute
-```
-
-Le run s'arrête sur un gate humain, un échec ou une limite de tentatives. Relancer la même commande reprend l'état persistant sans effacer l'historique.
-
-## Recherche récente
-
-Pour une donnée actuelle :
-
-1. utiliser `expert-recherche` ;
-2. rechercher/fetcher des sources récentes ;
-3. privilégier les sources officielles ;
-4. faire synthétiser localement ;
-5. n'envisager le cloud que si un motif autorisé reste démontré.
-
-La simple fraîcheur n'est pas un motif d'escalade LLM cloud.
+Le run s'arrête sur un gate humain, un échec ou une limite de tentatives. Relancer reprend l'état persistant sans effacer l'historique.
 
 ## Routage local
 
@@ -159,72 +184,13 @@ python .\scripts\27_route_openclaw.py `
   --message 'Analyse le problème.'
 ```
 
-La flotte supportée reste exactement :
+La route nominale du rôle DevOps reste l'alias `devstral-devops`, résolu vers `qwen2.5-coder:14b-instruct-q4_K_M`.
 
-```text
-qwen-max          -> qwen3.8:27b
-gemma-deep        -> gemma4:26b
-devstral-devops   -> devstral-small-2:24b
-```
+## Recherche récente et cloud
 
-## Cloud et FinOps
+Pour une donnée actuelle : recherche/fetch Web d'abord, synthèse locale ensuite. La fraîcheur seule n'est jamais un motif d'appel LLM cloud.
 
-Une route cloud nécessite :
-
-- `--cloud` ;
-- un motif versionné ;
-- les préconditions du motif ;
-- `OPENCLAW_LOCAL_CLOUD_ENABLED=true` ;
-- un budget disponible ;
-- `OPENROUTER_API_KEY` pour `--execute` ;
-- une approbation humaine si le motif l'impose.
-
-### Planification
-
-La planification peut vérifier un coût proposé sans modifier le ledger.
-
-### Exécution réelle
-
-Juste avant l'appel réel, le routeur :
-
-1. acquiert le verrou FinOps ;
-2. relit le ledger ;
-3. tient compte des réservations actives ;
-4. vérifie les limites ;
-5. crée une réservation append-only ;
-6. lance ensuite OpenClaw.
-
-Après obtention du coût réel :
-
-```powershell
-python .\scripts\30_record_cloud_cost.py `
-  --role expert-recherche `
-  --model perplexity/sonar-pro-search `
-  --reason deep_web_research `
-  --project-id p5-devops `
-  --reservation-id '<reservation-id>' `
-  --cost-eur 0.08
-```
-
-Le ledger reste hors Git sous `<OPENCLAW_LOCAL_ROOT>\state\finops\cloud-costs.jsonl`.
-
-## Diagrammes
-
-```powershell
-python .\scripts\29_render_diagram.py architecture.d2 architecture.svg --dry-run
-python .\scripts\29_render_diagram.py architecture.d2 architecture.svg
-```
-
-## Après changement de runtime, modèle, backend ou pilote GPU
-
-Une ancienne qualification n'est pas réutilisée automatiquement.
-
-```powershell
-.\menu.ps1 -Action inventory
-.\menu.ps1 -Action benchmark
-.\menu.ps1 -Action e2e
-.\menu.ps1 -Action qualification
-```
+Une route cloud exige activation explicite, motif autorisé, préconditions, budget disponible, secret local et éventuellement approbation humaine. Le cloud ne masque jamais une panne locale.
 
 ## Après changement des contrats agents/routage
 
@@ -234,10 +200,6 @@ Une ancienne qualification n'est pas réutilisée automatiquement.
 .\menu.ps1 -Action configure-openclaw
 .\menu.ps1 -Action e2e
 ```
-
-## Après changement des sources d'un projet
-
-Ne pas modifier un snapshot agent comme source de vérité. Mettre à jour le projet central via le parcours prévu puis resynchroniser. Le synchroniseur refuse d'écraser un snapshot non géré.
 
 ## Diagnostic ordonné
 
@@ -250,15 +212,13 @@ Ne pas modifier un snapshot agent comme source de vérité. Mettre à jour le pr
 7. `openclaw agents list --json` ;
 8. Gateway ;
 9. `verify` puis `e2e` ;
-10. dernier benchmark ;
+10. dernier benchmark/qualification ;
 11. preuves projet/Web ;
 12. seulement ensuite, si la politique le permet, envisager le cloud.
 
-Ne jamais masquer un défaut local par un fallback cloud automatique.
-
 ## Sauvegarde
 
-Avant maintenance, sauvegarder au minimum les données non reconstruisibles :
+Sauvegarder les données non reconstruisibles avant maintenance :
 
 ```powershell
 $root = $env:OPENCLAW_LOCAL_ROOT
@@ -274,27 +234,20 @@ foreach ($name in @('projects', 'state', 'proofs')) {
 }
 ```
 
-`runtime/` et `workspaces/` sont normalement reconstruisibles et ne constituent pas la sauvegarde canonique des projets.
+`runtime/` et `workspaces/` sont normalement reconstruisibles.
 
 ## Restauration
 
-1. arrêter les opérations et le Gateway si nécessaire ;
-2. restaurer `projects/`, `state/` et les preuves utiles depuis un backup cohérent ;
-3. ne pas restaurer un runtime ancien sur un lock incompatible ;
-4. réinstaller/réparer le runtime depuis Git si nécessaire ;
+1. arrêter Gateway et runtimes candidats si nécessaire ;
+2. restaurer `projects/`, `state/` et les `proofs/` utiles depuis un backup cohérent ;
+3. ne jamais restaurer un runtime ancien sous un lock incompatible ;
+4. réinstaller/réparer le runtime depuis Git ;
 5. resynchroniser les workspaces ;
-6. exécuter :
+6. exécuter `audit`, `verify` puis `e2e` ;
+7. vérifier les hashes/provenances des projets critiques.
 
-```powershell
-.\menu.ps1 -Action audit
-.\menu.ps1 -Action verify
-.\menu.ps1 -Action e2e
-```
-
-7. vérifier un projet critique avec `--action status` et les hashes/provenances attendus.
-
-Une sauvegarde n'est considérée utile qu'après au moins un test de restauration contrôlé.
+Une sauvegarde n'est considérée utile qu'après un test de restauration contrôlé.
 
 ## Références
 
-Pour les incidents détaillés, rollback, mise à jour, désinstallation, GPU, Gateway et secrets, voir `docs/TROUBLESHOOTING.md`.
+Pour les incidents détaillés, voir `docs/TROUBLESHOOTING.md`. Pour le protocole matériel, voir `docs/QUALIFICATION.md` et `docs/RUNTIME_BACKENDS.md`.
