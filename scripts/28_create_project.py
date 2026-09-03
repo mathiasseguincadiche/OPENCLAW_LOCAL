@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from clawlocal.project_ingestion import ingest_project_documents
+from clawlocal.project_ingestion_pre_v1 import ensure_secure_generic_zip_ingestion
 from clawlocal.project_intake import create_project
 
 
@@ -49,6 +50,7 @@ def main() -> int:
         criticality=args.criticality,
     )
     ingestion_index = ingest_project_documents(project)
+    ingestion_index = ensure_secure_generic_zip_ingestion(project)
     print(f"PROJECT={project}")
     print(f"INGESTION_INDEX={ingestion_index}")
     return 0
