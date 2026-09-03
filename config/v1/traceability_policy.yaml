@@ -1,0 +1,31 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+enabled: true
+artifact_root: context/traceability
+matrix_json: context/traceability/requirements_matrix.json
+matrix_markdown: context/traceability/REQUIREMENTS_TRACEABILITY.md
+
+requirements:
+  id_pattern: '^REQ-[0-9]{3,5}$'
+  explicit_requirements_required_for_nominal_orchestration: true
+  legacy_derivation_allowed_for_existing_tests_and_projects: true
+  preserve_source_document_ids: true
+  preserve_source_refs: true
+
+planning_gate:
+  reject_unknown_requirement_ids: true
+  require_every_explicit_requirement_mapped: true
+  allow_support_tasks_without_requirement_id: true
+
+completion_gate:
+  require_traceability_before_validating: true
+  require_pass_for_every_explicit_requirement: true
+  require_observed_output_or_evidence: true
+  fail_closed_on_unmapped_requirement: true
+
+principles:
+  requirements_are_not_task_titles: true
+  source_to_requirement_provenance_required: true
+  task_to_output_links_required: true
+  output_to_evidence_links_required: true
+  independent_verdict_preserved: true
