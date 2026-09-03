@@ -41,7 +41,7 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] thinking=$ThinkingMode repeats=$Repeats max_out=$MaxOutputTokens timeout=${CaseTimeoutSeconds}s"
     Write-Host '[DRY-RUN] native conserve le reasoning Qwen; off envoie think=false.'
     Write-Host '[DRY-RUN] Le runner continue après timeout/troncature pour mesurer les 3 probes.'
-    Write-Host '[DRY-RUN] Aucune qualification, identité modèle ou promotion backend n est modifiée.'
+    Write-Host "[DRY-RUN] Aucune qualification, identité modèle ou promotion backend n'est modifiée."
     exit 0
 }
 
