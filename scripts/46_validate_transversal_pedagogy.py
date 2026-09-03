@@ -290,7 +290,8 @@ def main() -> int:
 
     print("Transversal Pedagogy Gate: CONFORME")
     print("- 8 agents: contrat pédagogique obligatoire injecté avant le contrat de rôle")
-    print("- 3 modèles locaux: Qwen 3.8 27B, Gemma 4 26B, Devstral Small 2 24B")
+    print("- 3 modèles locaux: Qwen 3.5 9B, Gemma 3 12B, Qwen 2.5 Coder 14B")
+    print("- Ministral 3 14B reste challenger de benchmark hors routage")
     print("- escalade cloud explicite: même contrat pédagogique conservé au niveau agent")
     print("- 5 phases: apprentissage et accessibilité renforcés dans les prompts")
     print("- débutant accessible sans fausse simplification, profondeur expert préservée")
