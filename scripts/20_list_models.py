@@ -6,10 +6,24 @@ import sys
 from pathlib import Path
 
 
+def _platform_root_candidate() -> Path | None:
+    explicit = os.environ.get("OPENCLAW_LOCAL_ROOT")
+    if explicit:
+        return Path(explicit)
+    if os.name != "nt":
+        return None
+    if Path("E:/").exists():
+        return Path("E:/AI/OpenClawLocal")
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "OpenClawLocal"
+    return None
+
+
 def _activate_repository_runtime() -> None:
-    platform_root = os.environ.get("OPENCLAW_LOCAL_ROOT")
-    if platform_root and os.name == "nt":
-        managed = Path(platform_root) / "runtime" / "venv" / "Scripts" / "python.exe"
+    platform_root = _platform_root_candidate()
+    if platform_root is not None and os.name == "nt":
+        managed = platform_root / "runtime" / "venv" / "Scripts" / "python.exe"
         if managed.is_file() and Path(sys.executable).resolve() != managed.resolve():
             os.execv(
                 str(managed),
