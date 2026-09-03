@@ -1,4 +1,4 @@
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 platform_version: "0.2.0"
 enabled: true
 local_first: true
@@ -38,6 +38,12 @@ formats:
   office_sheet:
     extensions: [.xlsx]
     method: local_zip_xml_extract
+  archive:
+    extensions: [.zip]
+    method: local_safe_archive_extract
+    recursive_nested_archives: false
+    preserve_exact_member_bytes: true
+    preserve_member_sha256: true
   text:
     extensions:
       - .txt
@@ -90,9 +96,21 @@ extraction:
     max_single_member_mb: 64
     max_compression_ratio: 200
     reject_encrypted_members: true
+  generic_archive_safety:
+    max_archive_bytes_mb: 250
+    max_members: 20000
+    max_total_uncompressed_mb: 2048
+    max_single_member_mb: 256
+    max_compression_ratio: 200
+    max_depth: 12
+    reject_encrypted_members: true
+    reject_links_and_special_files: true
+    reject_windows_ambiguous_paths: true
+    reject_casefold_duplicates: true
+    nested_archives_are_opaque: true
 
 coverage_statuses: [READ, PARTIAL, UNREADABLE]
-coverage_methods: [local_text_extract, local_zip_xml_extract, pdf, view_image, raw_file]
+coverage_methods: [local_text_extract, local_zip_xml_extract, local_safe_archive_extract, pdf, view_image, raw_file]
 
 security:
   cloud_for_document_ingestion: false
