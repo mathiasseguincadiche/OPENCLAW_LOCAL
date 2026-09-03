@@ -32,7 +32,9 @@ def _protected_inputs(agent_id: str) -> tuple[str, ...]:
     defaults = enforcement.get("protected_inputs", list(_DEFAULT_PROTECTED))
     entry = policy.get("agents", {}).get(agent_id, {})
     values = entry.get("protected_inputs", defaults)
-    if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
+    if not isinstance(values, list) or any(
+        not isinstance(item, str) for item in values
+    ):
         raise ValueError(f"tool_policy: protected_inputs invalide pour {agent_id}")
     return tuple(values)
 
@@ -43,11 +45,16 @@ def allowed_output_kinds(agent_id: str) -> tuple[str, ...]:
     if not isinstance(entry, dict):
         raise ValueError(f"tool_policy: agent inconnu: {agent_id}")
     values = entry.get("collect_scopes", list(_DEFAULT_OUTPUTS))
-    if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
+    if not isinstance(values, list) or any(
+        not isinstance(item, str) for item in values
+    ):
         raise ValueError(f"tool_policy: collect_scopes invalide pour {agent_id}")
     unknown = sorted(set(values) - set(_DEFAULT_OUTPUTS))
     if unknown:
-        raise ValueError(f"tool_policy: collect_scopes inconnus pour {agent_id}: {', '.join(unknown)}")
+        raise ValueError(
+            f"tool_policy: collect_scopes inconnus pour {agent_id}: "
+            + ", ".join(unknown)
+        )
     return tuple(values)
 
 
@@ -61,7 +68,10 @@ def _snapshot(workspace_project: Path, agent_id: str) -> dict[str, Any]:
         if root.is_file():
             entries[relative] = _sha256(root)
             continue
-        for path in iter_regular_files_no_links(root, label=f"workspace guard {relative}"):
+        for path in iter_regular_files_no_links(
+            root,
+            label=f"workspace guard {relative}",
+        ):
             key = path.relative_to(workspace_project).as_posix()
             entries[key] = _sha256(path)
     canonical = json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()
@@ -78,7 +88,10 @@ def _snapshot(workspace_project: Path, agent_id: str) -> dict[str, Any]:
 def write_workspace_guard(workspace_project: Path, agent_id: str) -> Path:
     payload = _snapshot(workspace_project, agent_id)
     target = workspace_project / _GUARD_FILE
-    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    target.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     return target
 
 
@@ -93,7 +106,8 @@ def validate_workspace_guard(workspace_project: Path, agent_id: str) -> None:
     if expected.get("agent_id") != agent_id:
         raise PermissionError(f"workspace guard attribué au mauvais agent: {agent_id}")
     if expected.get("aggregate_sha256") != observed.get("aggregate_sha256"):
-        expected_entries = expected.get("entries", {}) if isinstance(expected.get("entries"), dict) else {}
+        raw_entries = expected.get("entries", {})
+        expected_entries = raw_entries if isinstance(raw_entries, dict) else {}
         observed_entries = observed.get("entries", {})
         changed = sorted(
             key
