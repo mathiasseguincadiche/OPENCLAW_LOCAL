@@ -1,4 +1,4 @@
-schema_version: "1.1.0"
+schema_version: "1.2.0"
 platform_version: "0.2.0"
 
 security_defaults:
@@ -9,16 +9,25 @@ security_defaults:
   cloud_tools_without_explicit_escalation: false
   document_tools: [pdf, view_image]
 
+write_enforcement:
+  protected_inputs: [intake, sources, context/exchange]
+  guard_manifest: .openclaw-local-input-guard.json
+  fail_on_protected_input_change: true
+  collect_scopes_are_enforced: true
+  central_project_accepts_only_collected_task_outputs: true
+
 agents:
   chef-operations:
     profile: coding
     also_allow: [pdf, view_image]
     deny: [write, edit, apply_patch, exec, process]
+    collect_scopes: [work, evidence]
 
   expert-recherche:
     profile: coding
     also_allow: [browser, pdf, view_image]
     deny: [write, edit, apply_patch, exec, process]
+    collect_scopes: [work, evidence]
 
   architecte-solutions:
     profile: coding
@@ -26,31 +35,37 @@ agents:
     deny: [write, edit, apply_patch, exec, process]
     artifact_writer: architecture_scoped
     write_scope: [context/architecture, diagrams]
+    collect_scopes: [work, evidence, diagrams]
 
   ingenieur-devops:
     profile: coding
     also_allow: [pdf, view_image]
     deny: []
+    collect_scopes: [work, deliverables, evidence, diagrams]
 
   ingenieur-securite:
     profile: coding
     also_allow: [pdf, view_image]
     deny: [write, edit, apply_patch]
+    collect_scopes: [work, evidence]
 
   ingenieur-release-forges:
     profile: coding
     also_allow: [pdf, view_image]
     deny: []
+    collect_scopes: [work, deliverables, evidence]
 
   redacteur-technique:
     profile: coding
     also_allow: [pdf, view_image]
     deny: [exec, process]
+    collect_scopes: [work, deliverables, evidence, diagrams]
 
   auditeur-qualite:
     profile: coding
     also_allow: [pdf, view_image]
     deny: [write, edit, apply_patch, exec, process]
+    collect_scopes: [work, evidence]
 
 notes:
   - "Le profil coding inclut group:web : web_search et web_fetch restent disponibles localement."
@@ -61,4 +76,6 @@ notes:
   - "Le mode elevated reste désactivé."
   - "Ingénieur sécurité audite et scanne mais ne modifie pas directement les sources."
   - "Architecte produit ADR/schémas via un writer borné à context/architecture et diagrams."
-  - "Les rôles de revue ne peuvent pas modifier silencieusement le livrable qu'ils auditent."
+  - "Les rôles de revue ne peuvent pas modifier silencieusement le livrable audité."
+  - "Le Workspace Guard hash les entrées intake/sources/context/exchange avant l'exécution et bloque la collecte si elles ont été altérées."
+  - "collect_scopes est appliqué par le collecteur central : une sortie hors périmètre n'est jamais promue dans le projet central."
