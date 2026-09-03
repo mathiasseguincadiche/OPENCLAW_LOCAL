@@ -1,0 +1,32 @@
+schema_version: "1.0.0"
+platform_version: "0.2.0"
+enabled: true
+provider: ollama
+state_root: state/qualification
+candidate_filename: candidate_model_identity.json
+qualified_filename: qualified_model_identity.json
+
+identity_fields:
+  - runtime_id
+  - digest
+  - format
+  - family
+  - parameter_size
+  - quantization_level
+
+qualification:
+  capture_before_full_benchmark: true
+  promote_only_after_full_gate_pass: true
+  quick_diagnostic_never_promotes: true
+  identity_must_remain_stable_during_qualification: true
+
+invalidation:
+  automatic_on_digest_or_quantization_change: true
+  automatic_on_required_model_change: true
+  invalidated_state: INVALIDATED
+  requalification_required_after_invalidation: true
+
+principles:
+  tags_are_not_immutable_identity: true
+  qualified_identity_is_runtime_observed: true
+  no_cloud_lookup_required: true
