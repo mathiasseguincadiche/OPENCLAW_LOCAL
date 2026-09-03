@@ -1,4 +1,4 @@
-schema_version: "1.1.0"
+schema_version: "1.2.0"
 platform_version: "0.2.0"
 suite: devops-v2
 required_contexts: [8192, 16384]
@@ -6,11 +6,16 @@ optional_contexts: [32768]
 
 automated_gates:
   required_models: [qwen-max, gemma-deep, devstral-devops]
+  extended_context_scenarios:
+    - project-intake-analysis
+    - kubernetes-root-cause
+    - tool-feedback-repair-json
+    - long-context-discipline
   thresholds:
     max_error_rate: 0.0
     min_check_pass_rate: 0.875
     min_median_tokens_per_second: 6.0
-    max_p95_ttft_ms: 12000
+    max_p95_first_token_ms: 12000
     per_context_min_check_pass_rate:
       "8192": 0.875
       "16384": 0.75
