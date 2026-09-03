@@ -1,0 +1,23 @@
+schema_version: "1.0.0"
+
+target_version: "1.0.0"
+approved: false
+
+qualification:
+  verdict: PENDING
+  source_commit: ""
+  model_identity_sha256: ""
+  automated_qualification_sha256: ""
+  openclaw_e2e_sha256: ""
+  backend_comparison_sha256: ""
+  golden_projects_sha256: ""
+  multimodal_evidence_sha256: ""
+  telemetry_evidence_sha256: ""
+  representative_project_package_sha256: ""
+  limits_documented: false
+  no_cloud_fallback_confirmed: false
+
+human_approval:
+  approved: false
+  approved_by: ""
+  approved_at_utc: ""
