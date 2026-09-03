@@ -172,7 +172,7 @@ CI/Release couvrent notamment :
 24_validate_release.py
 Ruff
 mypy
-pytest + coverage
+pytest + coverage >= 75 %
 Python 3.12 / 3.13
 PowerShell 7
 PSScriptAnalyzer
