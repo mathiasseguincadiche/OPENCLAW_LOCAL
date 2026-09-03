@@ -11,7 +11,7 @@ dependencies = ["PyYAML>=6.0.2,<7"]
 
 [project.optional-dependencies]
 dev = [
-  "mypy>=1.15,<2",
+  "mypy>=1.15,<3",
   "pytest>=8.3,<9",
   "pytest-cov>=6,<7",
   "ruff>=0.9,<1",
