@@ -2,44 +2,50 @@
 
 ## But
 
-La qualification transforme la flotte et les backends déclarés dans Git en décisions fondées sur des **preuves réelles** produites sur la workstation cible. Elle ne sert pas à découvrir de nouveaux modèles : la flotte supportée est fermée à exactement trois modèles.
+La qualification transforme la flotte et les backends déclarés dans Git en décisions fondées sur des **preuves réelles** produites sur la workstation Windows 11 + Intel Arc B580. La CI valide les contrats ; elle ne fabrique jamais une qualification matérielle.
 
-## Flotte obligatoire
+## Flotte obligatoire B580
 
-| Alias | Runtime | Classe |
-|---|---|---|
-| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX |
-| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP |
-| `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST |
+| Alias logique | Runtime | Quantification | Rôle principal |
+|---|---|---|---|
+| `qwen-max` | `qwen3.5:9b-q4_K_M` | Q4_K_M | orchestration, recherche, sécurité, release, multimodal |
+| `gemma-deep` | `gemma3:12b-it-q4_K_M` | Q4_K_M | architecture, rédaction, audit, multimodal |
+| `devstral-devops` | `qwen2.5-coder:14b-instruct-q4_K_M` | Q4_K_M | DevOps, code, outils dépôt |
 
-Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer le gate global. Il n'existe aucun modèle local optionnel ni quatrième candidat dans cette qualification.
+L'alias `devstral-devops` est conservé pour compatibilité logique ; le runtime est désormais Qwen2.5 Coder 14B et reste text-only. Les entrées PDF/image destinées au DevOps passent par Qwen/Gemma puis par un handoff traçable.
+
+Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer le gate global. Aucun quatrième modèle local n'est un fallback caché.
 
 ## Invariants
 
 - aucun appel LLM cloud pendant la qualification matérielle ;
 - aucun téléchargement implicite pendant le benchmark ;
 - exactement trois modèles évalués ;
+- quantification attendue Q4_K_M ;
+- contexte nominal opérationnel : **8192 tokens** ;
+- contexte **16384** : stress de qualification, jamais promotion nominale implicite ;
 - aucun seuil modifié pour faire passer artificiellement un modèle ;
 - aucune promotion automatique de backend, de catalogue ou de verdict V1 ;
 - le fingerprint exact des modèles peut être promu vers l'état `QUALIFIED` **uniquement après un gate complet PASS** ;
 - preuves brutes conservées hors Git ;
-- toute dérive de modèle, backend, OpenClaw, Ollama ou pilote GPU invalide la réutilisation automatique d'une preuve précédente ;
-- **la qualification complète ne doit jamais dépasser 40 minutes de temps mural**.
+- toute dérive modèle/backend/runtime/pilote invalide la réutilisation automatique d'une preuve ;
+- qualification complète : **2400 s** maximum.
 
-La promotion d'identité modèle n'est pas une promotion de backend ni une validation V1 : elle enregistre seulement le digest, le format, la famille, la taille de paramètres et la quantification réellement observés pendant une qualification complète réussie.
-
-## 1. Installation propre
+## 1. Installation de la nouvelle flotte
 
 ```powershell
 .\menu.ps1 -Action install-full -DryRun
 .\menu.ps1 -Action install-full
 ```
 
-Le parcours complet installe le runtime, configure le stockage local, télécharge les trois modèles, configure OpenClaw et le Gateway puis vérifie le parcours nominal.
+Pour une workstation déjà installée :
 
-Le smoke-test Ollama utilise l'API locale **`/api/chat`** avec `stream=false`. Il ne passe pas par `ollama run`. Pour Qwen3.8 et Gemma4, le thinking est désactivé pendant ce smoke-test minimal : cette étape vérifie que le runtime répond, pas sa capacité de raisonnement profond.
+```powershell
+.\menu.ps1 -Action configure-local
+.\scripts\windows\03_pull_models.ps1
+```
 
-Après le smoke-test, `/api/ps` peut être interrogé pour afficher la taille réellement chargée en VRAM, la taille totale du modèle et le contexte alloué par Ollama.
+Le pull lit `model_catalog.yaml` et télécharge les trois runtimes requis. Les anciens modèles éventuellement présents sur disque ne font plus partie du routage supporté.
 
 ## 2. Vérification du runtime
 
@@ -48,20 +54,11 @@ Après le smoke-test, `/api/ps` peut être interrogé pour afficher la taille r�
 .\menu.ps1 -Action verify
 ```
 
-Avant de poursuivre, vérifier notamment :
+Le smoke Ollama utilise `/api/chat`, un contexte réduit et une sortie courte. Pour Qwen 3.5, le thinking est désactivé pendant ce smoke minimal : cette étape vérifie la disponibilité du runtime, pas le raisonnement profond.
 
-- runtime conforme au lock ;
-- Ollama sur loopback ;
-- trois modèles présents ;
-- huit agents configurés ;
-- aucun cloud requis ;
-- identité modèle actuelle compatible avec l'état qualifié lorsqu'il existe.
+`/api/ps` expose lorsque disponible la taille chargée, `size_vram` et le contexte réellement alloué. Une résidence GPU complète n'est jamais supposée sans mesure.
 
-Sous Windows, les chemins de vérification utilisent le runtime Python géré OPENCLAW_LOCAL et ne doivent pas retomber silencieusement sur un Python système ambigu.
-
-### VRAM Windows
-
-`Win32_VideoController.AdapterRAM` reste une information secondaire. L'audit privilégie `HardwareInformation.qwMemorySize`, champ QWORD 64 bits du registre Windows. Le fallback historique 32 bits n'est jamais présenté comme une mesure fiable sur un GPU moderne de plus de 4 GiB.
+Sous Windows, les chemins sensibles utilisent le runtime Python géré OPENCLAW_LOCAL.
 
 ## 3. Gate OpenClaw E2E
 
@@ -70,40 +67,38 @@ Sous Windows, les chemins de vérification utilisent le runtime Python géré OP
 .\menu.ps1 -Action e2e
 ```
 
-Le gate E2E doit prouver au minimum :
+Le gate doit prouver :
 
 1. les huit agents via le Gateway ;
 2. le routage local attendu ;
-3. un vrai appel d'outil ;
+3. un vrai appel d'outil avec Qwen Coder pour l'Ingénieur DevOps ;
 4. une erreur d'outil contrôlée suivie d'une réparation ;
-5. trois exécutions locales stables ;
+5. trois exécutions stables ;
 6. aucune dépendance cloud nominale.
 
 Les preuves sont écrites sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
 
-## 4. Qualification automatique des trois modèles
-
-### Passe complète HARD-40M de référence
+## 4. HARD-40M
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
-Cette passe couvre **30 cas** :
+Le launcher utilise `benchmark_qualification_40m_v2.py`.
 
-- **24 cas 8K** : 8 scénarios adaptés au rôle de chacun des trois modèles ;
-- **6 cas 16K** : 2 scénarios de stress ciblés par modèle ;
-- les **12 scénarios** de `devops-v2` restent tous couverts collectivement à 8K ;
-- les trois modèles restent obligatoires.
+La matrice versionnée contient **30 cas** :
 
-La matrice complète est versionnée dans `config/v1/qualification_policy.yaml` sous `automated_gates.scenario_matrix`.
+- 24 cas à 8192 tokens ;
+- 6 cas à 16384 tokens ;
+- exactement trois modèles requis ;
+- les scénarios restent définis dans `devops-v2` et `qualification_policy.yaml`.
 
-Le 16K est conservé sur les tâches qui apportent réellement une contrainte de contexte : Project Intake et long contexte pour Qwen/Gemma ; diagnostic Kubernetes et long contexte pour Devstral.
+Le 16K sert à vérifier si le contexte étendu reste viable. Le support logiciel ne transforme jamais automatiquement ce stress en valeur nominale.
 
 ### Qwen reasoning
 
-Le thinking Qwen n'est plus activé sur tous les cas. Il reste **natif sur trois probes dédiés** :
+Trois probes Qwen gardent le thinking natif :
 
 ```text
 8192  project-intake-analysis
@@ -111,13 +106,11 @@ Le thinking Qwen n'est plus activé sur tous les cas. Il reste **natif sur trois
 16384 long-context-discipline
 ```
 
-Ces probes sont désormais bornés à **1024 tokens**. Cette marge est fondée sur une exécution B580 réelle où `kubernetes-root-cause` a atteint exactement l'ancienne borne de 768 tokens en 109,8 s, donc sans approcher le timeout individuel de 210 s. Tous les autres cas Qwen utilisent `think=false` et leur plafond de scénario normal. On conserve donc une preuve réelle du reasoning sans payer son coût sur les tâches courtes de formatage ou de contrôle.
+Le plafond HARD-40M reste **1024 tokens** sur ces probes. Atteindre cette borne reste une troncature et un échec. Tous les autres cas Qwen utilisent une génération bornée adaptée au scénario.
 
-Une génération qui atteint 1024 tokens reste considérée tronquée et fait échouer le gate. Le gain de marge ne repose pas sur l'acceptation silencieuse de réponses coupées.
+L'ancienne flotte 27B a montré sur la B580 que davantage de tokens ou de temps ne suffisait pas à corriger un mauvais ajustement matériel. Cette preuve historique motive le redimensionnement de la flotte ; elle ne constitue pas une qualification des nouveaux modèles.
 
 ### Budget temps contractualisé
-
-`qualification_policy.yaml` fixe :
 
 ```text
 qualification complète : 2400 s maximum
@@ -126,201 +119,94 @@ benchmark direct        : 2100 s par défaut
 cas individuel          :  210 s maximum
 ```
 
-`scripts/windows/07_run_qualification.ps1` démarre un chronomètre au début du parcours. Après audit, inventaire et capture de l'identité exacte des modèles, il retire le temps déjà consommé et réserve 60 secondes pour l'évaluation finale. Le budget restant est transmis au benchmark.
+Le runner applique un deadline mural et un fail-fast lorsque `max_error_rate: 0.0` rend déjà le gate impossible. Un timeout, une erreur API ou une sortie tronquée ne sont jamais convertis en PASS.
 
-`scripts/benchmark_qualification_40m_v2.py` applique ensuite son propre deadline mural. Une erreur API, un timeout ou une sortie tronquée déclenche un **fail-fast**, puisque `max_error_rate: 0.0` rend déjà le gate impossible.
+## 5. Identité exacte des modèles
 
-Si le budget de 40 minutes est atteint, le verdict est `FAIL/HARD_TIMEOUT` : le script ne continue pas au-delà de la limite.
+Avant le benchmark complet, la qualification capture l'identité des trois runtimes dans :
 
-### Verrouillage de l'identité des modèles
+```text
+state/qualification/candidate_model_identity.json
+```
 
-Avant le benchmark complet, la qualification capture l'identité runtime des trois modèles dans `state/qualification/candidate_model_identity.json`. Cette identité contient notamment le `runtime_id`, le digest, le format, la famille, la taille de paramètres et la quantification.
+Elle contient notamment runtime ID, digest, format, famille, paramètres et quantification observée.
 
-Après un gate complet PASS et seulement dans ce cas, cette même identité est promue vers `qualified_model_identity.json`. Si l'identité change pendant le run, la promotion est refusée. Si elle change ultérieurement, `verify` marque l'état qualifié `INVALIDATED` et impose une nouvelle qualification complète.
+Après un gate complet PASS, et seulement dans ce cas, cette identité peut être promue vers :
+
+```text
+state/qualification/qualified_model_identity.json
+```
+
+Si l'identité change ensuite, `verify` doit retourner `INVALIDATED`. Cette promotion d'identité n'est **aucune promotion automatique de backend** ni une approbation V1.
 
 Le mode `-Quick` ne promeut jamais l'identité modèle.
 
-### Suppression des smokes redondants en mode complet
-
-La passe complète ne génère plus trois smokes avant le benchmark. Elle vérifie le catalogue et la présence des modèles, puis la matrice de benchmark effectue directement de vraies générations sur chacun d'eux.
-
-Les smokes restent disponibles via `verify` et sont conservés dans le mode `-Quick`. Le gate OpenClaw E2E reste également distinct.
-
-### Passe rapide d'itération
+## 6. Diagnostic Quick
 
 ```powershell
 .\menu.ps1 -Action qualification -Quick -DryRun
 .\menu.ps1 -Action qualification -Quick
 ```
 
-Cette passe conserve **36 cas** : 3 modèles × 12 scénarios, uniquement à 8192 tokens, avec thinking Qwen désactivé.
+Quick conserve 36 cas à 8192 tokens avec thinking Qwen désactivé. Un succès produit un diagnostic ; il ne remplace pas HARD-40M.
 
-Le mode Quick sert au diagnostic ; il **ne remplace pas** la qualification HARD-40M. Un Quick réussi retourne `QUICK_DIAGNOSTIC_PASS`, jamais `READY_FOR_MANUAL_QUALIFICATION`.
+## 7. Comparaison des backends
 
-Ou directement :
+Backends candidats :
 
-```powershell
-.\scripts\windows\07_run_qualification.ps1
-.\scripts\windows\07_run_qualification.ps1 -Quick
-```
+- `ollama-vulkan` ;
+- `llama-cpp-sycl` ;
+- `llama-cpp-vulkan` ;
+- profil `b580-hybrid`.
 
-Le parcours complet enchaîne :
-
-1. audit host/runtime et VRAM ;
-2. lecture des trois modèles `required` ;
-3. inventaire matériel/runtime ;
-4. capture de l'identité exacte des trois modèles ;
-5. benchmark HARD-40M via `/api/chat` ;
-6. matrice 30 cas 8K/16K ;
-7. évaluation des seuils versionnés ;
-8. promotion du fingerprint modèle uniquement après PASS complet ;
-9. contrôle final que la durée totale reste inférieure à 2400 s.
-
-Après chaque scénario, l'opérateur voit le statut, la durée, le temps au premier token réellement généré, le délai jusqu'à la réponse finale, les tokens/s, le nombre de tokens générés, le volume de thinking sans son contenu, le budget restant et une estimation du temps restant.
-
-## 5. Mesures à collecter
-
-Pour chaque modèle/backend pertinent :
-
-- temps au premier token réellement généré ;
-- délai jusqu'au premier token de réponse finale ;
-- tokens/s ;
-- durée murale ;
-- VRAM fiable ou explicitement inconnue ;
-- offload VRAM réellement observé via Ollama ;
-- RAM ;
-- stabilité ;
-- erreurs ;
-- contexte 8K/16K ;
-- politique de thinking ;
-- tool-calling ;
-- réparation après retour d'outil ;
-- comportement multimodal PDF/image lorsqu'il s'applique.
-
-Pour un modèle reasoning, le gate de latence utilise le **premier token réellement généré**, y compris un token du canal thinking. Le temps jusqu'au premier token de réponse finale reste enregistré séparément.
-
-Les mesures absentes restent absentes : elles ne sont jamais inventées. La trace brute du thinking n'est pas conservée ; seul son volume est comptabilisé.
-
-## 6. Comparaison des backends Intel Arc
-
-Le contrat déclare :
-
-- `ollama-vulkan` — chemin nominal pré-qualification ;
-- `llama-cpp-sycl` — candidat ;
-- `llama-cpp-vulkan` — candidat.
-
-Comparer autant que possible le même modèle et la même quantification. Le choix doit reposer sur le compromis réel entre premier token, débit, VRAM/RAM, stabilité, contexte soutenable, compatibilité OpenClaw/tool-calling et simplicité d'exploitation.
+Comparer autant que possible même modèle, même quantification, même contexte et mêmes prompts. Mesures à conserver : TTFT, tokens/s, prompt tokens/s, wall time, VRAM/RAM, temps de chargement, stabilité, tool-calling et changements de modèles.
 
 Aucun backend n'est auto-promu.
 
-## 7. Projet représentatif obligatoire avant V1
+## 8. Golden Projects et projet représentatif
 
-La qualification technique doit être complétée par au moins un projet réel couvrant :
-
-```text
-INTAKE_READY
--> ANALYZE
--> CLARIFY si nécessaire
--> PLAN
--> ASSIGN
--> EXECUTE
--> VALIDATE
--> REVIEW
--> PACKAGE
--> approbation humaine
--> COMPLETE
+```powershell
+.\menu.ps1 -Action golden -DryRun
+.\menu.ps1 -Action golden
 ```
 
-Le scénario doit idéalement contenir plusieurs formats et une dépendance entre tâches permettant de vérifier l'Artifact Exchange et la resynchronisation.
-
-Les cinq golden projects pré-V1 complètent cette preuve, mais ne remplacent pas le projet représentatif final ni sa revue humaine.
+Les cinq Golden Projects complètent le benchmark mais ne remplacent pas un projet réel de `INTAKE_READY` à `COMPLETE` avec revue humaine, multimodalité réelle, Artifact Exchange, télémétrie et package final.
 
 ## Verdicts
 
 ### `NOT_READY`
 
-Au moins un garde-fou automatique échoue. Conserver la preuve, diagnostiquer puis corriger la cause. Ne pas abaisser un seuil sans justification et revue.
+Au moins un gate échoue. Conserver la preuve et corriger la cause ; ne pas abaisser le protocole pour obtenir du vert.
 
 ### `HARD_TIMEOUT`
 
-La workstation ne termine pas la qualification dans le budget opérationnel de 40 minutes. Ce résultat est un échec de qualification pour ce protocole ; on optimise le runtime ou la matrice, on ne laisse pas le processus dériver au-delà de la limite.
+Le parcours ne termine pas sous 2400 s. C'est un échec du protocole pour cette configuration.
 
 ### `READY_FOR_MANUAL_QUALIFICATION`
 
-Les gates automatiques sont passés **et le parcours s'est terminé sous 40 minutes**. Ce verdict ne signifie pas V1 qualifiée. Il reste à valider les preuves E2E, les performances, la stabilité, les backends, les golden projects et le projet représentatif.
+Les gates automatiques passent sous le budget. Il reste la revue humaine, les backends, la multimodalité, les Golden Projects et le projet représentatif.
 
-## Preuves minimales pour la décision V1
+## Preuves V1 minimales
 
 - commit Git exact ;
 - versions Windows/PowerShell/Python/OpenClaw/Ollama ;
 - pilote GPU ;
 - inventaire matériel ;
-- protocole `qualification-hard-40m-v1` ;
-- identité exacte/digest/quantification des trois modèles ;
-- durée totale de qualification ;
-- résultats des trois modèles ;
-- politique de thinking réellement utilisée ;
-- E2E OpenClaw ;
+- identité/digest/quantification des trois modèles ;
+- preuve HARD-40M ;
+- preuve OpenClaw E2E ;
 - comparaison backend ;
-- test multimodal ;
-- golden projects ;
-- télémétrie réelle ;
-- projet complet ;
-- limites observées ;
-- revue humaine.
-
-## 8. Attestation de release V1
-
-Les preuves brutes restent hors Git. Après exécution et revue de tous les contrôles ci-dessus, calculer leur SHA-256 et reporter les empreintes dans `config/v1/release_readiness.yaml`.
-
-Sous PowerShell :
-
-```powershell
-Get-FileHash -Algorithm SHA256 <chemin-preuve>
-```
-
-Pour une version `>=1.0.0`, le manifeste doit cibler exactement `VERSION` et relier la release aux preuves suivantes :
-
-- identité exacte des modèles qualifiés ;
-- qualification automatique HARD-40M ;
-- OpenClaw E2E ;
-- comparaison des backends Intel Arc ;
-- golden projects ;
+- Golden Projects ;
 - multimodalité réelle ;
 - télémétrie réelle ;
-- package du projet représentatif.
+- package du projet représentatif ;
+- limites observées ;
+- approbation humaine.
 
-Le manifeste exige également `limits_documented: true`, `no_cloud_fallback_confirmed: true`, le commit source de la qualification et une approbation humaine datée en UTC.
-
-`approved: true` et le verdict `APPROVED_FOR_V1` ne doivent être renseignés **qu'après** inspection humaine des fichiers de preuve correspondant aux SHA-256. Le hash lie l'attestation au fichier ; il ne remplace pas la revue.
-
-Le validateur final est :
+Les SHA-256 de ces preuves alimentent `config/v1/release_readiness.yaml`. Pour une version `>=1.0.0`, le validateur reste :
 
 ```powershell
 python .\scripts\24_validate_release.py --tag v<VERSION>
 ```
 
-Sur une version `0.x`, le V1 Release Readiness Gate est volontairement non applicable. Sur une version `>=1`, toute attestation absente, incomplète, visant une autre version ou dépourvue d'approbation humaine fait échouer la release avant le job `publish`.
-
-## Pourquoi GitHub Actions ne suffit pas
-
-La CI valide le code, les contrats, la compatibilité Python/PowerShell, les tests de sécurité et les invariants documentaires. Elle ne possède ni la workstation cible, ni son pilote, ni sa VRAM, ni les modèles réellement chargés.
-
-La CI peut donc prouver la **conformité logicielle**, jamais inventer une qualification matérielle. Le V1 Release Readiness Gate vérifie l'existence et la cohérence de l'attestation hashée ; il ne prétend pas reproduire les tests matériels dans GitHub Actions.
-
-## Critère V1.0.0
-
-`1.0.0` ne doit être envisagée qu'après :
-
-1. installation propre ;
-2. `audit` et `verify` réussis ;
-3. E2E réel réussi ;
-4. qualification HARD-40M des trois modèles ;
-5. identité modèle verrouillée par le PASS complet ;
-6. comparaison des backends prévue ;
-7. golden projects exécutés et revus ;
-8. multimodalité et télémétrie réelles vérifiées ;
-9. au moins un projet complet ;
-10. limites documentées ;
-11. preuves hashées dans `release_readiness.yaml` ;
-12. validation humaine finale et verdict `APPROVED_FOR_V1`.
+V1 reste bloquée tant que les preuves matérielles réelles et l'approbation humaine ne sont pas complètes.
