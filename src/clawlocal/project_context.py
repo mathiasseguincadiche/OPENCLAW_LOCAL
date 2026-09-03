@@ -32,6 +32,20 @@ _OUTPUT_DIRS = ("work", "deliverables", "evidence", "diagrams")
 _SNAPSHOT_MARKER = ".openclaw-local-project-snapshot"
 
 
+def _workspace_guard_reference(
+    platform_root: Path,
+    project_id: str,
+    agent_id: str,
+) -> Path:
+    return (
+        platform_root
+        / "state"
+        / "workspace-guards"
+        / project_id
+        / f"{agent_id}.json"
+    )
+
+
 def sync_project_context(
     platform_root: Path,
     project_id: str,
@@ -75,7 +89,8 @@ def sync_project_context(
             destination.mkdir()
 
     assert_no_link_like(target, label="snapshot agent")
-    write_workspace_guard(target, agent_id)
+    reference = _workspace_guard_reference(platform_root, normalized, agent_id)
+    write_workspace_guard(target, agent_id, reference_path=reference)
     return target
 
 
@@ -127,7 +142,12 @@ def collect_agent_outputs(
     )
     marker = workspace_project / _SNAPSHOT_MARKER
     secure_path_within(marker, workspace_project, require_file=True, label="snapshot agent")
-    validate_workspace_guard(workspace_project, agent_id)
+    reference = _workspace_guard_reference(platform_root, normalized, agent_id)
+    validate_workspace_guard(
+        workspace_project,
+        agent_id,
+        reference_path=reference,
+    )
 
     project = platform_root / "projects" / normalized
     secure_path_within(project / "project.json", project, require_file=True, label="projet")
