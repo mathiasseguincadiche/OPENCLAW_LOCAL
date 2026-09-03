@@ -18,6 +18,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+      - name: Require tagged commit on main
+        shell: bash
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor HEAD origin/main
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
@@ -39,7 +44,9 @@ jobs:
         run: python scripts/45_validate_model_fleet.py
       - name: Validate transversal pedagogy
         run: python scripts/46_validate_transversal_pedagogy.py
-      - name: Validate SemVer tag
+      - name: Validate pre-V1 hardening
+        run: python scripts/47_validate_pre_v1_hardening.py
+      - name: Validate SemVer tag and V1 readiness
         run: python scripts/24_validate_release.py --tag "${GITHUB_REF_NAME}"
       - name: Ruff
         run: ruff check src tests scripts

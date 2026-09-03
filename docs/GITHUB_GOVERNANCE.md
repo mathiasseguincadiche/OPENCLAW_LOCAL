@@ -129,7 +129,38 @@ VERSION = 0.1.0
 Tag     = v0.1.0
 ```
 
-Le workflow `Release` revalide le dépôt, le SemVer, Ruff, mypy, coverage, les tests Python, PSScriptAnalyzer et Pester, puis produit :
+Le workflow `Release` revalide le dépôt, la configuration, les contrats V7, le document flow, la flotte de modèles, la pédagogie transversale, le **Pre-V1 Hardening Gate**, le SemVer et le **V1 Release Readiness Gate**, puis exécute Ruff, mypy, coverage, les tests Python, PSScriptAnalyzer et Pester.
+
+Les versions `0.x` restent des versions de développement : le manifeste de preuves matérielles V1 n'est pas requis pour leur validation SemVer.
+
+### Verrou fail-closed pour `>=1.0.0`
+
+Toute version majeure `>=1` doit satisfaire `config/v1/release_readiness.yaml`. Le manifeste est volontairement livré avec `approved: false` et doit rester ainsi tant que la qualification V1 réelle n'est pas terminée.
+
+Pour autoriser une V1, le manifeste doit cibler exactement `VERSION` et contenir :
+
+- `approved: true` ;
+- verdict `APPROVED_FOR_V1` ;
+- commit Git source de la qualification ;
+- SHA-256 de l'identité exacte des modèles ;
+- SHA-256 du résultat de qualification automatique HARD-40M ;
+- SHA-256 de la preuve OpenClaw E2E ;
+- SHA-256 de la comparaison des backends ;
+- SHA-256 des golden projects ;
+- SHA-256 de la preuve multimodale ;
+- SHA-256 de la télémétrie réelle ;
+- SHA-256 du package du projet représentatif ;
+- confirmation que les limites sont documentées ;
+- confirmation de l'absence de fallback cloud nominal ;
+- approbation humaine explicite, identifiée et datée en UTC.
+
+Les preuves brutes restent hors Git conformément à la politique de confidentialité et de taille. Les SHA-256 inscrits dans le manifeste servent à **lier cryptographiquement** l'attestation versionnée aux fichiers de preuve conservés localement.
+
+GitHub Actions ne déduit pas qu'un benchmark matériel ou qu'une revue humaine a réussi. Il vérifie seulement que la release V1 possède une attestation complète et cohérente. La responsabilité de vérifier les fichiers de preuve avant de passer `approved: true` reste humaine.
+
+Ainsi, pousser prématurément un tag `v1.0.0` ne peut pas conduire au job `publish` tant que le manifeste est incomplet ou non approuvé.
+
+Après validation, le workflow produit :
 
 - wheel ;
 - sdist ;
@@ -152,4 +183,4 @@ Les permissions d'écriture et d'attestation sont limitées au job `publish`, ap
 
 ## Version 1.0.0
 
-`1.0.0` reste interdite tant que le parcours local nominal n'a pas été qualifié sur la workstation cible avec les preuves prévues dans `docs/QUALIFICATION.md`.
+`1.0.0` reste interdite tant que le parcours local nominal n'a pas été qualifié sur la workstation cible avec les preuves prévues dans `docs/QUALIFICATION.md`, que ces preuves n'ont pas été hashées dans `config/v1/release_readiness.yaml` et que l'approbation humaine finale n'a pas été explicitement enregistrée.
