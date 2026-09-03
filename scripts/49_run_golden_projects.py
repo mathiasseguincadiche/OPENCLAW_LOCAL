@@ -15,8 +15,14 @@ def default_root() -> Path:
     return Path(os.environ.get("LOCALAPPDATA", ".")) / "OpenClawLocal"
 
 
-def _activate_repository_runtime() -> None:
-    platform_root = default_root()
+def requested_root(argv: list[str] | None = None) -> Path:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--root", type=Path)
+    known, _ = parser.parse_known_args(sys.argv[1:] if argv is None else argv)
+    return known.root if known.root is not None else default_root()
+
+
+def _activate_repository_runtime(platform_root: Path) -> None:
     if os.name == "nt":
         managed = platform_root / "runtime" / "venv" / "Scripts" / "python.exe"
         if managed.is_file() and Path(sys.executable).resolve() != managed.resolve():
@@ -34,7 +40,8 @@ def _activate_repository_runtime() -> None:
 
 
 def main() -> int:
-    _activate_repository_runtime()
+    platform_root = requested_root()
+    _activate_repository_runtime(platform_root)
 
     from clawlocal.golden_projects import (
         SCENARIOS,
@@ -44,7 +51,7 @@ def main() -> int:
     )
 
     parser = argparse.ArgumentParser(description="Prépare et exécute les golden projects pré-V1.")
-    parser.add_argument("--root", type=Path, default=default_root())
+    parser.add_argument("--root", type=Path, default=platform_root)
     parser.add_argument("--scenario", choices=["all", *SCENARIOS], default="all")
     parser.add_argument("--prepare", action="store_true")
     parser.add_argument("--execute", action="store_true")
