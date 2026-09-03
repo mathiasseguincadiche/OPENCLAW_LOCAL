@@ -9,7 +9,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 def test_release_workflow_requires_tagged_commit_on_main() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    fetch_main = "git fetch origin main:refs/remotes/origin/main --no-tags"
+    fetch_main = "git fetch --no-tags origin main:refs/remotes/origin/main"
     ancestry = "git merge-base --is-ancestor HEAD origin/main"
     hardening = "python scripts/47_validate_pre_v1_hardening.py"
     readiness = 'python scripts/24_validate_release.py --tag "${GITHUB_REF_NAME}"'
