@@ -14,8 +14,12 @@ param(
     [switch]$AllowRuntimeDrift,
     [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
     [string]$Backend = 'ollama-vulkan',
-    [ValidateSet('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b')]
-    [string]$Model = 'devstral-small-2:24b',
+    [ValidateSet(
+        'qwen3.5:9b-q4_K_M',
+        'gemma3:12b-it-q4_K_M',
+        'qwen2.5-coder:14b-instruct-q4_K_M'
+    )]
+    [string]$Model = 'qwen2.5-coder:14b-instruct-q4_K_M',
     [switch]$NoLog
 )
 
@@ -136,7 +140,8 @@ function Show-Title {
     Write-Host ' OPENCLAW_LOCAL — CENTRE DE CONTRÔLE LOCAL-FIRST WINDOWS 11 PRO'
     Write-Host '============================================================================== '
     Write-Host ' Nominal : OpenClaw + Ollama/Vulkan natifs Windows'
-    Write-Host ' B580    : profil hybride mesuré Qwen/Ollama + Gemma/Devstral llama.cpp/Vulkan'
+    Write-Host ' B580    : flotte Q4_K_M 9B/12B/14B, contexte nominal 8K'
+    Write-Host ' Hybride : Qwen/Ollama + Gemma/Qwen Coder llama.cpp/Vulkan'
     Write-Host ' Intel   : llama.cpp/SYCL/Level Zero reste disponible pour qualification'
     Write-Host ' Cloud   : escalade explicite uniquement, jamais fallback silencieux'
 }
@@ -149,8 +154,12 @@ function Invoke-Action {
         [switch]$AllowRuntimeDriftMode,
         [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
         [string]$BackendMode = 'ollama-vulkan',
-        [ValidateSet('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b')]
-        [string]$ModelMode = 'devstral-small-2:24b',
+        [ValidateSet(
+            'qwen3.5:9b-q4_K_M',
+            'gemma3:12b-it-q4_K_M',
+            'qwen2.5-coder:14b-instruct-q4_K_M'
+        )]
+        [string]$ModelMode = 'qwen2.5-coder:14b-instruct-q4_K_M',
         [switch]$NoLogMode
     )
 
@@ -249,10 +258,10 @@ while ($true) {
 17) Vérifier Intel B580 SYCL + trois modèles
 18) Comparer Ollama/Vulkan vs Intel SYCL (utiliser -Quick pour diagnostic court)
 19) Arrêter le serveur Intel SYCL
-20) Diagnostiquer directement un modèle Intel SYCL (paramètre -Model; Devstral par défaut)
+20) Diagnostiquer directement un modèle Intel SYCL (paramètre -Model; Qwen Coder par défaut)
 21) Isoler llama.cpp Vulkan vs SYCL/Ollama sur Intel B580
 22) Installer/démarrer llama.cpp Vulkan géré pour le profil B580 hybride
-23) Vérifier llama.cpp Vulkan géré (Gemma + Devstral)
+23) Vérifier llama.cpp Vulkan géré (Gemma 3 + Qwen Coder)
 24) Arrêter le serveur llama.cpp Vulkan géré
 25) Exécuter les 5 golden projects pré-V1 (reset + prepare + execute + evaluate)
 0) Quitter
