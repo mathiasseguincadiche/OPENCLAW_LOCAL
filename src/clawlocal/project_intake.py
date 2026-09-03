@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import mimetypes
@@ -29,6 +30,7 @@ PROJECT_DIRS = (
 )
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
+_WINDOWS_SID_RE = re.compile(r"^S-\d+(?:-\d+)+$")
 _SECRET_PATTERNS = (
     re.compile(r"sk-or-(?:v1-)?[A-Za-z0-9_-]{8,}"),
     re.compile(r"(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})"),
@@ -227,22 +229,35 @@ def _set_posix_read_only(root: Path) -> None:
     root.chmod(0o555)
 
 
-def _set_windows_read_only(root: Path) -> None:
-    identity_result = subprocess.run(
-        ["whoami.exe"], capture_output=True, text=True, check=False
+def _windows_current_user_sid() -> str:
+    result = subprocess.run(
+        ["whoami.exe", "/user", "/fo", "csv", "/nh"],
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    identity = identity_result.stdout.strip()
-    if identity_result.returncode != 0 or not identity:
-        raise RuntimeError("impossible de déterminer l'identité Windows pour l'ACL intake")
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise RuntimeError(f"identité Windows introuvable pour ACL intake: {detail}")
+    rows = list(csv.reader(line for line in result.stdout.splitlines() if line.strip()))
+    if not rows or len(rows[0]) < 2:
+        raise RuntimeError("SID Windows introuvable pour ACL intake")
+    sid = rows[0][1].strip()
+    if not _WINDOWS_SID_RE.fullmatch(sid):
+        raise RuntimeError(f"SID Windows invalide pour ACL intake: {sid}")
+    return f"*{sid}"
+
+
+def _set_windows_read_only(root: Path) -> None:
+    identity_sid = _windows_current_user_sid()
     result = subprocess.run(
         [
             "icacls.exe",
             str(root),
             "/inheritancelevel:r",
             "/grant:r",
-            f"{identity}:(OI)(CI)RX",
+            f"{identity_sid}:(OI)(CI)RX",
             "*S-1-5-18:(OI)(CI)F",
-            "/T",
             "/Q",
         ],
         capture_output=True,
@@ -277,11 +292,9 @@ def _restore_posix_writable(root: Path) -> None:
 def _restore_windows_writable(root: Path) -> None:
     if not root.exists():
         return
-    identity_result = subprocess.run(
-        ["whoami.exe"], capture_output=True, text=True, check=False
-    )
-    identity = identity_result.stdout.strip()
-    if identity_result.returncode != 0 or not identity:
+    try:
+        identity_sid = _windows_current_user_sid()
+    except RuntimeError:
         return
     subprocess.run(
         [
@@ -289,8 +302,7 @@ def _restore_windows_writable(root: Path) -> None:
             str(root),
             "/inheritancelevel:e",
             "/grant:r",
-            f"{identity}:(OI)(CI)F",
-            "/T",
+            f"{identity_sid}:(OI)(CI)F",
             "/Q",
         ],
         capture_output=True,
@@ -389,7 +401,9 @@ def create_project(
             mime_types=mime_types,
             symlinks=symlinks,
         )
-        source_checksums, source_mime, source_symlinks = _inventory(destination / "sources")
+        source_checksums, source_mime, source_symlinks = _inventory(
+            destination / "sources"
+        )
         if source_symlinks:
             raise ValueError("sources matérialisées contiennent un lien/reparse point")
         _write_inventory(
@@ -416,7 +430,8 @@ def create_project(
             criticality=criticality,
         )
         (destination / "project.json").write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
         )
         initialize_learning(destination)
         initialize_publication(destination)
