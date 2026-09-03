@@ -16,14 +16,22 @@ def _now() -> str:
 
 
 def _canonical_sha(payload: Any) -> str:
-    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    raw = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
     return hashlib.sha256(raw).hexdigest()
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     tmp.replace(path)
 
 
@@ -59,7 +67,9 @@ def current_model_identity(*, timeout_seconds: int = 10) -> dict[str, Any]:
         with urlopen(f"{endpoint}/api/tags", timeout=timeout_seconds) as response:  # noqa: S310
             tags = json.loads(response.read().decode("utf-8"))
     except (OSError, URLError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"impossible de lire l'identité des modèles Ollama: {exc}") from exc
+        raise RuntimeError(
+            f"impossible de lire l'identité des modèles Ollama: {exc}"
+        ) from exc
     models = tags.get("models", []) if isinstance(tags, dict) else []
     if not isinstance(models, list):
         raise ValueError("réponse Ollama /api/tags invalide")
@@ -75,7 +85,11 @@ def current_model_identity(*, timeout_seconds: int = 10) -> dict[str, Any]:
 
     identities: dict[str, dict[str, Any]] = {}
     for alias, model in catalog.get("models", {}).items():
-        if not isinstance(model, dict) or model.get("provider") != "ollama" or not model.get("required"):
+        if (
+            not isinstance(model, dict)
+            or model.get("provider") != "ollama"
+            or not model.get("required")
+        ):
             continue
         runtime_id = str(model["runtime_id"])
         observed = by_name.get(runtime_id)
@@ -95,8 +109,11 @@ def current_model_identity(*, timeout_seconds: int = 10) -> dict[str, Any]:
             "parameter_size": str(details.get("parameter_size", "")),
             "quantization_level": str(details.get("quantization_level", "")),
         }
-    if len(identities) != int(catalog.get("policy", {}).get("local_model_count", 3)):
-        raise ValueError("identité incomplète: la flotte required n'est pas entièrement résolue")
+    expected_count = int(catalog.get("policy", {}).get("local_model_count", 3))
+    if len(identities) != expected_count:
+        raise ValueError(
+            "identité incomplète: la flotte required n'est pas entièrement résolue"
+        )
     return {
         "schema_version": "1.0.0",
         "captured_at": _now(),
@@ -130,7 +147,9 @@ def promote_candidate(platform_root: Path) -> Path:
     candidate = _read_json(candidate_path)
     current = current_model_identity()
     if candidate.get("fingerprint_sha256") != current.get("fingerprint_sha256"):
-        raise PermissionError("identité modèle modifiée pendant la qualification; promotion refusée")
+        raise PermissionError(
+            "identité modèle modifiée pendant la qualification; promotion refusée"
+        )
     qualified = {
         **current,
         "status": "QUALIFIED",
