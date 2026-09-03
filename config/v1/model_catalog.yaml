@@ -72,6 +72,26 @@ models:
     multimodal_handoff: [qwen-max, gemma-deep]
     context_policy: benchmark_before_raise
 
+benchmark_challengers:
+  ministral-tool-calling:
+    provider: ollama
+    runtime_id: ministral-3:14b-instruct-2512-q4_K_M
+    family: mistral
+    class: benchmark_challenger
+    input: [text, image]
+    required_for_selection: true
+    status: candidate_challenger
+    routing_active: false
+    incumbent_alias: gemma-deep
+    challenge_scope: [native_tool_calling, tool_feedback_repair, architecture_quality, b580_fit]
+    quantization: Q4_K_M
+    registry_size_gb: 9.1
+    nominal_context_tokens: 8192
+    qualification_context_tokens: [8192]
+    hardware_fit: unqualified_b580_12gb_challenger
+    automatic_promotion: false
+    compatibility_note: "Challenger de benchmark uniquement; ne compte pas dans la flotte locale routée et ne peut pas devenir nominal sans décision humaine explicite."
+
 cloud_catalog:
   research:
     provider: openrouter
