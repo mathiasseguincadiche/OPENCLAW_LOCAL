@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import mimetypes
+import shutil
 import stat
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -9,7 +10,10 @@ from typing import Any
 
 _MIB = 1024 * 1024
 _WINDOWS_RESERVED = {
-    "con", "prn", "aux", "nul",
+    "con",
+    "prn",
+    "aux",
+    "nul",
     *(f"com{i}" for i in range(1, 10)),
     *(f"lpt{i}" for i in range(1, 10)),
 }
@@ -49,7 +53,16 @@ def _member_kind(path: PurePosixPath) -> str:
     suffix = path.suffix.casefold()
     if suffix == ".pdf":
         return "pdf"
-    if suffix in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}:
+    if suffix in {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".bmp",
+        ".gif",
+        ".tif",
+        ".tiff",
+    }:
         return "image"
     if suffix in {".docx", ".pptx", ".xlsx"}:
         return "office"
@@ -57,9 +70,34 @@ def _member_kind(path: PurePosixPath) -> str:
         return "nested_archive"
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     if mime.startswith("text/") or suffix in {
-        ".md", ".rst", ".json", ".jsonl", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-        ".conf", ".py", ".ps1", ".sh", ".tf", ".tfvars", ".hcl", ".js", ".ts",
-        ".tsx", ".jsx", ".java", ".go", ".rs", ".cs", ".sql", ".xml", ".csv", ".tsv",
+        ".md",
+        ".rst",
+        ".json",
+        ".jsonl",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".py",
+        ".ps1",
+        ".sh",
+        ".tf",
+        ".tfvars",
+        ".hcl",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".java",
+        ".go",
+        ".rs",
+        ".cs",
+        ".sql",
+        ".xml",
+        ".csv",
+        ".tsv",
     }:
         return "text"
     return "binary"
@@ -96,30 +134,48 @@ def safe_extract_zip(
         with zipfile.ZipFile(archive_path) as archive:
             infos = archive.infolist()
             if len(infos) > max_members:
-                raise ValueError(f"archive ZIP contient trop de membres: {archive_path.name}")
+                raise ValueError(
+                    f"archive ZIP contient trop de membres: {archive_path.name}"
+                )
             for info in infos:
                 member = _safe_member_path(info.filename, max_depth=max_depth)
                 canonical = member.as_posix().casefold()
                 if canonical in seen:
-                    raise ValueError(f"archive ZIP: chemin dupliqué/ambigu: {info.filename}")
+                    raise ValueError(
+                        f"archive ZIP: chemin dupliqué/ambigu: {info.filename}"
+                    )
                 seen.add(canonical)
                 if reject_encrypted and (info.flag_bits & 0x1):
-                    raise ValueError(f"archive ZIP chiffrée non supportée: {archive_path.name}")
+                    raise ValueError(
+                        f"archive ZIP chiffrée non supportée: {archive_path.name}"
+                    )
                 if _is_link_or_special(info):
-                    raise ValueError(f"archive ZIP: lien ou fichier spécial refusé: {info.filename}")
+                    raise ValueError(
+                        "archive ZIP: lien ou fichier spécial refusé: "
+                        f"{info.filename}"
+                    )
                 if info.is_dir():
-                    (destination / Path(*member.parts)).mkdir(parents=True, exist_ok=True)
+                    (destination / Path(*member.parts)).mkdir(
+                        parents=True,
+                        exist_ok=True,
+                    )
                     continue
                 total_uncompressed += int(info.file_size)
                 if info.file_size > max_member:
-                    raise ValueError(f"archive ZIP: membre trop volumineux: {info.filename}")
+                    raise ValueError(
+                        f"archive ZIP: membre trop volumineux: {info.filename}"
+                    )
                 if total_uncompressed > max_total:
-                    raise ValueError(f"archive ZIP décompressée trop volumineuse: {archive_path.name}")
+                    raise ValueError(
+                        "archive ZIP décompressée trop volumineuse: "
+                        f"{archive_path.name}"
+                    )
                 if info.file_size:
                     ratio = info.file_size / max(1, info.compress_size)
                     if ratio > max_ratio:
                         raise ValueError(
-                            f"archive ZIP: ratio de compression suspect: {info.filename} ({ratio:.1f}x)"
+                            "archive ZIP: ratio de compression suspect: "
+                            f"{info.filename} ({ratio:.1f}x)"
                         )
 
                 target = destination / Path(*member.parts)
@@ -133,12 +189,18 @@ def safe_extract_zip(
                             break
                         observed += len(chunk)
                         if observed > max_member or observed > info.file_size:
-                            raise ValueError(f"archive ZIP: taille réelle incohérente: {info.filename}")
+                            raise ValueError(
+                                "archive ZIP: taille réelle incohérente: "
+                                f"{info.filename}"
+                            )
                         digest.update(chunk)
                         sink.write(chunk)
                 if observed != info.file_size:
                     raise ValueError(f"archive ZIP: membre tronqué: {info.filename}")
-                mime = mimetypes.guess_type(member.name)[0] or "application/octet-stream"
+                mime = (
+                    mimetypes.guess_type(member.name)[0]
+                    or "application/octet-stream"
+                )
                 kind = _member_kind(member)
                 records.append(
                     {
@@ -151,8 +213,6 @@ def safe_extract_zip(
                     }
                 )
     except Exception:
-        import shutil
-
         shutil.rmtree(destination, ignore_errors=True)
         raise
     return sorted(records, key=lambda item: str(item["member_path"]))
