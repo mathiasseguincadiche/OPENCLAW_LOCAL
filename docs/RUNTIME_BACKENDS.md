@@ -2,144 +2,153 @@
 
 ## Objectif
 
-La plateforme ne lie pas les trois modèles supportés à un backend GPU unique. Le backend est un axe d'exploitation distinct du choix du modèle et du rôle.
+Le choix du modèle et le choix du backend sont deux axes distincts. `OPENCLAW_LOCAL` conserve plusieurs moteurs locaux afin de mesurer ce qui fonctionne réellement sur l'Intel Arc B580 12 Go.
 
-Le chemin installé par défaut reste **Ollama/Vulkan**. Les mesures réelles effectuées sur l'Intel Arc B580 ont toutefois montré qu'un backend global unique est sous-optimal. Le dépôt expose donc un profil candidat explicite **`b580-hybrid`** :
+La migration de flotte vers des modèles Q4_K_M plus petits **réinitialise la décision de performance** : aucun benchmark de l'ancienne flotte 24–27B ne qualifie les nouveaux modèles.
 
-- Qwen 3.8 27B → Ollama/Vulkan ;
-- Gemma 4 26B → llama.cpp/Vulkan ;
-- Devstral Small 2 24B → llama.cpp/Vulkan ;
-- image/PDF → Ollama ;
-- aucun fallback cloud silencieux ;
-- rollback explicite vers Ollama.
+## Flotte active
 
-Le profil hybride reste candidat tant que son E2E OpenClaw réel n'est pas validé. Il n'est jamais activé automatiquement.
+```text
+qwen-max          -> qwen3.5:9b-q4_K_M
+gemma-deep        -> gemma3:12b-it-q4_K_M
+devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+```
+
+Le contexte nominal est 8192 tokens. Le 16K reste un stress de qualification.
 
 ## Backends déclarés
 
 | ID | Provider OpenClaw | Accélération | Endpoint | Statut |
 |---|---|---|---|---|
 | `ollama-vulkan` | `ollama` | Vulkan | `127.0.0.1:11434` | nominal / rollback |
-| `llama-cpp-sycl` | `intel-sycl` | SYCL → Level Zero | `127.0.0.1:8080/v1` | qualification B580 |
-| `llama-cpp-vulkan` | `intel-vulkan` | Vulkan | `127.0.0.1:8081/v1` | candidat géré Gemma/Devstral |
-| `b580-hybrid` | mixte local | par modèle | Ollama + `8081/v1` | profil candidat mesuré |
+| `llama-cpp-sycl` | `intel-sycl` | SYCL → Level Zero | `127.0.0.1:8080/v1` | candidat |
+| `llama-cpp-vulkan` | `intel-vulkan` | Vulkan | `127.0.0.1:8081/v1` | candidat |
+| `b580-hybrid` | mixte local | par modèle | Ollama + `8081/v1` | profil candidat |
 
-Le mot **nominal** signifie « chemin d'installation et rollback sûr », pas « vainqueur de performance pour tous les modèles ».
+`nominal` signifie ici chemin d'installation et de rollback sûr. Cela ne signifie pas qu'Ollama est le moteur le plus rapide pour tous les nouveaux modèles.
 
-## Résultat du benchmark B580 isolé
-
-Le protocole de comparaison décharge explicitement Ollama avant le cas llama.cpp et vérifie `/api/ps`; les résultats exploitables portent `GPU_MEMORY_ISOLATION=true`.
-
-Mesures observées sur le scénario DevOps structuré :
-
-| Modèle | Ollama/Vulkan | llama.cpp/SYCL | llama.cpp/Vulkan | Backend mesuré le plus rapide |
-|---|---:|---:|---:|---|
-| Qwen 3.8 27B | 8.27 tok/s | 5.00 tok/s | 6.29 tok/s | Ollama/Vulkan |
-| Gemma 4 26B | 14.03 tok/s | 34.94 tok/s | 36.08 tok/s | llama.cpp/Vulkan |
-| Devstral Small 2 24B | 7.77 tok/s | 7.51 tok/s | 8.96 tok/s | llama.cpp/Vulkan |
-
-Ces chiffres constituent une preuve locale pour cette workstation et ce protocole, pas une promesse générale de performance sur toutes les machines.
-
-## Flotte indépendante du backend
+## Profil B580 hybride candidat
 
 ```text
-Modèles supportés
-  +-- LOCAL_MAX        -> qwen-max        -> qwen3.8:27b
-  +-- LOCAL_DEEP       -> gemma-deep      -> gemma4:26b
-  +-- LOCAL_SPECIALIST -> devstral-devops -> devstral-small-2:24b
-
-Profil B580 hybride texte
-  +-- qwen-max        -> Ollama / Vulkan
-  +-- gemma-deep      -> llama.cpp / Vulkan
-  +-- devstral-devops -> llama.cpp / Vulkan
-
-Multimodal
-  +-- Ollama uniquement
+qwen-max        -> Ollama / Vulkan
+gemma-deep      -> llama.cpp / Vulkan
+devstral-devops -> llama.cpp / Vulkan
+image/PDF       -> Ollama
 ```
 
-Changer de profil ne réécrit ni les huit rôles, ni le Project Orchestrator, ni les politiques d'escalade.
+OpenClaw expose alors simultanément un provider `ollama` et un provider `intel-vulkan`. Le profil n'ajoute aucun provider cloud.
+
+Le choix conserve Qwen sur Ollama et Gemma/Qwen Coder sur Vulkan comme **hypothèse d'exploitation à requalifier**, pas comme résultat déjà démontré pour la nouvelle flotte.
+
+## Mesures historiques de l'ancienne flotte
+
+Des mesures B580 ont été obtenues auparavant avec :
+
+```text
+qwen3.8:27b
+gemma4:26b
+devstral-small-2:24b
+```
+
+Elles ont servi à montrer deux choses utiles :
+
+1. un backend unique n'est pas nécessairement optimal pour tous les modèles ;
+2. des modèles 24–27B peuvent provoquer une pression mémoire/offload excessive sur une B580 12 Go.
+
+Ces mesures sont désormais **historiques seulement**. Elles ne doivent pas être copiées dans une attestation de qualification de la flotte actuelle et ne permettent pas de promouvoir `b580-hybrid` avec les nouveaux runtimes.
 
 ## Ollama/Vulkan
 
-Ollama reste le chemin nominal et de rollback car il simplifie :
+Ollama reste le chemin nominal et le rollback parce qu'il simplifie :
 
 - téléchargement et inventaire des modèles ;
 - API locale ;
-- multimodalité ;
-- Qwen, qui reste le plus rapide sur le benchmark isolé ;
-- récupération immédiate si un runtime candidat échoue.
+- multimodalité Qwen/Gemma ;
+- démarrage et récupération ;
+- conservation d'un chemin de référence commun aux trois modèles.
 
-L'API reste liée à `127.0.0.1:11434`.
+L'API reste liée à :
+
+```text
+http://127.0.0.1:11434
+```
+
+Le contexte nominal exposé à OpenClaw est 8192.
 
 ## llama.cpp/SYCL/Level Zero
 
 Le chemin SYCL reste géré et qualifiable :
 
-- llama.cpp `b10621` verrouillé par SHA-256 ;
+- release llama.cpp verrouillée dans `runtime_versions.json` ;
+- archive vérifiée par SHA-256 ;
 - `ONEAPI_DEVICE_SELECTOR=level_zero:gpu` ;
-- device exigé : `SYCL0` ;
-- B580 détectée via `--list-devices` ;
+- device B580 détecté ;
 - endpoint `127.0.0.1:8080/v1` ;
 - `--offline` ;
-- `--gpu-layers auto` + `--fit on` ;
+- `gpu_layers=auto` ;
 - `models_max=1` ;
 - `parallel=1` ;
-- contexte initial 8192 ;
-- unload explicite entre modèles ;
-- Devstral utilise un GGUF llama.cpp natif Q4_K_M verrouillé par SHA-256.
+- contexte 8192 ;
+- unload explicite entre modèles.
 
-SYCL reste utile pour qualification et comparaison, mais n'est plus le candidat prioritaire du profil B580 mesuré.
+Les trois modèles actuels doivent être chargés et mesurés avec leurs identités/quantifications exactes. Un résultat produit avec un ancien GGUF ne qualifie pas le runtime actuel.
 
 ## llama.cpp/Vulkan géré
 
-Le runtime Vulkan de production candidate utilise la même release llama.cpp `b10621` que SYCL, avec l'archive Windows Vulkan officielle vérifiée par SHA-256.
+Le runtime Vulkan candidat :
 
-Contrat :
+- utilise la release verrouillée dans `runtime_versions.json` ;
+- écoute sur `http://127.0.0.1:8081/v1` ;
+- détecte l'Intel Arc B580 ;
+- utilise `models_max=1`, `parallel=1`, `gpu_layers=auto` et `fit=on` ;
+- utilise le contexte 8192 ;
+- reste `--offline` ;
+- suit son PID dans l'état géré ;
+- charge `gemma3:12b-it-q4_K_M` et `qwen2.5-coder:14b-instruct-q4_K_M` dans le profil hybride ;
+- décharge explicitement les modèles entre smokes/switches.
 
-- endpoint : `http://127.0.0.1:8081/v1` ;
-- device B580 détecté dynamiquement (`Vulkan0` sur la workstation qualifiée) ;
-- `models_max=1` ;
-- `parallel=1` ;
-- `gpu_layers=auto` ;
-- `fit=on` ;
-- contexte 8192 ;
-- `--offline` ;
-- PID suivi dans l'état géré ;
-- Gemma + Devstral seulement ;
-- Qwen reste volontairement sur Ollama ;
-- mêmes sources GGUF effectives que le chemin llama.cpp/SYCL ;
-- unload explicite après chaque smoke/switch.
+Le setup Vulkan arrête le routeur SYCL suivi avant de démarrer afin d'éviter une contention B580 entre deux runtimes llama.cpp.
 
-Le setup Vulkan arrête le routeur SYCL suivi avant de démarrer afin d'éviter une contention de VRAM entre deux runtimes llama.cpp.
+## Multimodalité
 
-## Profil `b580-hybrid`
-
-Le renderer OpenClaw configure deux providers locaux simultanés :
+Le profil hybride garde PDF/images sur Ollama :
 
 ```text
-ollama
-  baseUrl -> http://127.0.0.1:11434
-  qwen3.8:27b
-  gemma4:26b (multimodal / rollback local)
-  devstral-small-2:24b (rollback local)
-
-intel-vulkan
-  baseUrl -> http://127.0.0.1:8081/v1
-  gemma4:26B
-  devstral-small-2:24B
+imageModel/pdfModel
+  -> ollama/qwen3.5:9b-q4_K_M
+  -> fallback ollama/gemma3:12b-it-q4_K_M
 ```
 
-Routage texte :
+Qwen 2.5 Coder 14B reste text-only. Le passage d'une entrée visuelle vers le spécialiste DevOps se fait par ingestion/handoff textuel avec provenance.
 
-```text
-qwen-max        -> ollama/qwen3.8:27b
-gemma-deep      -> intel-vulkan/gemma4:26B
-devstral-devops -> intel-vulkan/devstral-small-2:24B
-```
+## Protocole de comparaison
 
-Les `imageModel` et `pdfModel` restent systématiquement sur Ollama. Le profil n'ajoute aucun provider cloud.
+Comparer, autant que possible, le **même modèle effectif et la même quantification** sur les backends :
+
+- TTFT ;
+- durée murale ;
+- tokens/s ;
+- prompt tokens/s ;
+- VRAM/RAM ;
+- chargement du modèle ;
+- stabilité ;
+- changement de modèle ;
+- isolation mémoire entre backends ;
+- tool-calling OpenClaw ;
+- contexte 8K puis stress 16K ;
+- simplicité d'exploitation et rollback.
+
+Le runner de comparaison conserve `promotion_allowed: false`. Une comparaison n'autorise jamais à elle seule une bascule de production.
 
 ## Cycle opérateur recommandé
+
+### Baseline Ollama
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
+.\menu.ps1 -Action verify
+.\menu.ps1 -Action e2e -Backend ollama-vulkan
+```
 
 ### Qualification SYCL
 
@@ -149,73 +158,46 @@ Les `imageModel` et `pdfModel` restent systématiquement sur Ollama. Le profil n
 .\menu.ps1 -Action intel-sycl-compare -Quick
 ```
 
-### Qualification Vulkan géré
+### Qualification Vulkan
 
 ```powershell
 .\menu.ps1 -Action intel-vulkan-setup
 .\menu.ps1 -Action intel-vulkan-verify
 ```
 
-### Bascule hybride explicite
-
-Uniquement après succès des deux commandes précédentes :
+### E2E hybride
 
 ```powershell
 .\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
 .\menu.ps1 -Action e2e -Backend b580-hybrid
 ```
 
-L'E2E doit prouver :
-
-- provider primaire attendu agent par agent ;
-- Qwen réellement servi par Ollama ;
-- agents Gemma/Devstral réellement servis par `intel-vulkan` ;
-- tool-calling réel Devstral/Vulkan ;
-- réparation après erreur outil ;
-- trois runs stables ;
-- aucune escalade cloud.
-
 ### Rollback
 
 ```powershell
 .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
 .\menu.ps1 -Action intel-vulkan-stop
+.\menu.ps1 -Action intel-sycl-stop
 ```
-
-## Protocole de comparaison
-
-Comparer les mêmes modèles et le même scénario sur :
-
-- durée murale ;
-- chargement du modèle ;
-- prompt tokens/seconde ;
-- génération tokens/seconde ;
-- stabilité ;
-- changement de modèle ;
-- isolation VRAM entre backends ;
-- tool-calling OpenClaw ;
-- contextes réellement qualifiés ;
-- simplicité de démarrage, mise à jour et récupération.
-
-Le runner `scripts/28_compare_local_backends.py` écrit toujours `promotion_allowed: false`. Le probe Vulkan accepte uniquement une baseline schema `1.5.0` portant `gpu_memory_isolation_between_backends=true`.
 
 ## Conditions de promotion du profil hybride
 
-Le profil `b580-hybrid` ne peut devenir nominal qu'après preuve de :
+Avant toute promotion, il faut de nouvelles preuves portant sur **la flotte actuelle** :
 
-1. B580 détectée ;
-2. runtime Vulkan géré et intègre ;
-3. Gemma + Devstral chargeables sur Vulkan ;
+1. B580 détectée et pilote enregistré ;
+2. identités/digests des trois nouveaux modèles ;
+3. chargement des modèles attendus sur chaque backend ;
 4. benchmark isolé reproductible ;
 5. configuration OpenClaw valide ;
-6. provider attendu prouvé pour chaque rôle ;
-7. tool-calling Devstral/Vulkan réel ;
-8. réparation après retour d'outil ;
+6. provider attendu prouvé agent par agent ;
+7. tool-calling réel avec Qwen 2.5 Coder/Vulkan ;
+8. réparation après erreur d'outil ;
 9. multi-agent/E2E sans fallback cloud ;
-10. trois exécutions stables ;
-11. revue humaine.
+10. trois runs stables ;
+11. contexte soutenable mesuré ;
+12. revue humaine.
 
-Le dépôt conserve `default_backend: ollama-vulkan` et `no_automatic_promotion: true` jusqu'à cette décision humaine.
+Le dépôt conserve `default_backend: ollama-vulkan` et `no_automatic_promotion: true` jusqu'à décision humaine.
 
 ## Preuves
 
@@ -223,7 +205,8 @@ Le dépôt conserve `default_backend: ollama-vulkan` et `no_automatic_promotion:
 <OPENCLAW_LOCAL_ROOT>\proofs\intel-sycl\
 <OPENCLAW_LOCAL_ROOT>\proofs\intel-vulkan\
 <OPENCLAW_LOCAL_ROOT>\proofs\intel-vulkan-probe\
-<repo>\benchmarks\results\
+<OPENCLAW_LOCAL_ROOT>\proofs\
+<REPO>\benchmarks\results\
 ```
 
-Les preuves contiennent release, SHA, binaire, PID, device, modèles, smokes et logs stdout/stderr. Les résultats de qualification restent locaux/hors Git selon la politique du projet.
+Les preuves doivent identifier sans ambiguïté le commit, le backend, le modèle, le digest/quantification, le pilote et le protocole réellement utilisés.
