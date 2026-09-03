@@ -48,7 +48,7 @@ if ($DryRun) {
         Write-Host '[DRY-RUN] Mode COMPLET HARD-40M: 24 cas 8K + 6 cas 16K = 30 cas.'
         Write-Host '[DRY-RUN] Couverture collective des 12 scénarios; 8 scénarios par modèle à 8K.'
         Write-Host '[DRY-RUN] 16K: 2 scénarios ciblés par modèle.'
-        Write-Host '[DRY-RUN] Qwen thinking natif uniquement sur 3 probes; plafond 768 tokens.'
+        Write-Host '[DRY-RUN] Qwen thinking natif uniquement sur 3 probes; plafond 1024 tokens.'
         Write-Host '[DRY-RUN] Runner full: budget benchmark par défaut 35 min, timeout par cas 210 s.'
         Write-Host '[DRY-RUN] La limite globale qualification reste 2400 s et reste prioritaire.'
     }
