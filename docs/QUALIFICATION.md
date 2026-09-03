@@ -212,6 +212,8 @@ Après un gate complet PASS, cette identité peut être promue vers :
 state/qualification/qualified_model_identity.json
 ```
 
+Si l'identité exacte, le digest, la quantification ou un autre verrou matériel/runtime dérive ensuite, `verify` doit considérer l'état comme **`INVALIDATED`** et exiger une nouvelle qualification complète.
+
 Cette promotion d'identité ne vaut ni sélection définitive du modèle deep, ni promotion de backend, ni approbation V1.
 
 Le mode `-Quick` ne promeut jamais l'identité modèle.
