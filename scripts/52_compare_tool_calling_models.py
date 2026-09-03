@@ -33,12 +33,7 @@ TOOLS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "required": ["path"],
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Chemin relatif du fichier à lire.",
-                    }
-                },
+                "properties": {"path": {"type": "string"}},
             },
         },
     },
@@ -50,12 +45,7 @@ TOOLS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "required": ["directory"],
-                "properties": {
-                    "directory": {
-                        "type": "string",
-                        "description": "Répertoire relatif à lister.",
-                    }
-                },
+                "properties": {"directory": {"type": "string"}},
             },
         },
     },
@@ -63,8 +53,7 @@ TOOLS: list[dict[str, Any]] = [
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
-    with path.open(encoding="utf-8") as handle:
-        value = yaml.safe_load(handle)
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise ValueError(f"YAML invalide: {path}")
     return value
@@ -83,10 +72,9 @@ def post_chat(
     payload: dict[str, Any],
     timeout: float,
 ) -> tuple[dict[str, Any], float]:
-    body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         f"{endpoint}/api/chat",
-        data=body,
+        data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
@@ -123,11 +111,10 @@ def function_call(call: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     function = call.get("function", {})
     if not isinstance(function, dict):
         return "", {}
-    name = str(function.get("name") or "")
     arguments = function.get("arguments", {})
     if not isinstance(arguments, dict):
         arguments = {}
-    return name, arguments
+    return str(function.get("name") or ""), arguments
 
 
 def has_tool_call(
@@ -152,7 +139,7 @@ def response_fingerprint(response: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(message, dict):
         message = {}
     content = str(message.get("content") or "")
-    calls = []
+    calls: list[dict[str, Any]] = []
     for item in tool_calls(message):
         name, arguments = function_call(item)
         calls.append({"name": name, "arguments": arguments})
@@ -204,7 +191,7 @@ def loaded_model_snapshot(endpoint: str, runtime_id: str) -> dict[str, Any] | No
         return {
             "size_bytes": size,
             "size_vram_bytes": size_vram,
-            "gpu_residency_ratio": (size_vram / size if size > 0 else None),
+            "gpu_residency_ratio": size_vram / size if size > 0 else None,
             "context_length": int(item.get("context_length") or 0) or None,
         }
     return None
@@ -243,10 +230,8 @@ def run_iteration(
         chat_payload(runtime_id, messages, context_tokens),
         timeout,
     )
-    first_message = first.get("message", {})
-    first_calls = tool_calls(first_message)
     intent_pass = has_tool_call(
-        first_calls,
+        tool_calls(first.get("message", {})),
         name="read_file",
         argument="path",
         expected="config/prod.yaml",
@@ -254,17 +239,19 @@ def run_iteration(
 
     repair_pass = False
     second: dict[str, Any] | None = None
-    second_wall_ms: float | None = None
+    repair_wall_ms: float | None = None
     if intent_pass:
-        messages.append(assistant_message(first))
-        messages.append(
-            {
-                "role": "tool",
-                "tool_name": "read_file",
-                "content": "ERROR file_not_found: config/prod.yaml",
-            }
+        messages.extend(
+            [
+                assistant_message(first),
+                {
+                    "role": "tool",
+                    "tool_name": "read_file",
+                    "content": "ERROR file_not_found: config/prod.yaml",
+                },
+            ]
         )
-        second, second_wall_ms = post_chat(
+        second, repair_wall_ms = post_chat(
             endpoint,
             chat_payload(runtime_id, messages, context_tokens),
             timeout,
@@ -280,7 +267,7 @@ def run_iteration(
         "intent_pass": intent_pass,
         "repair_pass": repair_pass,
         "first_wall_ms": first_wall_ms,
-        "repair_wall_ms": second_wall_ms,
+        "repair_wall_ms": repair_wall_ms,
         "first_response": response_fingerprint(first),
         "repair_response": response_fingerprint(second) if second is not None else None,
         "memory": loaded_model_snapshot(endpoint, runtime_id),
@@ -293,33 +280,26 @@ def median(values: list[float]) -> float | None:
 
 def summarize(cases: list[dict[str, Any]]) -> dict[str, Any]:
     count = len(cases)
-    intent_passes = sum(bool(case.get("intent_pass")) for case in cases)
-    repair_passes = sum(bool(case.get("repair_pass")) for case in cases)
     first_wall = [float(case["first_wall_ms"]) for case in cases]
-    repair_wall = [
-        float(case["repair_wall_ms"])
-        for case in cases
-        if case.get("repair_wall_ms") is not None
-    ]
     tokens_per_second: list[float] = []
     vram_ratios: list[float] = []
     for case in cases:
         for response_key in ("first_response", "repair_response"):
             response = case.get(response_key)
-            if not isinstance(response, dict):
-                continue
-            value = response.get("tokens_per_second")
-            if value is not None:
-                tokens_per_second.append(float(value))
+            if isinstance(response, dict) and response.get("tokens_per_second") is not None:
+                tokens_per_second.append(float(response["tokens_per_second"]))
         memory = case.get("memory")
         if isinstance(memory, dict) and memory.get("gpu_residency_ratio") is not None:
             vram_ratios.append(float(memory["gpu_residency_ratio"]))
     return {
         "runs": count,
-        "tool_intent_pass_rate": intent_passes / count if count else 0.0,
-        "tool_repair_pass_rate": repair_passes / count if count else 0.0,
-        "median_first_wall_ms": median(first_wall),
-        "median_repair_wall_ms": median(repair_wall),
+        "tool_intent_pass_rate": (
+            sum(bool(case.get("intent_pass")) for case in cases) / count if count else 0.0
+        ),
+        "tool_repair_pass_rate": (
+            sum(bool(case.get("repair_pass")) for case in cases) / count if count else 0.0
+        ),
+        "median_wall_ms": median(first_wall),
         "median_tokens_per_second": median(tokens_per_second),
         "median_gpu_residency_ratio": median(vram_ratios),
     }
@@ -328,8 +308,8 @@ def summarize(cases: list[dict[str, Any]]) -> dict[str, Any]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Compare Gemma et son challenger Ministral sur le tool-calling natif "
-            "Ollama, sans promotion automatique."
+            "Compare Gemma et Ministral sur le tool-calling natif Ollama, "
+            "sans promotion automatique."
         )
     )
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
@@ -339,12 +319,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def missing_model_message(alias: str, runtime_id: str) -> str:
+    return f"INFO installer {alias} explicitement avec: ollama pull {runtime_id}"
+
+
 def main() -> int:
     args = parse_args()
-    if args.repetitions < 1 or args.repetitions > 10:
+    if not 1 <= args.repetitions <= 10:
         print("KO  repetitions doit être compris entre 1 et 10")
         return 2
-    if args.context < 2048 or args.context > 32768:
+    if not 2048 <= args.context <= 32768:
         print("KO  context doit être compris entre 2048 et 32768")
         return 2
 
@@ -385,16 +369,18 @@ def main() -> int:
         if isinstance(item, dict) and (item.get("name") or item.get("model"))
     }
     missing = [
-        f"{alias} ({runtime_id})"
+        (alias, runtime_id)
         for alias, runtime_id in pairs
         if not runtime_id or not model_available(runtime_id, available)
     ]
     if missing:
-        print("KO  modèles absents dans Ollama: " + ", ".join(missing))
         print(
-            "INFO installer le challenger explicitement avec: "
-            "ollama pull ministral-3:14b-instruct-2512-q4_K_M"
+            "KO  modèles absents dans Ollama: "
+            + ", ".join(f"{alias} ({runtime_id})" for alias, runtime_id in missing)
         )
+        for alias, runtime_id in missing:
+            if runtime_id:
+                print(missing_model_message(alias, runtime_id))
         return 2
 
     started_at = datetime.now(UTC)
@@ -432,6 +418,9 @@ def main() -> int:
         evidence[alias] = cases
 
     summaries = {alias: summarize(cases) for alias, cases in evidence.items()}
+    comparison_complete = not protocol_errors and all(
+        len(evidence.get(alias, [])) == args.repetitions for alias, _ in pairs
+    )
     payload = {
         "schema_version": "1.0.0",
         "protocol": "native_tool_calling_v1",
@@ -447,12 +436,13 @@ def main() -> int:
         "summaries": summaries,
         "cases": evidence,
         "protocol_errors": protocol_errors,
-        "comparison_complete": not protocol_errors
-        and all(len(evidence.get(alias, [])) == args.repetitions for alias, _ in pairs),
+        "protocol_error_count": len(protocol_errors),
+        "comparison_complete": comparison_complete,
         "automatic_promotion": False,
         "human_decision_required": True,
         "qualification_effect": "required_selection_evidence_only",
     }
+
     RESULTS.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     result_path = RESULTS / f"tool_calling_challenger_{stamp}.json"
@@ -466,11 +456,13 @@ def main() -> int:
         print(
             f"SUMMARY {alias}: intent={summary['tool_intent_pass_rate']:.3f} "
             f"repair={summary['tool_repair_pass_rate']:.3f} "
+            f"wall_ms={summary['median_wall_ms']} "
             f"tok/s={summary['median_tokens_per_second']}"
         )
+    print(f"PROTOCOL_ERROR_COUNT={len(protocol_errors)}")
     print("PROMOTION_ALLOWED=false")
     print("MANUAL_DECISION_REQUIRED=true")
-    if not payload["comparison_complete"]:
+    if not comparison_complete:
         print("VERDICT=INCOMPLETE")
         return 2
     print("VERDICT=MEASURED_FOR_MANUAL_SELECTION")
