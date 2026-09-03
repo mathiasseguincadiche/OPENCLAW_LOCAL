@@ -10,7 +10,11 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Verify | Should -Match '/api/chat'
         $Verify | Should -Match '/api/ps'
         $Verify | Should -Match 'stream = \$false'
-        $Verify | Should -Match 'num_predict = 16'
+        $Verify | Should -Match 'num_predict = 64'
+        $Verify | Should -Match "gemma4:\*"
+        $Verify | Should -Match '\$RequestBody\.think = \$false'
+        $Verify | Should -Match 'thinking_chars='
+        $Verify | Should -Match 'done_reason='
         $Verify | Should -Not -Match '/api/generate'
         $Verify | Should -Not -Match '& ollama run'
     }
