@@ -111,9 +111,9 @@ Le thinking Qwen n'est plus activé sur tous les cas. Il reste **natif sur trois
 16384 long-context-discipline
 ```
 
-Ces probes sont bornés à **768 tokens**. Tous les autres cas Qwen utilisent `think=false` et leur plafond de scénario normal. On conserve donc une preuve réelle du reasoning sans payer son coût sur les tâches courtes de formatage ou de contrôle.
+Ces probes sont désormais bornés à **1024 tokens**. Cette marge est fondée sur une exécution B580 réelle où `kubernetes-root-cause` a atteint exactement l'ancienne borne de 768 tokens en 109,8 s, donc sans approcher le timeout individuel de 210 s. Tous les autres cas Qwen utilisent `think=false` et leur plafond de scénario normal. On conserve donc une preuve réelle du reasoning sans payer son coût sur les tâches courtes de formatage ou de contrôle.
 
-Une génération qui atteint sa borne est considérée tronquée et fait échouer le gate. Le gain de temps ne repose pas sur l'acceptation silencieuse de réponses coupées.
+Une génération qui atteint 1024 tokens reste considérée tronquée et fait échouer le gate. Le gain de marge ne repose pas sur l'acceptation silencieuse de réponses coupées.
 
 ### Budget temps contractualisé
 
