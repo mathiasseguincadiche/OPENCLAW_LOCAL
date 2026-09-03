@@ -10,7 +10,11 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Verify | Should -Match '/api/chat'
         $Verify | Should -Match '/api/ps'
         $Verify | Should -Match 'stream = \$false'
-        $Verify | Should -Match 'num_predict = 16'
+        $Verify | Should -Match 'num_predict = 64'
+        $Verify | Should -Match "gemma4:\*"
+        $Verify | Should -Match '\$RequestBody\.think = \$false'
+        $Verify | Should -Match 'thinking_chars='
+        $Verify | Should -Match 'done_reason='
         $Verify | Should -Not -Match '/api/generate'
         $Verify | Should -Not -Match '& ollama run'
     }
@@ -35,5 +39,19 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Text | Should -Match 'mode QUICK'
         $Text | Should -Match 'thinking Qwen désactivé'
         $Text | Should -Match '36 cas'
+    }
+}
+
+Describe 'Inventaire VRAM Windows fiable' {
+    It 'préfère QWORD et ne traite pas le fallback 32 bits comme fiable' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $InventoryHelper = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\windows\lib\hardware_inventory.ps1'
+        )
+        $InventoryHelper | Should -Match 'HardwareInformation\.qwMemorySize'
+        $InventoryHelper | Should -Match 'windows_registry_hardware_information_qword'
+        $InventoryHelper | Should -Match 'HardwareInformation\.MemorySize'
+        $InventoryHelper | Should -Match 'windows_registry_hardware_information_legacy32'
+        $InventoryHelper | Should -Match 'reliable = \$IsQword'
     }
 }

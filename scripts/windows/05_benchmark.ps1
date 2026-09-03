@@ -21,6 +21,7 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] python $($BenchmarkArgs -join ' ')"
     Write-Host '[DRY-RUN] Les trois modèles requis et la suite sont lus depuis les contrats YAML.'
     Write-Host '[DRY-RUN] Chaque scénario borne sa sortie avec max_output_tokens.'
+    Write-Host '[DRY-RUN] Gemma 4: thinking désactivé pour préserver le budget de réponse finale des gates fonctionnels.'
     Write-Host '[DRY-RUN] Le runner affiche durée, TTFT, tokens/s, tokens générés et progression.'
     if ($Quick) {
         Write-Host '[DRY-RUN] Mode QUICK: contexte 8192, 36 cas, thinking Qwen désactivé.'

@@ -155,6 +155,11 @@ def resolve_generation_policy(
     qwen_thinking: str,
 ) -> tuple[int, bool | None, str]:
     family = str(model.get("family") or "").casefold()
+    if family == "gemma":
+        # Les gates fonctionnels bornent la réponse finale. Gemma 4 possède désormais
+        # un canal thinking configurable qui peut consommer ce budget avant content.
+        # Le raisonnement profond reste couvert par les E2E/projets représentatifs.
+        return scenario_limit, False, "off"
     if family != "qwen":
         return scenario_limit, None, "not_applicable"
     if qwen_thinking == "off":
@@ -385,7 +390,8 @@ def main() -> int:
     print(
         "BENCHMARK_PLAN "
         f"modeles={len(selected_models)} contextes={len(contexts)} "
-        f"scenarios={len(scenarios)} cas={total} qwen_thinking={args.qwen_thinking}"
+        f"scenarios={len(scenarios)} cas={total} "
+        f"qwen_thinking={args.qwen_thinking} gemma_thinking=off"
     )
 
     for model in selected_models:
@@ -495,7 +501,7 @@ def main() -> int:
     finished_at = datetime.now(UTC)
     total_wall_ms = (time.perf_counter() - run_started) * 1000
     payload = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "suite": suite["id"],
         "started_at": started_at.isoformat(),
         "finished_at": finished_at.isoformat(),
@@ -503,6 +509,7 @@ def main() -> int:
         "ollama_version": version.get("version"),
         "contexts": contexts,
         "qwen_thinking": args.qwen_thinking,
+        "gemma_thinking": "off",
         "total_wall_ms": total_wall_ms,
         "models": [
             {

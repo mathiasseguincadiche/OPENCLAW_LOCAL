@@ -67,8 +67,16 @@ def test_qwen_native_mode_is_bounded_without_overriding_thinking() -> None:
     assert mode == "native"
 
 
-def test_non_qwen_models_keep_scenario_limit_and_native_behavior() -> None:
+def test_gemma_disables_thinking_for_bounded_functional_gates() -> None:
     model = {"family": "gemma"}
+    limit, think, mode = BENCHMARK.resolve_generation_policy(model, 320, "native")
+    assert limit == 320
+    assert think is False
+    assert mode == "off"
+
+
+def test_non_reasoning_models_keep_scenario_limit_and_native_behavior() -> None:
+    model = {"family": "mistral"}
     limit, think, mode = BENCHMARK.resolve_generation_policy(model, 320, "off")
     assert limit == 320
     assert think is None

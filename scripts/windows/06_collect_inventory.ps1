@@ -14,7 +14,7 @@ $HardwareInventory = Join-Path $PSScriptRoot 'lib\hardware_inventory.ps1'
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Collecter OS, CPU, RAM, GPU/pilotes et versions runtime.'
-    Write-Host '[DRY-RUN] Résoudre la VRAM via le registre Windows; CIM reste informatif seulement.'
+    Write-Host '[DRY-RUN] Résoudre la VRAM via HardwareInformation.qwMemorySize; les sources 32 bits restent informatives.'
     Write-Host '[DRY-RUN] Comparer les versions observées au runtime lock versionné.'
     Write-Host "[DRY-RUN] Écrire l'inventaire dans $ResultsDir sans secret."
     exit 0
@@ -115,8 +115,8 @@ $Payload = [ordered]@{
     ollama_models_text = $OllamaModels
     notes = @(
         'Inventaire de qualification; aucune performance n est déduite de cet inventaire.',
-        'La VRAM fiable utilise HardwareInformation.MemorySize du registre Windows lorsque disponible.',
-        'AdapterRAM de Win32_VideoController est conservé uniquement comme donnée informative.',
+        'La VRAM fiable utilise HardwareInformation.qwMemorySize 64 bits du registre Windows lorsque disponible.',
+        'HardwareInformation.MemorySize et AdapterRAM sont conservés uniquement comme données informatives 32 bits.',
         'Une version observée différente du runtime lock impose une nouvelle qualification.'
     )
 }

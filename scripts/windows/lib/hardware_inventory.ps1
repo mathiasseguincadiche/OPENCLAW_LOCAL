@@ -33,7 +33,7 @@ function ConvertTo-UInt64MemoryByteCount {
     }
 }
 
-function Get-RegistryVideoMemoryByteCount {
+function Get-RegistryVideoMemoryMeasurement {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -92,13 +92,30 @@ function Get-RegistryVideoMemoryByteCount {
                 continue
             }
 
-            $MemoryProperty = $Properties.PSObject.Properties['HardwareInformation.MemorySize']
-            if ($null -eq $MemoryProperty) {
-                continue
-            }
-            $ByteCount = ConvertTo-UInt64MemoryByteCount -Value $MemoryProperty.Value
-            if ($null -ne $ByteCount -and $ByteCount -gt 0) {
-                return $ByteCount
+            foreach ($MemoryPropertyName in @(
+                'HardwareInformation.qwMemorySize',
+                'HardwareInformation.MemorySize'
+            )) {
+                $MemoryProperty = $Properties.PSObject.Properties[$MemoryPropertyName]
+                if ($null -eq $MemoryProperty) {
+                    continue
+                }
+                $ByteCount = ConvertTo-UInt64MemoryByteCount -Value $MemoryProperty.Value
+                if ($null -eq $ByteCount -or $ByteCount -le 0) {
+                    continue
+                }
+
+                $IsQword = $MemoryPropertyName -eq 'HardwareInformation.qwMemorySize'
+                return [pscustomobject][ordered]@{
+                    byte_count = $ByteCount
+                    source = if ($IsQword) {
+                        'windows_registry_hardware_information_qword'
+                    }
+                    else {
+                        'windows_registry_hardware_information_legacy32'
+                    }
+                    reliable = $IsQword
+                }
             }
         }
     }
@@ -122,14 +139,16 @@ function Get-OpenClawGpuInventory {
             $CimByteCount = ConvertTo-UInt64MemoryByteCount -Value $AdapterRamProperty.Value
         }
 
-        $RegistryByteCount = Get-RegistryVideoMemoryByteCount -AdapterName $Name
+        $RegistryMeasurement = Get-RegistryVideoMemoryMeasurement -AdapterName $Name
+        $RegistryByteCount = $null
         $VramGib = $null
         $VramSource = 'unavailable'
         $VramReliable = $false
-        if ($null -ne $RegistryByteCount) {
+        if ($null -ne $RegistryMeasurement) {
+            $RegistryByteCount = [uint64]$RegistryMeasurement.byte_count
             $VramGib = [math]::Round($RegistryByteCount / 1GB, 2)
-            $VramSource = 'windows_registry_hardware_information'
-            $VramReliable = $true
+            $VramSource = [string]$RegistryMeasurement.source
+            $VramReliable = [bool]$RegistryMeasurement.reliable
         }
 
         $CimGib = $null
