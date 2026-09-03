@@ -15,6 +15,9 @@ $Evaluate = Join-Path $RepoRoot 'scripts\23_evaluate_benchmark.py'
 $ListModels = Join-Path $RepoRoot 'scripts\20_list_models.py'
 . (Join-Path $PSScriptRoot 'lib\python_runtime.ps1')
 
+$QualificationMaxWallSeconds = 2400
+$EvaluationReserveSeconds = 60
+
 function Get-PlatformRoot {
     if ($env:OPENCLAW_LOCAL_ROOT) {
         return $env:OPENCLAW_LOCAL_ROOT
@@ -31,34 +34,48 @@ function Assert-ExitCode([string]$Step) {
     }
 }
 
+function Assert-QualificationBudget([System.Diagnostics.Stopwatch]$Watch, [string]$Step) {
+    if ($Watch.Elapsed.TotalSeconds -ge $QualificationMaxWallSeconds) {
+        throw "HARD_TIMEOUT qualification > 40 min pendant/après $Step."
+    }
+}
+
 if ($DryRun) {
     Write-Host '[DRY-RUN] Qualification locale stricte, sans appel cloud :'
     Write-Host '  runtime Python: environnement géré OPENCLAW_LOCAL avec PyYAML vérifié'
-    Write-Host '  1. audit host avec VRAM fiable si HardwareInformation.qwMemorySize est disponible'
-    Write-Host '  2. smoke tests API sans spinner des trois modèles required du catalogue'
+    Write-Host '  1. audit host + VRAM fiable'
+    if ($Quick) {
+        Write-Host '  2. smoke tests API des trois modèles required'
+    }
+    else {
+        Write-Host '  2. préflight catalogue uniquement; les smokes redondants sont couverts par le benchmark réel'
+    }
     Write-Host '  3. inventaire matériel/runtime'
     Write-Host '  4. benchmark borné des trois modèles selon qualification_policy.yaml'
     Write-Host '  5. progression avec durée, premier token, tokens/s et estimation du restant'
-    Write-Host '  politique Gemma 4: thinking désactivé dans les gates fonctionnels bornés'
     if ($Quick) {
         Write-Host '  6. diagnostic automatique 8K uniquement; aucune qualification/promotion'
         Write-Host '  mode QUICK: contexte 8192, 36 cas, thinking Qwen désactivé'
     }
     else {
         Write-Host '  6. évaluation complète des seuils; aucune promotion automatique'
-        Write-Host '  mode COMPLET OPTIMISÉ: 36 cas 8K + 12 cas ciblés 16K = 48 cas'
-        Write-Host '  Qwen thinking natif conservé, budget borné à 768 tokens par cas'
-        Write-Host '  16K cible: intake projet, diagnostic K8s, réparation outil, long contexte'
+        Write-Host '  mode COMPLET HARD-40M: 24 cas 8K + 6 cas 16K = 30 cas'
+        Write-Host '  8 scénarios 8K par modèle; couverture collective des 12 scénarios'
+        Write-Host '  2 scénarios 16K ciblés par modèle'
+        Write-Host '  Qwen thinking natif uniquement sur 3 probes dédiés'
+        Write-Host '  HARD LIMIT qualification complète: 2400 s, évaluation finale incluse'
     }
     exit 0
 }
 
+$QualificationWatch = [System.Diagnostics.Stopwatch]::StartNew()
 $PlatformRoot = Get-PlatformRoot
 $ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
 Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 & $Audit
 Assert-ExitCode 'Audit host'
+if (-not $Quick) { Assert-QualificationBudget $QualificationWatch 'audit host' }
 
 $Models = @(
     & $ManagedPython $ListModels --provider ollama --required
@@ -69,26 +86,50 @@ if ($Models.Count -ne 3) {
     throw "La flotte supportée doit contenir exactement trois modèles required Ollama; détectés: $($Models.Count)."
 }
 
-foreach ($Model in $Models) {
-    & $Verify -Model $Model
-    Assert-ExitCode "Smoke test $Model"
+if ($Quick) {
+    foreach ($Model in $Models) {
+        & $Verify -Model $Model
+        Assert-ExitCode "Smoke test $Model"
+    }
+}
+else {
+    Write-Host 'OK  Préflight modèles: 3 modèles required; inférence validée dans la matrice benchmark.'
 }
 
 & $Inventory
 Assert-ExitCode 'Inventaire'
-
-& $Benchmark -Quick:$Quick
-Assert-ExitCode 'Benchmark local'
+if (-not $Quick) { Assert-QualificationBudget $QualificationWatch 'inventaire' }
 
 if ($Quick) {
+    & $Benchmark -Quick
+    Assert-ExitCode 'Benchmark local'
     & $ManagedPython $Evaluate --quick
     Assert-ExitCode 'Évaluation diagnostic rapide 8K'
     Write-Host 'VERDICT: QUICK_DIAGNOSTIC_PASS; PASSE COMPLETE 8K+16K ENCORE REQUISE POUR QUALIFICATION.'
     exit 0
 }
 
+$ElapsedSeconds = [int][Math]::Ceiling($QualificationWatch.Elapsed.TotalSeconds)
+$BenchmarkBudgetSeconds = $QualificationMaxWallSeconds - $ElapsedSeconds - $EvaluationReserveSeconds
+if ($BenchmarkBudgetSeconds -le 0) {
+    throw 'HARD_TIMEOUT: budget de qualification épuisé avant le benchmark.'
+}
+Write-Host (
+    "QUALIFICATION_BUDGET total={0}s elapsed={1}s benchmark={2}s reserve_eval={3}s" -f 
+    $QualificationMaxWallSeconds, $ElapsedSeconds, $BenchmarkBudgetSeconds, $EvaluationReserveSeconds
+)
+
+& $Benchmark -MaxWallSeconds $BenchmarkBudgetSeconds
+Assert-ExitCode 'Benchmark local HARD-40M'
+Assert-QualificationBudget $QualificationWatch 'benchmark'
+
 & $ManagedPython $Evaluate
 Assert-ExitCode 'Évaluation automatique complète'
+Assert-QualificationBudget $QualificationWatch 'évaluation automatique'
 
-Write-Host 'VERDICT: GATE AUTOMATIQUE PASSÉ POUR LES TROIS MODÈLES; QUALIFICATION MANUELLE ENCORE REQUISE.'
+Write-Host (
+    'VERDICT: GATE AUTOMATIQUE PASSÉ POUR LES TROIS MODÈLES; ' +
+    'QUALIFICATION MANUELLE ENCORE REQUISE.'
+)
+Write-Host ("QUALIFICATION_DURATION={0:N1}s" -f $QualificationWatch.Elapsed.TotalSeconds)
 exit 0

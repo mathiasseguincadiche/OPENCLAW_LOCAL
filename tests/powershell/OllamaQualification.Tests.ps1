@@ -45,15 +45,31 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Text | Should -Match 'Python géré OPENCLAW_LOCAL'
     }
 
-    It 'annonce le plan complet optimisé à 48 cas' {
+    It 'annonce le plan complet HARD-40M à 30 cas' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $TestRepoRoot 'menu.ps1') `
             -Action qualification -DryRun 2>&1
         $LASTEXITCODE | Should -Be 0
         $Text = $Output -join "`n"
-        $Text | Should -Match '36 cas 8K \+ 12 cas ciblés 16K = 48 cas'
-        $Text | Should -Match '768 tokens'
+        $Text | Should -Match '24 cas 8K \+ 6 cas 16K = 30 cas'
+        $Text | Should -Match '3 probes dédiés'
+        $Text | Should -Match 'HARD LIMIT qualification complète: 2400 s'
         $Text | Should -Match 'premier token'
+    }
+
+    It 'verrouille le budget mural dans le runner de qualification' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $Qualification = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\windows\07_run_qualification.ps1'
+        )
+        $Benchmark = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\windows\05_benchmark.ps1'
+        )
+        $Qualification | Should -Match '\$QualificationMaxWallSeconds = 2400'
+        $Qualification | Should -Match '\$EvaluationReserveSeconds = 60'
+        $Qualification | Should -Match 'Assert-QualificationBudget'
+        $Qualification | Should -Match 'MaxWallSeconds \$BenchmarkBudgetSeconds'
+        $Benchmark | Should -Match 'benchmark_qualification_40m\.py'
     }
 
     It 'transmet Quick à la qualification depuis le menu' {

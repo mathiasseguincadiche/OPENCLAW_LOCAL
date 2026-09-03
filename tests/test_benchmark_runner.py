@@ -113,28 +113,12 @@ def test_versioned_suite_has_safe_output_limits() -> None:
         assert 1 <= limit <= BENCHMARK.MAX_CONFIGURED_OUTPUT_TOKENS
 
 
-def test_full_matrix_keeps_all_8k_and_only_four_targeted_16k_scenarios() -> None:
-    suite = BENCHMARK.load_yaml(ROOT / "benchmarks" / "suites" / "devops_v2.yaml")
+def test_full_qualification_matrix_is_owned_by_hard_40m_policy() -> None:
     policy = BENCHMARK.load_yaml(ROOT / "config" / "v1" / "qualification_policy.yaml")
-    scenarios = list(suite["scenarios"])
-    enabled_8k = [
-        scenario
-        for scenario in scenarios
-        if BENCHMARK.scenario_enabled_for_context(scenario, 8192, policy)
-    ]
-    enabled_16k = [
-        scenario
-        for scenario in scenarios
-        if BENCHMARK.scenario_enabled_for_context(scenario, 16384, policy)
-    ]
-    assert len(enabled_8k) == 12
-    assert [str(item["id"]) for item in enabled_16k] == [
-        "project-intake-analysis",
-        "kubernetes-root-cause",
-        "tool-feedback-repair-json",
-        "long-context-discipline",
-    ]
-    assert 3 * (len(enabled_8k) + len(enabled_16k)) == 48
+    gates = policy["automated_gates"]
+    assert "scenario_matrix" in gates
+    assert "extended_context_scenarios" not in gates
+    assert policy["runtime_budget"]["qualification_max_wall_seconds"] == 2400
 
 
 def test_format_duration_is_operator_friendly() -> None:

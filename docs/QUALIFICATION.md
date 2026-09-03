@@ -2,7 +2,7 @@
 
 ## But
 
-La qualification transforme la flotte et les backends déclarés dans Git en décisions fondées sur des **preuves réelles** produites sur la workstation cible. Elle ne sert pas à découvrir de nouveaux modèles : la flotte supportée est déjà fermée à exactement trois modèles.
+La qualification transforme la flotte et les backends déclarés dans Git en décisions fondées sur des **preuves réelles** produites sur la workstation cible. Elle ne sert pas à découvrir de nouveaux modèles : la flotte supportée est fermée à exactement trois modèles.
 
 ## Flotte obligatoire
 
@@ -12,7 +12,7 @@ La qualification transforme la flotte et les backends déclarés dans Git en dé
 | `gemma-deep` | `gemma4:26b` | LOCAL_DEEP |
 | `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST |
 
-Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer le gate global. Il n'existe aucun modèle local optionnel, aucun quatrième candidat et aucun switch de qualification permettant d'en ajouter un.
+Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer le gate global. Il n'existe aucun modèle local optionnel ni quatrième candidat dans cette qualification.
 
 ## Invariants
 
@@ -22,7 +22,8 @@ Les trois modèles sont `required: true`. L'échec de l'un d'eux fait échouer l
 - aucun seuil modifié pour faire passer artificiellement un modèle ;
 - aucune promotion automatique ;
 - preuves brutes conservées hors Git ;
-- toute dérive de modèle, backend, OpenClaw, Ollama ou pilote GPU invalide la réutilisation automatique d'une preuve précédente.
+- toute dérive de modèle, backend, OpenClaw, Ollama ou pilote GPU invalide la réutilisation automatique d'une preuve précédente ;
+- **la qualification complète ne doit jamais dépasser 40 minutes de temps mural**.
 
 ## 1. Installation propre
 
@@ -35,7 +36,7 @@ Le parcours complet installe le runtime, configure le stockage local, téléchar
 
 Le smoke-test Ollama utilise l'API locale **`/api/chat`** avec `stream=false`. Il ne passe pas par `ollama run`. Pour Qwen3.8 et Gemma4, le thinking est désactivé pendant ce smoke-test minimal : cette étape vérifie que le runtime répond, pas sa capacité de raisonnement profond.
 
-Après le smoke-test, `/api/ps` est interrogé pour afficher la taille réellement chargée en VRAM, la taille totale du modèle et le contexte alloué par Ollama.
+Après le smoke-test, `/api/ps` peut être interrogé pour afficher la taille réellement chargée en VRAM, la taille totale du modèle et le contexte alloué par Ollama.
 
 ## 2. Vérification du runtime
 
@@ -76,21 +77,60 @@ Les preuves sont écrites sous `<OPENCLAW_LOCAL_ROOT>\proofs\`.
 
 ## 4. Qualification automatique des trois modèles
 
-### Passe complète optimisée de référence
+### Passe complète HARD-40M de référence
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
-Cette passe couvre **48 cas** :
+Cette passe couvre **30 cas** :
 
-- **36 cas 8K** : 3 modèles × 12 scénarios, pour conserver la couverture fonctionnelle complète ;
-- **12 cas 16K** : 3 modèles × 4 scénarios ciblés : `project-intake-analysis`, `kubernetes-root-cause`, `tool-feedback-repair-json` et `long-context-discipline`.
+- **24 cas 8K** : 8 scénarios adaptés au rôle de chacun des trois modèles ;
+- **6 cas 16K** : 2 scénarios de stress ciblés par modèle ;
+- les **12 scénarios** de `devops-v2` restent tous couverts collectivement à 8K ;
+- les trois modèles restent obligatoires.
 
-Les tests 16K ne rejouent donc plus les tâches courtes qui n'apportent aucune information supplémentaire à contexte étendu. Le stress 16K reste obligatoire sur les tâches qui sollicitent réellement analyse, diagnostic, réparation et long contexte.
+La matrice complète est versionnée dans `config/v1/qualification_policy.yaml` sous `automated_gates.scenario_matrix`.
 
-Pour Qwen3.8, le thinking reste dans son mode **natif** pendant la passe complète, mais son budget est borné à **768 tokens maximum par cas** au lieu de 2048. Les scénarios conservent au minimum leur propre limite fonctionnelle. Une génération qui atteint cette borne est considérée tronquée et fait échouer le gate : le gain de temps ne repose donc pas sur l'acceptation silencieuse d'une réponse coupée.
+Le 16K est conservé sur les tâches qui apportent réellement une contrainte de contexte : Project Intake et long contexte pour Qwen/Gemma ; diagnostic Kubernetes et long contexte pour Devstral.
+
+### Qwen reasoning
+
+Le thinking Qwen n'est plus activé sur tous les cas. Il reste **natif sur trois probes dédiés** :
+
+```text
+8192  project-intake-analysis
+8192  kubernetes-root-cause
+16384 long-context-discipline
+```
+
+Ces probes sont bornés à **640 tokens**. Tous les autres cas Qwen utilisent `think=false` et leur plafond de scénario normal. On conserve donc une preuve réelle du reasoning sans payer son coût sur les tâches courtes de formatage ou de contrôle.
+
+Une génération qui atteint sa borne est considérée tronquée et fait échouer le gate. Le gain de temps ne repose pas sur l'acceptation silencieuse de réponses coupées.
+
+### Budget temps contractualisé
+
+`qualification_policy.yaml` fixe :
+
+```text
+qualification complète : 2400 s maximum
+réserve évaluation      :   60 s
+benchmark direct        : 2100 s par défaut
+cas individuel          :  150 s maximum
+```
+
+`scripts/windows/07_run_qualification.ps1` démarre un chronomètre au début du parcours. Après audit et inventaire, il retire le temps déjà consommé et réserve 60 secondes pour l'évaluation finale. Le budget restant est transmis au benchmark.
+
+`scripts/benchmark_qualification_40m.py` applique ensuite son propre deadline mural. Une erreur API, un timeout ou une sortie tronquée déclenche un **fail-fast**, puisque `max_error_rate: 0.0` rend déjà le gate impossible.
+
+Si le budget de 40 minutes est atteint, le verdict est `FAIL/HARD_TIMEOUT` : le script ne continue pas au-delà de la limite.
+
+### Suppression des smokes redondants en mode complet
+
+La passe complète ne génère plus trois smokes avant le benchmark. Elle vérifie le catalogue et la présence des modèles, puis la matrice de benchmark effectue directement de vraies générations sur chacun d'eux.
+
+Les smokes restent disponibles via `verify` et sont conservés dans le mode `-Quick`. Le gate OpenClaw E2E reste également distinct.
 
 ### Passe rapide d'itération
 
@@ -99,9 +139,9 @@ Pour Qwen3.8, le thinking reste dans son mode **natif** pendant la passe complè
 .\menu.ps1 -Action qualification -Quick
 ```
 
-Cette passe couvre **36 cas** : les mêmes 3 modèles et 12 scénarios, uniquement à 8192 tokens. Elle désactive le thinking de Qwen3.8 afin de vérifier rapidement formats, contrôles et performances d'inférence.
+Cette passe conserve **36 cas** : 3 modèles × 12 scénarios, uniquement à 8192 tokens, avec thinking Qwen désactivé.
 
-Le mode Quick sert au diagnostic et aux itérations courantes ; il **ne remplace pas** la passe complète optimisée pour une décision de qualification. Un Quick réussi retourne `QUICK_DIAGNOSTIC_PASS`, jamais `READY_FOR_MANUAL_QUALIFICATION`.
+Le mode Quick sert au diagnostic ; il **ne remplace pas** la qualification HARD-40M. Un Quick réussi retourne `QUICK_DIAGNOSTIC_PASS`, jamais `READY_FOR_MANUAL_QUALIFICATION`.
 
 Ou directement :
 
@@ -110,19 +150,17 @@ Ou directement :
 .\scripts\windows\07_run_qualification.ps1 -Quick
 ```
 
-Le parcours enchaîne :
+Le parcours complet enchaîne :
 
-1. audit host/runtime ;
-2. lecture des trois modèles `required` depuis `model_catalog.yaml` ;
-3. smoke test API de chacun ;
-4. inventaire matériel/runtime ;
-5. benchmark via `/api/chat` selon `qualification_policy.yaml` ;
-6. couverture complète 8K et stress ciblé 16K ;
-7. évaluation des seuils versionnés.
+1. audit host/runtime et VRAM ;
+2. lecture des trois modèles `required` ;
+3. inventaire matériel/runtime ;
+4. benchmark HARD-40M via `/api/chat` ;
+5. matrice 30 cas 8K/16K ;
+6. évaluation des seuils versionnés ;
+7. contrôle final que la durée totale reste inférieure à 2400 s.
 
-Chaque scénario possède un plafond fonctionnel `max_output_tokens`. Une génération qui atteint le budget appliqué est enregistrée comme tronquée, marquée `status=error` et fait échouer le gate puisque la politique impose `max_error_rate: 0`.
-
-Après chaque scénario, l'opérateur voit le statut, la durée, le temps au premier token réellement généré, le délai jusqu'à la réponse finale, les tokens/s, le nombre de tokens générés, le volume de thinking observé sans son contenu et une estimation du temps restant.
+Après chaque scénario, l'opérateur voit le statut, la durée, le temps au premier token réellement généré, le délai jusqu'à la réponse finale, les tokens/s, le nombre de tokens générés, le volume de thinking sans son contenu, le budget restant et une estimation du temps restant.
 
 ## 5. Mesures à collecter
 
@@ -143,7 +181,7 @@ Pour chaque modèle/backend pertinent :
 - réparation après retour d'outil ;
 - comportement multimodal PDF/image lorsqu'il s'applique.
 
-Pour un modèle reasoning, le gate de latence utilise le **premier token réellement généré**, y compris un token du canal thinking. Le temps jusqu'au premier token de réponse finale reste enregistré séparément mais n'est pas confondu avec la TTFT d'inférence.
+Pour un modèle reasoning, le gate de latence utilise le **premier token réellement généré**, y compris un token du canal thinking. Le temps jusqu'au premier token de réponse finale reste enregistré séparément.
 
 Les mesures absentes restent absentes : elles ne sont jamais inventées. La trace brute du thinking n'est pas conservée ; seul son volume est comptabilisé.
 
@@ -185,9 +223,13 @@ Le scénario doit idéalement contenir plusieurs formats et une dépendance entr
 
 Au moins un garde-fou automatique échoue. Conserver la preuve, diagnostiquer puis corriger la cause. Ne pas abaisser un seuil sans justification et revue.
 
+### `HARD_TIMEOUT`
+
+La workstation ne termine pas la qualification dans le budget opérationnel de 40 minutes. Ce résultat est un échec de qualification pour ce protocole ; on optimise le runtime ou la matrice, on ne laisse pas le processus dériver au-delà de la limite.
+
 ### `READY_FOR_MANUAL_QUALIFICATION`
 
-Les gates automatiques sont passés. Ce verdict **ne signifie pas V1 qualifiée**. Il reste à valider les preuves E2E, les performances, la stabilité, les backends et le projet représentatif.
+Les gates automatiques sont passés **et le parcours s'est terminé sous 40 minutes**. Ce verdict ne signifie pas V1 qualifiée. Il reste à valider les preuves E2E, les performances, la stabilité, les backends et le projet représentatif.
 
 ## Preuves minimales pour la décision V1
 
@@ -195,6 +237,8 @@ Les gates automatiques sont passés. Ce verdict **ne signifie pas V1 qualifiée*
 - versions Windows/PowerShell/Python/OpenClaw/Ollama ;
 - pilote GPU ;
 - inventaire matériel ;
+- protocole `qualification-hard-40m-v1` ;
+- durée totale de qualification ;
 - résultats des trois modèles ;
 - politique de thinking réellement utilisée ;
 - E2E OpenClaw ;
@@ -217,7 +261,7 @@ La CI peut donc prouver la **conformité logicielle**, jamais inventer une quali
 1. installation propre ;
 2. `audit` et `verify` réussis ;
 3. E2E réel réussi ;
-4. qualification des trois modèles ;
+4. qualification HARD-40M des trois modèles ;
 5. comparaison des backends prévue ;
 6. au moins un projet complet ;
 7. limites documentées ;
