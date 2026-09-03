@@ -43,7 +43,7 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test /api/chat sans spinner avec $Model."
     Write-Host '[DRY-RUN] Thinking désactivé pour les modèles de raisonnement pendant ce smoke runtime minimal.'
     Write-Host '[DRY-RUN] Lire ensuite /api/ps pour exposer la part réellement chargée en VRAM.'
-    Write-Host '[DRY-RUN] Vérifier enfin le digest/format/quantification contre l’identité qualifiée si elle existe.'
+    Write-Host '[DRY-RUN] Vérifier enfin digest, format et quantification contre l’identité qualifiée si elle existe.'
     exit 0
 }
 
@@ -135,8 +135,11 @@ if ($EvalCount -gt 0 -and $EvalDuration -gt 0) {
     $TokensPerSecond = [math]::Round($EvalCount / $EvalDuration * 1000000000, 2)
 }
 
-$Metric = if ($null -ne $TokensPerSecond) { " ($TokensPerSecond tok/s)" } else { '' }
-Write-Host "OK  Inférence locale validée avec $Model via API Ollama$Metric."
+$Metric = ''
+if ($null -ne $TokensPerSecond) {
+    $Metric = ' ({0} tok/s)' -f $TokensPerSecond
+}
+Write-Host ('OK  Inférence locale validée avec {0} via API Ollama{1}.' -f $Model, $Metric)
 
 try {
     $Running = Invoke-RestMethod -Method Get `
@@ -157,10 +160,15 @@ try {
             0
         }
         $ContextLength = $Loaded.context_length
-        Write-Host (
-            "INFO Ollama mémoire $Model : VRAM=$VramGiB/$SizeGiB GiB " +
-            "(~$GpuPercent% GPU), contexte alloué=$ContextLength."
+        $MemoryMessage = (
+            'INFO Ollama mémoire {0} : VRAM={1}/{2} GiB (~{3}% GPU), contexte alloué={4}.' -f
+            $Model,
+            $VramGiB,
+            $SizeGiB,
+            $GpuPercent,
+            $ContextLength
         )
+        Write-Host $MemoryMessage
     }
 }
 catch {
