@@ -7,14 +7,16 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 
-def test_release_workflow_runs_pre_v1_hardening_before_readiness_gate() -> None:
+def test_release_workflow_requires_tagged_commit_on_main() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
+    ancestry = 'git merge-base --is-ancestor "${GITHUB_SHA}" origin/main'
     hardening = "python scripts/47_validate_pre_v1_hardening.py"
     readiness = 'python scripts/24_validate_release.py --tag "${GITHUB_REF_NAME}"'
     build = "python -m build"
-    assert hardening in text
-    assert readiness in text
-    assert text.index(hardening) < text.index(readiness) < text.index(build)
+    assert "git fetch origin main --no-tags" in text
+    assert ancestry in text
+    assert text.index(ancestry) < text.index(hardening) < text.index(readiness)
+    assert text.index(readiness) < text.index(build)
 
 
 def test_release_publish_depends_on_python_and_windows_validation() -> None:
