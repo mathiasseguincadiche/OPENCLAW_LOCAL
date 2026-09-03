@@ -14,9 +14,9 @@
         api: "ollama",
         timeoutSeconds: 300,
         models: [
-          { id: "qwen3.8:27b", name: "qwen3.8:27b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
-          { id: "gemma4:26b", name: "gemma4:26b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
-          { id: "devstral-small-2:24b", name: "devstral-small-2:24b", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
+          { id: "qwen3.5:9b-q4_K_M", name: "qwen3.5:9b-q4_K_M", input: ["text", "image"], contextTokens: 8192, params: { num_ctx: 8192, keep_alive: "15m" } },
+          { id: "gemma3:12b-it-q4_K_M", name: "gemma3:12b-it-q4_K_M", input: ["text", "image"], contextTokens: 8192, params: { num_ctx: 8192, keep_alive: "15m" } },
+          { id: "qwen2.5-coder:14b-instruct-q4_K_M", name: "qwen2.5-coder:14b-instruct-q4_K_M", input: ["text"], contextTokens: 8192, params: { num_ctx: 8192, keep_alive: "15m" } },
         ],
       },
     },
@@ -24,9 +24,9 @@
   agents: {
     defaults: {
       skipBootstrap: true,
-      model: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
-      imageModel: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
-      pdfModel: { primary: "ollama/qwen3.8:27b", fallbacks: ["ollama/gemma4:26b"] },
+      model: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma3:12b-it-q4_K_M"] },
+      imageModel: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma3:12b-it-q4_K_M"] },
+      pdfModel: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma3:12b-it-q4_K_M"] },
     },
     // Le générateur remplit cette liste avec les 8 rôles et marque
     // chef-operations comme agent par défaut.

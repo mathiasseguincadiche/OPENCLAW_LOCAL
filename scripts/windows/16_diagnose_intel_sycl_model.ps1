@@ -1,8 +1,12 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [ValidateSet('qwen3.8:27b', 'gemma4:26b', 'devstral-small-2:24b')]
-    [string]$Model = 'devstral-small-2:24b',
+    [ValidateSet(
+        'qwen3.5:9b-q4_K_M',
+        'gemma3:12b-it-q4_K_M',
+        'qwen2.5-coder:14b-instruct-q4_K_M'
+    )]
+    [string]$Model = 'qwen2.5-coder:14b-instruct-q4_K_M',
     [ValidateRange(30, 600)]
     [int]$TimeoutSeconds = 180
 )
@@ -175,7 +179,8 @@ $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeL
 if ($DryRun) {
     Write-Host '[DRY-RUN] Diagnostic direct du modèle réellement utilisé par le backend SYCL.'
     Write-Host "[DRY-RUN] Model=$Model Release=$($RuntimeLock.release) Device=$($RuntimeLock.device)"
-    Write-Host '[DRY-RUN] Les overrides natifs llama.cpp sont préférés aux blobs Ollama incompatibles.'
+    Write-Host '[DRY-RUN] Résoudre la source GGUF effective, avec override natif seulement si le lock l''exige.'
+    Write-Host '[DRY-RUN] Contexte nominal B580=8192 tokens.'
     Write-Host '[DRY-RUN] Matrice: SYCL/all+fit on -> SYCL/all+fit off -> SYCL/auto+fit on -> CPU/0+fit off.'
     Write-Host '[DRY-RUN] Chaque essai utilise un port loopback éphémère et capture stdout/stderr séparément.'
     Write-Host '[DRY-RUN] Aucun téléchargement n''est déclenché par diagnose; lancez intel-sycl-setup si une source native manque.'
@@ -255,7 +260,7 @@ else {
 }
 
 $Proof = [ordered]@{
-    schema_version = '1.2.0'
+    schema_version = '1.3.0'
     diagnosed_at = [DateTimeOffset]::UtcNow.ToString('o')
     model = $ResolvedModel
     model_path = $ModelPath

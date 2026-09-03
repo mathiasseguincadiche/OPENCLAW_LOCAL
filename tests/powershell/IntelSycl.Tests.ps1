@@ -13,6 +13,7 @@ Describe 'Backend Intel Arc B580 SYCL' {
         [string]$Lock.llama_cpp_sycl.oneapi_device_selector | Should -Be 'level_zero:gpu'
         [string]$Lock.llama_cpp_sycl.device | Should -Be 'SYCL0'
         [int]$Lock.llama_cpp_sycl.models_max | Should -Be 1
+        [int]$Lock.llama_cpp_sycl.context_tokens | Should -Be 8192
         [bool]$Lock.llama_cpp_sycl.offline | Should -BeTrue
     }
 
@@ -74,15 +75,15 @@ Describe 'Backend Intel Arc B580 SYCL' {
         $ListModels | Should -Match 'os\.execv'
     }
 
-    It 'résout les IDs normalisés par llama.cpp sans casser les IDs Ollama' {
+    It 'résout les IDs actuels sans casser les IDs Ollama' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Catalog = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'config\v1\model_catalog.yaml'
         )
-        $Catalog | Should -Match 'runtime_id:\s*qwen3\.8:27b'
-        $Catalog | Should -Match 'sycl_runtime_id:\s*qwen3\.8:27B'
-        $Catalog | Should -Match 'sycl_runtime_id:\s*gemma4:26B'
-        $Catalog | Should -Match 'sycl_runtime_id:\s*devstral-small-2:24B'
+        $Catalog | Should -Match 'runtime_id:\s*qwen3\.5:9b-q4_K_M'
+        $Catalog | Should -Match 'sycl_runtime_id:\s*qwen3\.5:9b-q4_K_M'
+        $Catalog | Should -Match 'sycl_runtime_id:\s*gemma3:12b-it-q4_K_M'
+        $Catalog | Should -Match 'sycl_runtime_id:\s*qwen2\.5-coder:14b-instruct-q4_K_M'
 
         foreach ($ScriptName in @(
             '12_setup_intel_sycl.ps1',

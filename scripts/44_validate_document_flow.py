@@ -138,10 +138,16 @@ def main() -> int:
         if not {"pdf", "view_image"} <= allowed:
             failures.append(f"{role}: pdf/view_image doivent être explicitement autorisés")
 
-    for alias in ("qwen-max", "gemma-deep", "devstral-devops"):
+    for alias in ("qwen-max", "gemma-deep"):
         model = catalog.get("models", {}).get(alias, {})
         if "image" not in model.get("input", []):
             failures.append(f"{alias}: entrée image requise pour le parcours documentaire")
+
+    specialist = catalog.get("models", {}).get("devstral-devops", {})
+    if specialist.get("input") != ["text"]:
+        failures.append("devstral-devops: le spécialiste Qwen Coder doit rester text-only")
+    if specialist.get("multimodal_handoff") != ["qwen-max", "gemma-deep"]:
+        failures.append("devstral-devops: handoff multimodal vers Qwen/Gemma requis")
 
     required_files = (
         "src/clawlocal/safe_fs.py",
@@ -237,6 +243,7 @@ def main() -> int:
         return 2
     print("OK  Document Ingestion + Artifact Exchange Gate")
     print("OK  PDF/images local-first + Office/text deterministic extraction")
+    print("OK  multimodal Qwen/Gemma + handoff vers spécialiste DevOps text-only")
     print("OK  Office archives bornées + filesystem link/reparse fail-closed")
     print("OK  source_coverage complet et ingestion stale fail-closed")
     print("OK  artefacts versionnés, hashés, propagés et resynchronisés")

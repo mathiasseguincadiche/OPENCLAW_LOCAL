@@ -76,7 +76,7 @@ def test_sycl_benchmark_disables_thinking_for_backend_comparability() -> None:
     module.unload_sycl_model = fake_unload_sycl_model
     result = module.run_sycl(
         "http://127.0.0.1:8080/v1",
-        "qwen3.8:27B",
+        "qwen3.5:9b-q4_K_M",
         "test",
         32,
         10.0,
@@ -87,7 +87,7 @@ def test_sycl_benchmark_disables_thinking_for_backend_comparability() -> None:
         "enable_thinking": False
     }
     assert unload_calls == [
-        ("http://127.0.0.1:8080/v1", "qwen3.8:27B")
+        ("http://127.0.0.1:8080/v1", "qwen3.5:9b-q4_K_M")
     ]
     assert result["content"] == "ok"
     assert result["reasoning_content_present"] is False

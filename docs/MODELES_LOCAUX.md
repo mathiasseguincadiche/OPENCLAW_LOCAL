@@ -2,17 +2,25 @@
 
 ## Politique
 
-OPENCLAW_LOCAL utilise une flotte **performance-only**. La présence d'un modèle dans le catalogue signifie qu'il est pris en charge par la plateforme ; il n'existe pas de petit modèle de secours ni de candidat legacy caché.
+OPENCLAW_LOCAL utilise une flotte **B580 right-sized, performance-only**. La présence d'un modèle dans le catalogue signifie qu'il est pris en charge par la plateforme ; il n'existe pas de petit modèle de secours ni de candidat legacy caché.
 
-La flotte locale supportée contient exactement trois modèles :
+La flotte locale supportée contient exactement trois modèles, tous quantifiés en **Q4_K_M** :
 
-| Alias | Runtime Ollama | Classe | Usage |
-|---|---|---|---|
-| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX | orchestration, recherche, sécurité, release, raisonnement transversal |
-| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP | architecture, rédaction, audit, contre-revue multimodale |
-| `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST | DevOps, software engineering agentique, outils dépôt |
+| Alias | Runtime Ollama | Taille registre indicative | Usage |
+|---|---|---:|---|
+| `qwen-max` | `qwen3.5:9b-q4_K_M` | ~6,6 Go | orchestration, recherche, sécurité, release, raisonnement transversal, multimodal |
+| `gemma-deep` | `gemma3:12b-it-q4_K_M` | ~8,1 Go | architecture, rédaction, audit, contre-revue multimodale |
+| `devstral-devops` | `qwen2.5-coder:14b-instruct-q4_K_M` | ~9,0 Go | DevOps, software engineering agentique, outils dépôt, texte/code |
 
 La source de vérité opérationnelle est `config/v1/model_catalog.yaml`. Le validateur CI exige que l'ensemble des alias locaux soit **exactement** `{qwen-max, gemma-deep, devstral-devops}`.
+
+L'alias `devstral-devops` est volontairement conservé comme **alias logique de compatibilité** : il évite de casser les routes, workspaces et états déjà créés, mais son runtime n'est plus Devstral ; c'est Qwen2.5 Coder 14B.
+
+## Pourquoi cette flotte
+
+La première qualification réelle de l'ancienne flotte 24–27B a montré qu'un modèle d'environ 18 Go ne pouvait pas résider entièrement dans les 12 Go de VRAM de la B580 et tombait autour de 4 tok/s avec offload CPU/GPU. La nouvelle flotte vise donc une zone de poids beaucoup plus cohérente avec 12 Go de VRAM, sans prétendre qu'une résidence complète ou un débit précis sont acquis avant mesure.
+
+Le redimensionnement ne modifie pas les huit rôles et ne relâche pas les gates de qualification. Le but est d'obtenir davantage de travail réellement accéléré sur GPU, pas de fabriquer un PASS.
 
 ## Support logiciel vs qualification matérielle
 
@@ -25,9 +33,9 @@ Deux affirmations sont donc séparées :
 
 Aucun benchmark public ne remplace la seconde étape.
 
-## Qwen 3.8 27B — LOCAL_MAX
+## Qwen 3.5 9B Q4_K_M — `qwen-max`
 
-`qwen3.8:27b` est le modèle généraliste de performance pour :
+`qwen3.5:9b-q4_K_M` est le modèle généraliste de performance pour :
 
 - Chef des opérations ;
 - Expert recherche, associé aux outils Web ;
@@ -35,11 +43,11 @@ Aucun benchmark public ne remplace la seconde étape.
 - Ingénieur Release/Forges ;
 - raisonnement transversal ou contre-revue lorsque la famille Gemma a produit le livrable.
 
-Il sert aussi de modèle multimodal par défaut pour `imageModel` et `pdfModel`, avec Gemma 4 26B en fallback local.
+Il sert aussi de modèle multimodal par défaut pour `imageModel` et `pdfModel`, avec Gemma 3 12B en fallback local.
 
-## Gemma 4 26B — LOCAL_DEEP
+## Gemma 3 12B Q4_K_M — `gemma-deep`
 
-`gemma4:26b` est utilisé pour :
+`gemma3:12b-it-q4_K_M` est utilisé pour :
 
 - Architecte solutions ;
 - Rédacteur technique ;
@@ -48,31 +56,32 @@ Il sert aussi de modèle multimodal par défaut pour `imageModel` et `pdfModel`,
 
 L'Auditeur bascule vers la famille Qwen lorsque le producteur est Gemma afin de préserver l'indépendance de famille lorsque cela est praticable.
 
-## Devstral Small 2 24B — LOCAL_SPECIALIST
+## Qwen 2.5 Coder 14B Q4_K_M — alias `devstral-devops`
 
-`devstral-small-2:24b` est le modèle nominal de l'Ingénieur DevOps. Il est destiné à :
+`qwen2.5-coder:14b-instruct-q4_K_M` est le runtime nominal de l'Ingénieur DevOps. Il est destiné à :
 
 - exploration de dépôts ;
 - édition multi-fichiers ;
 - automatisation ;
 - CI/CD ;
 - conteneurs, Kubernetes et IaC ;
-- utilisation d'outils agentiques.
+- utilisation d'outils agentiques ;
+- scripts Bash/PowerShell/Python et configuration technique.
 
-Il est également déclaré multimodal selon les capacités exposées par le runtime Ollama ; la qualité réelle de vision reste à valider E2E sur la workstation.
+Ce modèle est **text-only dans le contrat OPENCLAW_LOCAL**. Lorsqu'une tâche DevOps dépend d'une image ou d'un PDF, Qwen 3.5 ou Gemma 3 réalise la lecture multimodale et transmet le contexte/provenance au spécialiste DevOps.
 
 ## Routage nominal
 
 ```text
-Chef opérations       -> Qwen 3.8 27B
-Expert recherche      -> Qwen 3.8 27B + Web
-Architecte solutions  -> Gemma 4 26B
-Ingénieur DevOps      -> Devstral Small 2 24B
-Ingénieur sécurité    -> Qwen 3.8 27B
-Release/Forges        -> Qwen 3.8 27B
-Rédacteur technique   -> Gemma 4 26B
-Auditeur qualité      -> Gemma 4 26B
-                         -> Qwen 3.8 27B si producteur Gemma
+Chef opérations       -> Qwen 3.5 9B
+Expert recherche      -> Qwen 3.5 9B + Web
+Architecte solutions  -> Gemma 3 12B
+Ingénieur DevOps      -> Qwen 2.5 Coder 14B
+Ingénieur sécurité    -> Qwen 3.5 9B
+Release/Forges        -> Qwen 3.5 9B
+Rédacteur technique   -> Gemma 3 12B
+Auditeur qualité      -> Gemma 3 12B
+                         -> Qwen 3.5 9B si producteur Gemma
 ```
 
 Les fallbacks locaux d'un rôle sont eux aussi limités à ces trois modèles. Une indisponibilité locale ne déclenche jamais automatiquement le cloud.
@@ -86,7 +95,13 @@ La couche Document Ingestion utilise :
 - extraction locale déterministe pour DOCX/PPTX/XLSX ;
 - `source_coverage[]` pour rendre explicite ce qui a réellement été lu.
 
-Qwen 3.8 27B et Gemma 4 26B sont les modèles par défaut du parcours PDF/image OpenClaw. Devstral peut traiter les documents utiles au DevOps, mais l'original reste immuable et la provenance reste conservée.
+Qwen 3.5 9B et Gemma 3 12B sont les modèles du parcours PDF/image OpenClaw. Qwen2.5 Coder reste un spécialiste texte/code et reçoit un handoff multimodal traçable lorsque nécessaire.
+
+## Politique de contexte
+
+La cible nominale est **8192 tokens** pour les trois modèles et les routeurs gérés. Le contexte **16384** reste volontairement présent dans la matrice de qualification afin de mesurer l'impact réel sur la B580.
+
+Les fenêtres maximales annoncées par les familles de modèles ne sont pas utilisées automatiquement. Toute augmentation du contexte nominal exige des preuves de KV-cache, VRAM/RAM, TTFT, débit et stabilité.
 
 ## Qualification obligatoire des trois modèles
 
@@ -115,13 +130,10 @@ Le modèle et le backend restent découplés. La V0.2 compare :
 
 - Ollama/Vulkan ;
 - llama.cpp/SYCL ;
-- llama.cpp/Vulkan.
+- llama.cpp/Vulkan ;
+- le profil candidat `b580-hybrid`.
 
 Voir `docs/RUNTIME_BACKENDS.md`.
-
-## Contexte
-
-Les fenêtres maximales annoncées par les modèles ne sont pas utilisées automatiquement. OPENCLAW_LOCAL conserve un contexte opérationnel prudent et l'augmente uniquement après mesure de l'impact KV-cache, VRAM/RAM, TTFT et débit.
 
 ## Gate anti-régression
 
@@ -129,11 +141,15 @@ Les fenêtres maximales annoncées par les modèles ne sont pas utilisées autom
 
 - exactement trois modèles locaux ;
 - les trois runtime IDs attendus ;
+- quantification Q4_K_M ;
+- poids de registre borné pour le profil B580 ;
+- contexte nominal 8192 ;
 - `required: true` pour chacun ;
 - aucun alias local hors flotte dans le routage ;
-- aucune réapparition des anciens runtimes dans les surfaces actives ;
+- aucune réapparition des anciens runtimes 24–27B dans les surfaces actives ;
 - qualification obligatoire des trois modèles ;
 - indépendance Gemma/Qwen de l'Auditeur ;
-- configuration OpenClaw multimodale alignée.
+- configuration OpenClaw multimodale alignée ;
+- handoff multimodal explicite vers le spécialiste DevOps text-only.
 
 Ce gate est exécuté dans CI et Release.

@@ -35,10 +35,13 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         [int]$script:HybridRuntime.llama_cpp_vulkan.listen_port | Should -Be 8081
         [int]$script:HybridRuntime.llama_cpp_vulkan.models_max | Should -Be 1
         [int]$script:HybridRuntime.llama_cpp_vulkan.parallel | Should -Be 1
-        [int]$script:HybridRuntime.llama_cpp_vulkan.context_tokens | Should -Be 16384
+        [int]$script:HybridRuntime.llama_cpp_vulkan.context_tokens | Should -Be 8192
         [string]$script:HybridRuntime.llama_cpp_vulkan.gpu_layers | Should -Be 'auto'
         @($script:HybridRuntime.llama_cpp_vulkan.managed_models) |
-            Should -Be @('gemma4:26b', 'devstral-small-2:24b')
+            Should -Be @(
+                'gemma3:12b-it-q4_K_M',
+                'qwen2.5-coder:14b-instruct-q4_K_M'
+            )
     }
 
     It 'gère PID intégrité B580 et mono-modèle sans réutiliser un port non suivi' {
@@ -59,7 +62,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:VulkanHelper | Should -Match 'Get-IntelVulkanManagedModel'
     }
 
-    It 'encode le profil mesuré Qwen Ollama et Gemma Devstral Vulkan sans auto-promotion' {
+    It 'encode le profil mesuré Qwen Ollama et Gemma Qwen Coder Vulkan sans auto-promotion' {
         $script:HybridBackends | Should -Match 'b580-hybrid:'
         $script:HybridBackends | Should -Match 'qwen-max:\s*ollama-vulkan'
         $script:HybridBackends | Should -Match 'gemma-deep:\s*llama-cpp-vulkan'
@@ -68,16 +71,17 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridBackends | Should -Match 'default_backend:\s*ollama-vulkan'
         $script:HybridBackends | Should -Match 'no_automatic_promotion:\s*true'
         $script:HybridBackends | Should -Match 'rollback_backend:\s*ollama-vulkan'
+        $script:HybridBackends | Should -Match 'nominal_context_tokens:\s*8192'
     }
 
     It 'rend configuration et E2E conscients du provider hybride sans cloud silencieux' {
         $script:HybridConfigure | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid'\)"
-        $script:HybridConfigure | Should -Match 'Qwen->Ollama, Gemma/Devstral->intel-vulkan'
+        $script:HybridConfigure | Should -Match 'Qwen 3\.5->Ollama, Gemma 3/Qwen Coder->intel-vulkan'
         $script:HybridConfigure | Should -Match 'INTEL_VULKAN_API_KEY'
         $script:HybridE2E | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid'\)"
         $script:HybridE2E | Should -Match 'Get-AgentPrimaryModelRef'
         $script:HybridE2E | Should -Match 'provider_by_agent'
-        $script:HybridE2E | Should -Match 'intel-vulkan/devstral-small-2:24B'
+        $script:HybridE2E | Should -Match 'intel-vulkan/qwen2\.5-coder:14b-instruct-q4_K_M'
         $script:HybridE2E | Should -Match 'vulkan-tool-ok\.txt'
         $script:HybridE2E | Should -Match 'Test-ExpectedProvider'
         $script:HybridE2E | Should -Match 'Test-GatewayTransport'
@@ -114,7 +118,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Not -Match 'ColdModelTimeoutSeconds'
         $script:HybridE2E | Should -Not -Match 'SeenModelRefs'
         $script:HybridE2E | Should -Match 'smokes groupés par modèle'
-        $script:HybridE2E | Should -Match 'Devstral reste résident'
+        $script:HybridE2E | Should -Match 'Qwen Coder reste résident'
         $script:HybridE2E | Should -Match "'auditeur-qualite',[\s\S]*'ingenieur-devops'"
     }
 
@@ -152,7 +156,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $Configure = & pwsh -NoLogo -NoProfile -File (Join-Path $script:HybridRepoRoot 'menu.ps1') `
             -Action configure-openclaw -Backend b580-hybrid -DryRun 2>&1
         $LASTEXITCODE | Should -Be 0
-        ($Configure -join "`n") | Should -Match 'Qwen -> Ollama; Gemma \+ Devstral -> intel-vulkan'
+        ($Configure -join "`n") | Should -Match 'Qwen 3\.5 -> Ollama; Gemma 3 \+ Qwen Coder -> intel-vulkan'
 
         $E2E = & pwsh -NoLogo -NoProfile -File (Join-Path $script:HybridRepoRoot 'menu.ps1') `
             -Action e2e -Backend b580-hybrid -DryRun 2>&1

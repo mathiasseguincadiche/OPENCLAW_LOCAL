@@ -18,18 +18,14 @@ EXPECTED_AGENTS = {
 }
 
 EXPECTED_MODELS = {
-    "qwen3.8:27b",
-    "gemma4:26b",
-    "devstral-small-2:24b",
+    "qwen3.5:9b-q4_K_M",
+    "gemma3:12b-it-q4_K_M",
+    "qwen2.5-coder:14b-instruct-q4_K_M",
 }
-EXPECTED_SYCL_MODELS = {
-    "qwen3.8:27B",
-    "gemma4:26B",
-    "devstral-small-2:24B",
-}
+EXPECTED_SYCL_MODELS = EXPECTED_MODELS
 EXPECTED_VULKAN_MODELS = {
-    "gemma4:26B",
-    "devstral-small-2:24B",
+    "gemma3:12b-it-q4_K_M",
+    "qwen2.5-coder:14b-instruct-q4_K_M",
 }
 
 PINNED_OPENCLAW_VERSION = "2026.7.1-2"
@@ -110,22 +106,25 @@ def test_read_only_roles_cannot_mutate_or_exec() -> None:
         assert {"write", "edit", "apply_patch", "exec", "process"} <= denied
 
 
-def test_provider_exposes_exactly_three_performance_models() -> None:
+def test_provider_exposes_exactly_three_b580_sized_models() -> None:
     patch = build_openclaw_patch(Path("C:/OpenClawLocal"))
     provider = patch["models"]["providers"]["ollama"]
     assert provider["api"] == "ollama"
-    ids = {model["id"] for model in provider["models"]}
-    assert ids == EXPECTED_MODELS
-    assert all(model["input"] == ["text", "image"] for model in provider["models"])
-    assert all(model["contextTokens"] == 16384 for model in provider["models"])
+    by_id = {model["id"]: model for model in provider["models"]}
+    assert set(by_id) == EXPECTED_MODELS
+    assert by_id["qwen3.5:9b-q4_K_M"]["input"] == ["text", "image"]
+    assert by_id["gemma3:12b-it-q4_K_M"]["input"] == ["text", "image"]
+    assert by_id["qwen2.5-coder:14b-instruct-q4_K_M"]["input"] == ["text"]
+    assert all(model["contextTokens"] == 8192 for model in provider["models"])
+    assert all(model["params"]["num_ctx"] == 8192 for model in provider["models"])
     assert all("metadata" not in model for model in provider["models"])
 
 
-def test_multimodal_defaults_use_qwen38_then_gemma26() -> None:
+def test_multimodal_defaults_use_qwen35_then_gemma3() -> None:
     defaults = build_openclaw_patch(Path("C:/OpenClawLocal"))["agents"]["defaults"]
     expected = {
-        "primary": "ollama/qwen3.8:27b",
-        "fallbacks": ["ollama/gemma4:26b"],
+        "primary": "ollama/qwen3.5:9b-q4_K_M",
+        "fallbacks": ["ollama/gemma3:12b-it-q4_K_M"],
     }
     assert defaults["model"] == expected
     assert defaults["imageModel"] == expected
@@ -145,7 +144,7 @@ def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None
     assert sycl["apiKey"] == "intel-sycl-local"
     assert {model["id"] for model in sycl["models"]} == EXPECTED_SYCL_MODELS
     assert all(model["input"] == ["text"] for model in sycl["models"])
-    assert all(model["contextWindow"] == 16384 for model in sycl["models"])
+    assert all(model["contextWindow"] == 8192 for model in sycl["models"])
     assert all(model["compat"]["toolSchemaProfile"] == "llamacpp" for model in sycl["models"])
 
     entries = _entries_by_id(patch)
@@ -158,12 +157,12 @@ def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None
 
     defaults = patch["agents"]["defaults"]
     assert defaults["model"] == {
-        "primary": "intel-sycl/qwen3.8:27B",
-        "fallbacks": ["intel-sycl/gemma4:26B"],
+        "primary": "intel-sycl/qwen3.5:9b-q4_K_M",
+        "fallbacks": ["intel-sycl/gemma3:12b-it-q4_K_M"],
     }
     expected_multimodal = {
-        "primary": "ollama/qwen3.8:27b",
-        "fallbacks": ["ollama/gemma4:26b"],
+        "primary": "ollama/qwen3.5:9b-q4_K_M",
+        "fallbacks": ["ollama/gemma3:12b-it-q4_K_M"],
     }
     assert defaults["imageModel"] == expected_multimodal
     assert defaults["pdfModel"] == expected_multimodal
@@ -178,29 +177,29 @@ def test_b580_hybrid_routes_each_model_to_measured_backend() -> None:
     assert vulkan["api"] == "openai-completions"
     assert vulkan["apiKey"] == "intel-vulkan-local"
     assert {model["id"] for model in vulkan["models"]} == EXPECTED_VULKAN_MODELS
-    assert all(model["contextWindow"] == 16384 for model in vulkan["models"])
+    assert all(model["contextWindow"] == 8192 for model in vulkan["models"])
 
     entries = _entries_by_id(patch)
     assert entries["chef-operations"]["model"] == {
-        "primary": "ollama/qwen3.8:27b",
-        "fallbacks": ["intel-vulkan/gemma4:26B"],
+        "primary": "ollama/qwen3.5:9b-q4_K_M",
+        "fallbacks": ["intel-vulkan/gemma3:12b-it-q4_K_M"],
     }
     assert entries["architecte-solutions"]["model"] == {
-        "primary": "intel-vulkan/gemma4:26B",
-        "fallbacks": ["ollama/qwen3.8:27b"],
+        "primary": "intel-vulkan/gemma3:12b-it-q4_K_M",
+        "fallbacks": ["ollama/qwen3.5:9b-q4_K_M"],
     }
     assert entries["ingenieur-devops"]["model"] == {
-        "primary": "intel-vulkan/devstral-small-2:24B",
-        "fallbacks": ["ollama/qwen3.8:27b"],
+        "primary": "intel-vulkan/qwen2.5-coder:14b-instruct-q4_K_M",
+        "fallbacks": ["ollama/qwen3.5:9b-q4_K_M"],
     }
     defaults = patch["agents"]["defaults"]
     assert defaults["model"] == {
-        "primary": "ollama/qwen3.8:27b",
-        "fallbacks": ["intel-vulkan/gemma4:26B"],
+        "primary": "ollama/qwen3.5:9b-q4_K_M",
+        "fallbacks": ["intel-vulkan/gemma3:12b-it-q4_K_M"],
     }
     expected_multimodal = {
-        "primary": "ollama/qwen3.8:27b",
-        "fallbacks": ["ollama/gemma4:26b"],
+        "primary": "ollama/qwen3.5:9b-q4_K_M",
+        "fallbacks": ["ollama/gemma3:12b-it-q4_K_M"],
     }
     assert defaults["imageModel"] == expected_multimodal
     assert defaults["pdfModel"] == expected_multimodal

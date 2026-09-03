@@ -1,4 +1,4 @@
-schema_version: "1.2.0"
+schema_version: "1.3.0"
 platform_version: "0.2.0"
 backends:
   ollama-vulkan:
@@ -28,7 +28,7 @@ backends:
       offline: true
       jinja: true
       gpu_layers: auto
-      context_tokens: 16384
+      context_tokens: 8192
       parallel: 1
     model_source: provider_specific_gguf
     qualification_required: true
@@ -60,7 +60,7 @@ backends:
       offline: true
       jinja: true
       gpu_layers: auto
-      context_tokens: 16384
+      context_tokens: 8192
       parallel: 1
     managed_models:
       - gemma-deep
@@ -70,7 +70,7 @@ backends:
     promotion_requires:
       - intel_arc_b580_detected
       - vulkan_device_detected
-      - gemma_and_devstral_load
+      - deep_and_specialist_models_load
       - benchmark_vs_ollama_and_sycl
       - openclaw_http_provider_smoke
       - tool_calling_e2e
@@ -83,6 +83,8 @@ backends:
     windows_native: true
     activation: explicit_only
     qualification_required: true
+    nominal_context_tokens: 8192
+    target_vram_gb: 12
     model_backends:
       qwen-max: ollama-vulkan
       gemma-deep: llama-cpp-vulkan
@@ -108,6 +110,8 @@ selection:
   compare_same_model_when_possible: true
   no_automatic_promotion: true
   rollback_backend: ollama-vulkan
+  nominal_context_tokens: 8192
+  extended_context_requires_qualification: true
   metrics:
     - ttft_ms
     - tokens_per_second

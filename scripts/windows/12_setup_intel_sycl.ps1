@@ -19,7 +19,7 @@ $RuntimeLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
 $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeLock
 
 if ([int]$RuntimeLock.parallel -ne 1) {
-    throw 'Contrat Intel SYCL invalide: parallel=1 requis pour un seul gros modèle sur B580.'
+    throw 'Contrat Intel SYCL invalide: parallel=1 requis pour un seul modèle sur B580.'
 }
 
 if ($DryRun) {
@@ -29,15 +29,16 @@ if ($DryRun) {
     Write-Host "SHA-256     : $($RuntimeLock.sha256)"
     Write-Host "Device      : $($RuntimeLock.device) via $($RuntimeLock.oneapi_device_selector)"
     Write-Host "Endpoint    : $($RuntimeLock.endpoint)"
-    Write-Host "Models max  : $($RuntimeLock.models_max) (un gros modèle à la fois)"
+    Write-Host "Models max  : $($RuntimeLock.models_max) (un modèle à la fois)"
+    Write-Host "Context     : $($RuntimeLock.context_tokens) tokens nominal B580"
     Write-Host "Parallel    : $($RuntimeLock.parallel) slot (évite le défaut auto=4 de llama-server)"
     Write-Host '[DRY-RUN] Utiliser le runtime Python géré OPENCLAW_LOCAL, jamais un Python système ambigu.'
     Write-Host '[DRY-RUN] Vérifier le pilote B580, l''archive officielle, le manifeste du binaire et le port 8080.'
     Write-Host '[DRY-RUN] Résoudre les IDs réellement annoncés par le routeur llama.cpp avant les smokes.'
     Write-Host '[DRY-RUN] Désactiver le thinking uniquement pour le smoke déterministe LOCAL_OK.'
     Write-Host '[DRY-RUN] Décharger explicitement chaque modèle et attendre unloaded avant le switch suivant.'
-    Write-Host '[DRY-RUN] Qwen/Gemma réutilisent Ollama; Devstral utilise un GGUF llama.cpp natif SHA-256 verrouillé.'
-    Write-Host '[DRY-RUN] Le téléchargement Devstral est reprenable et n''est effectué que si le GGUF natif manque.'
+    Write-Host '[DRY-RUN] Les trois modèles utilisent le blob GGUF Ollama sauf override natif explicitement verrouillé.'
+    Write-Host '[DRY-RUN] Aucun override natif n''est requis par la flotte B580 Q4_K_M actuelle.'
     Write-Host '[DRY-RUN] Le runtime binaire embarque les dépendances SYCL; pas d''installation oneAPI complète.'
     Write-Host '[DRY-RUN] Le stop du processus suivi ne doit jamais contaminer la sortie objet de Start-IntelSyclServer.'
     Write-Host '[DRY-RUN] Aucune promotion OpenClaw automatique; Ollama/Vulkan reste le rollback.'
@@ -48,7 +49,7 @@ $ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
 Write-Host "OK  Runtime Python géré: $ManagedPython"
 
 $Proof = [ordered]@{
-    schema_version = '1.5.0'
+    schema_version = '1.6.0'
     started_at = [DateTimeOffset]::UtcNow.ToString('o')
     release = [string]$RuntimeLock.release
     asset = [string]$RuntimeLock.asset
@@ -58,6 +59,7 @@ $Proof = [ordered]@{
     oneapi_device_selector = [string]$RuntimeLock.oneapi_device_selector
     models_max = [int]$RuntimeLock.models_max
     parallel = [int]$RuntimeLock.parallel
+    context_tokens = [int]$RuntimeLock.context_tokens
     model_source_policy = [string]$RuntimeLock.model_source_policy
     explicit_unload_between_models = $true
     strict_process_output_contract = $true

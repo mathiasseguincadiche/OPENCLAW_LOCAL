@@ -15,8 +15,8 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] Installer/vérifier llama.cpp Vulkan b10621 géré.'
     Write-Host "[DRY-RUN] Endpoint=$($RuntimeLock.endpoint) models=$(@($RuntimeLock.managed_models) -join ',')"
     Write-Host '[DRY-RUN] Arrêter le routeur SYCL suivi avant Vulkan pour éviter toute contention B580.'
-    Write-Host '[DRY-RUN] Démarrer models_max=1, parallel=1, gpu_layers=auto, fit=on.'
-    Write-Host '[DRY-RUN] Smoke Gemma + Devstral puis unload explicite entre modèles.'
+    Write-Host '[DRY-RUN] Démarrer models_max=1, parallel=1, gpu_layers=auto, fit=on, contexte nominal 8K.'
+    Write-Host '[DRY-RUN] Smoke Gemma 3 + Qwen Coder puis unload explicite entre modèles.'
     Write-Host '[DRY-RUN] OpenClaw ne sera pas reconfiguré automatiquement.'
     exit 0
 }
@@ -31,7 +31,7 @@ $null = Stop-IntelSyclServer -StatePath $SyclPaths.ProcessState -Confirm:$false
 
 $Server = $null
 $Proof = [ordered]@{
-    schema_version = '1.0.0'
+    schema_version = '1.1.0'
     started_at = [DateTimeOffset]::UtcNow.ToString('o')
     backend = 'llama-cpp-vulkan'
     endpoint = [string]$RuntimeLock.endpoint

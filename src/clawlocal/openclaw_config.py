@@ -89,14 +89,15 @@ def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
     for model in catalog["models"].values():
         if model["provider"] != "ollama":
             continue
+        context_tokens = int(model.get("nominal_context_tokens", 8192))
         models.append(
             {
                 "id": model["runtime_id"],
                 "name": model["runtime_id"],
                 "input": list(model.get("input", ["text"])),
-                "contextTokens": 16384,
+                "contextTokens": context_tokens,
                 "params": {
-                    "num_ctx": 16384,
+                    "num_ctx": context_tokens,
                     "keep_alive": "15m",
                 },
             }

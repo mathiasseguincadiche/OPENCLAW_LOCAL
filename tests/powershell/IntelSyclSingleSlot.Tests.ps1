@@ -23,7 +23,7 @@ Describe 'Intel SYCL single-slot runtime contract' {
         $Setup | Should -Match '\$env:LLAMA_ARG_N_PARALLEL\s*=\s*\[string\]\$RuntimeLock\.parallel'
         $Setup | Should -Match 'Remove-Item Env:LLAMA_ARG_N_PARALLEL'
         $Setup | Should -Match 'single_slot_runtime_contract\s*=\s*\$true'
-        $Setup | Should -Match "schema_version\s*=\s*'1\.5\.0'"
+        $Setup | Should -Match "schema_version\s*=\s*'1\.6\.0'"
     }
 
     It 'documente le slot unique dans le DryRun opérateur' {

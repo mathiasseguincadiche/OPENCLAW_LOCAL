@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "config" / "v1"
 
 EXPECTED_MODELS = {
-    "qwen-max": "qwen3.8:27b",
-    "gemma-deep": "gemma4:26b",
-    "devstral-devops": "devstral-small-2:24b",
+    "qwen-max": "qwen3.5:9b-q4_K_M",
+    "gemma-deep": "gemma3:12b-it-q4_K_M",
+    "devstral-devops": "qwen2.5-coder:14b-instruct-q4_K_M",
 }
 
 EXPECTED_PRIMARY = {
@@ -28,8 +28,12 @@ EXPECTED_PRIMARY = {
     "auditeur-qualite": "gemma-deep",
 }
 
+# Matching is deliberately case-insensitive below so llama.cpp-normalized IDs
+# such as :27B/:26B/:24B cannot bypass the retired-runtime gate.
 FORBIDDEN_ACTIVE_RUNTIME_IDS = (
-    "qwen3.5:9b",
+    "qwen3.8:27b",
+    "gemma4:26b",
+    "devstral-small-2:24b",
     "gemma4:12b",
     "qwen3.5:27b",
     "sera-14b",
@@ -40,18 +44,27 @@ ACTIVE_MODEL_TEXT_FILES = (
     "STATUS.md",
     "docs/ARCHITECTURE.md",
     "docs/BENCHMARK.md",
+    "docs/INSTALLATION_WINDOWS_11.md",
     "docs/MODELES_LOCAUX.md",
     "docs/OPENCLAW_INTEGRATION.md",
     "docs/OPERATIONS.md",
+    "docs/PREMIERS_PAS_OPENCLAW_LOCAL.md",
     "docs/QUALIFICATION.md",
     "docs/ROUTAGE_HYBRIDE.md",
     "docs/RUNTIME_BACKENDS.md",
+    "docs/TELEMETRY.md",
     "docs/TROUBLESHOOTING.md",
     "config/openclaw.local.example.json5",
     "config/v1/model_catalog.yaml",
     "config/v1/model_routing.yaml",
     "config/v1/qualification_policy.yaml",
+    "config/v1/runtime_versions.json",
     "src/clawlocal/openclaw_config.py",
+    "menu.ps1",
+    "scripts/windows/04_verify_local.ps1",
+    "scripts/windows/08_configure_openclaw.ps1",
+    "scripts/windows/16_diagnose_intel_sycl_model.ps1",
+    "scripts/windows/18_setup_intel_vulkan.ps1",
 )
 
 DOCUMENTATION_FILES = (
@@ -63,9 +76,11 @@ DOCUMENTATION_FILES = (
     "docs/MODELES_LOCAUX.md",
     "docs/OPENCLAW_INTEGRATION.md",
     "docs/OPERATIONS.md",
+    "docs/PREMIERS_PAS_OPENCLAW_LOCAL.md",
     "docs/QUALIFICATION.md",
     "docs/ROUTAGE_HYBRIDE.md",
     "docs/RUNTIME_BACKENDS.md",
+    "docs/TELEMETRY.md",
     "docs/TROUBLESHOOTING.md",
 )
 
@@ -94,6 +109,18 @@ def read_required(path: str, failures: list[str]) -> str:
     return target.read_text(encoding="utf-8")
 
 
+def active_model_contract_files() -> tuple[str, ...]:
+    files = list(ACTIVE_MODEL_TEXT_FILES)
+    pester_root = ROOT / "tests" / "powershell"
+    if not pester_root.is_dir():
+        return tuple(files)
+    files.extend(
+        path.relative_to(ROOT).as_posix()
+        for path in sorted(pester_root.glob("*.ps1"))
+    )
+    return tuple(files)
+
+
 def main() -> int:
     failures: list[str] = []
     catalog = load_yaml("model_catalog.yaml")
@@ -115,6 +142,10 @@ def main() -> int:
         failures.append("model_catalog: exactement trois modèles locaux supportés")
     if policy.get("no_hidden_small_model_fallback") is not True:
         failures.append("model_catalog: les petits fallbacks cachés doivent être interdits")
+    if policy.get("target_hardware_profile") != "intel_arc_b580_12gb":
+        failures.append("model_catalog: profil matériel B580 12GB requis")
+    if policy.get("nominal_context_tokens") != 8192:
+        failures.append("model_catalog: contexte nominal B580 doit rester à 8192")
 
     for alias, runtime_id in EXPECTED_MODELS.items():
         model = models.get(alias)
@@ -131,6 +162,22 @@ def main() -> int:
             failures.append(f"{alias}: doit être requis dans la flotte supportée")
         if model.get("routing_active") is not True:
             failures.append(f"{alias}: doit être routable")
+        if model.get("quantization") != "Q4_K_M":
+            failures.append(f"{alias}: quantification Q4_K_M requise pour le profil B580")
+        if model.get("nominal_context_tokens") != 8192:
+            failures.append(f"{alias}: contexte nominal 8192 attendu")
+        if float(model.get("registry_size_gb", 99)) > 9.5:
+            failures.append(f"{alias}: poids registre trop élevé pour la flotte B580")
+
+    specialist = models.get("devstral-devops", {})
+    if specialist.get("family") != "qwen2-coder":
+        failures.append("devstral-devops: runtime spécialiste doit être Qwen2.5 Coder")
+    if specialist.get("compatibility_alias") is not True:
+        failures.append("devstral-devops: alias de compatibilité doit être explicite")
+    if specialist.get("input") != ["text"]:
+        failures.append("devstral-devops: Qwen2.5 Coder doit rester text-only")
+    if specialist.get("multimodal_handoff") != ["qwen-max", "gemma-deep"]:
+        failures.append("devstral-devops: handoff multimodal Qwen/Gemma requis")
 
     allowed = set(EXPECTED_MODELS)
     for agent, expected in EXPECTED_PRIMARY.items():
@@ -151,7 +198,7 @@ def main() -> int:
 
     auditor = agents.get("auditeur-qualite", {})
     if auditor.get("independent_alternative") != "qwen-max":
-        failures.append("Auditeur: Qwen 3.8 27B doit être l'alternative indépendante")
+        failures.append("Auditeur: Qwen 3.5 9B doit être l'alternative indépendante")
     if (
         auditor.get("independence_rule")
         != "reviewer_family_must_differ_from_producer_when_practical"
@@ -192,11 +239,14 @@ def main() -> int:
     for marker in ('["qwen-max"]', '["gemma-deep"]'):
         if marker not in openclaw_source:
             failures.append(f"OpenClaw: modèle performance par défaut non câblé: {marker}")
+    if 'model.get("nominal_context_tokens", 8192)' not in openclaw_source:
+        failures.append("OpenClaw: contexte nominal par modèle non câblé")
 
-    for relative in ACTIVE_MODEL_TEXT_FILES:
+    for relative in active_model_contract_files():
         text = read_required(relative, failures)
+        folded_text = text.casefold()
         for runtime_id in FORBIDDEN_ACTIVE_RUNTIME_IDS:
-            if runtime_id in text:
+            if runtime_id.casefold() in folded_text:
                 failures.append(f"{relative}: ancien modèle local encore actif: {runtime_id}")
 
     for relative in DOCUMENTATION_FILES:
@@ -247,16 +297,17 @@ def main() -> int:
             failures.append(f"docs/OPERATIONS.md: sauvegarde/restauration incomplète: {marker}")
 
     if failures:
-        print("Performance-only Model Fleet + Documentation: NON CONFORME")
+        print("B580-sized Model Fleet + Documentation: NON CONFORME")
         for failure in failures:
             print(f"- {failure}")
         return 1
 
-    print("Performance-only Model Fleet + Documentation: CONFORME")
-    print("- Qwen 3.8 27B: orchestration/recherche/sécurité/release")
-    print("- Gemma 4 26B: architecture/rédaction/audit")
-    print("- Devstral Small 2 24B: DevOps/software engineering")
-    print("- aucun runtime legacy dans les surfaces actives")
+    print("B580-sized Model Fleet + Documentation: CONFORME")
+    print("- Qwen 3.5 9B Q4_K_M: orchestration/recherche/sécurité/release")
+    print("- Gemma 3 12B Q4_K_M: architecture/rédaction/audit/multimodal")
+    print("- Qwen 2.5 Coder 14B Q4_K_M: DevOps/software engineering")
+    print("- contexte nominal 8K; 16K reste soumis à qualification matérielle")
+    print("- aucun runtime legacy dans les surfaces actives ou tests Pester")
     print("- aucune commande de qualification legacy dans la documentation active")
     print("- OLLAMA_MODELS est câblé vers la racine gérée")
     print("- sauvegarde/restauration opérationnelles documentées")

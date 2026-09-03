@@ -2,11 +2,13 @@
 
 ## Version courante
 
-**0.2.0 — Local-First Project Workflow + Project Orchestrator + V7 Superset + Document Flow + flotte performance-only**
+**0.2.0 — Local-First Project Workflow + Project Orchestrator + V7 Superset + Document Flow + flotte B580 right-sized**
 
 `OPENCLAW_LOCAL` est le successeur local-first de `openclaw_openrouter` : huit rôles spécialisés, contrats, projets, preuves, séparation producteur/auditeur, pédagogie, publication gouvernée et garde-fous V7 sont préservés ou renforcés. Le parcours LLM nominal reste local ; le cloud est une escalade explicite, budgétée et contrôlée.
 
 La CI valide l'architecture logicielle et les contrats. Elle **ne qualifie pas** les performances des modèles, le backend Intel Arc ni la qualité sémantique multimodale sur la workstation réelle.
+
+La flotte a été redimensionnée pour la cible **Intel Arc B580 12 Go** après mesure réelle de l'ancienne flotte 24–27B : le support logiciel utilise désormais trois quantifications Q4_K_M de 9B, 12B et 14B, avec **8K comme contexte nominal**. Le contexte 16K reste une surface de qualification et non un réglage nominal acquis.
 
 ## Parcours projet implémenté
 
@@ -96,32 +98,42 @@ State gates et action gates protègent notamment création distante, visibilité
 - Rédacteur : documentation versionnée, sans réécriture des sources de vérité ;
 - Auditeur : contrôle indépendant, sans correction silencieuse.
 
-## Flotte IA locale — performance-only
+## Flotte IA locale — B580 right-sized
 
 **Trois modèles locaux, et uniquement trois :**
 
-| Alias | Runtime | Tier | Usage cible |
+| Alias | Runtime | Quantification | Usage cible |
 |---|---|---|---|
-| `qwen-max` | `qwen3.8:27b` | LOCAL_MAX | orchestration, recherche, sécurité, release, raisonnement complexe |
-| `gemma-deep` | `gemma4:26b` | LOCAL_DEEP | architecture, rédaction, audit, contre-revue multimodale |
-| `devstral-devops` | `devstral-small-2:24b` | LOCAL_SPECIALIST | DevOps/software engineering agentique |
+| `qwen-max` | `qwen3.5:9b-q4_K_M` | Q4_K_M | orchestration, recherche, sécurité, release, raisonnement complexe, multimodal |
+| `gemma-deep` | `gemma3:12b-it-q4_K_M` | Q4_K_M | architecture, rédaction, audit, contre-revue multimodale |
+| `devstral-devops` | `qwen2.5-coder:14b-instruct-q4_K_M` | Q4_K_M | DevOps/software engineering agentique, texte/code |
+
+L'alias logique `devstral-devops` est conservé pour compatibilité avec les routes, workspaces et états existants ; son runtime est désormais **Qwen2.5 Coder 14B**. Ce spécialiste est text-only : les entrées image/PDF sont prises en charge ou préparées par `qwen-max`/`gemma-deep` avant handoff.
 
 Il n'existe **aucun petit modèle local ou modèle legacy supporté comme fallback**. Les trois modèles ci-dessus sont `required: true` dans le catalogue et constituent exactement la flotte installable/routable par la plateforme.
 
 ### Routage par rôle
 
 ```text
-Chef opérations       -> Qwen 3.8 27B
-Expert recherche      -> Qwen 3.8 27B + Web
-Architecte solutions  -> Gemma 4 26B
-Ingénieur DevOps      -> Devstral Small 2 24B
-Ingénieur sécurité    -> Qwen 3.8 27B
-Release/Forges        -> Qwen 3.8 27B
-Rédacteur technique   -> Gemma 4 26B
-Auditeur qualité      -> Gemma 4 26B ; bascule Qwen 3.8 27B si producteur Gemma
+Chef opérations       -> Qwen 3.5 9B
+Expert recherche      -> Qwen 3.5 9B + Web
+Architecte solutions  -> Gemma 3 12B
+Ingénieur DevOps      -> Qwen 2.5 Coder 14B
+Ingénieur sécurité    -> Qwen 3.5 9B
+Release/Forges        -> Qwen 3.5 9B
+Rédacteur technique   -> Gemma 3 12B
+Auditeur qualité      -> Gemma 3 12B ; bascule Qwen 3.5 9B si producteur Gemma
 ```
 
 Cette table définit le **support logiciel et le routage nominal**. Elle n'est pas une preuve de performance B580.
+
+## Politique de contexte
+
+- **8192 tokens** : contexte nominal de la flotte B580 ;
+- **16384 tokens** : contexte étendu testé par la qualification matérielle ;
+- toute montée au-delà reste interdite comme valeur nominale sans nouvelles mesures.
+
+Le fait qu'un modèle annonce un contexte théorique supérieur ne constitue pas une preuve que ce contexte est performant ou stable avec 12 Go de VRAM.
 
 ## Qualification de la flotte
 
@@ -136,13 +148,16 @@ L'échec de l'un des trois modèles fait échouer le gate de qualification de la
 
 La qualification réelle exige encore les critères de `qualification_policy.yaml`, notamment E2E OpenClaw, tool-calling, réparation après erreur, stabilité sur trois runs, parcours Project Intake/Web, multimodalité PDF/image, absence de dépendance cloud nominale et revue humaine.
 
+Les seuils HARD-40M ne sont pas abaissés pour la nouvelle flotte : le redimensionnement doit démontrer un gain réel sur le matériel cible.
+
 ## Backends Intel Arc
 
 Candidats :
 
 - `ollama-vulkan` — nominal pré-qualification ;
 - `llama-cpp-sycl` — candidat ;
-- `llama-cpp-vulkan` — candidat.
+- `llama-cpp-vulkan` — candidat ;
+- `b580-hybrid` — profil candidat Qwen/Ollama + Gemma/Qwen Coder llama.cpp/Vulkan.
 
 La sélection finale exige des mesures B580 réelles : TTFT, tokens/s, VRAM, RAM, stabilité, contexte et tool-calling. Aucun backend n'est déclaré vainqueur par la CI.
 
@@ -178,7 +193,7 @@ CodeQL
 Dependency Review
 ```
 
-Le gate flotte vérifie que le catalogue contient **exactement** les trois runtimes supportés, que tous les rôles n'utilisent que ces alias, qu'aucun ancien petit modèle ne réapparaît dans les surfaces actives, que les trois modèles sont obligatoires dans la qualification et que l'indépendance de l'Auditeur reste respectée.
+Le gate flotte vérifie que le catalogue contient **exactement** les trois runtimes supportés, qu'ils sont Q4_K_M, qu'ils ciblent le profil B580 12 Go avec contexte nominal 8K, que tous les rôles n'utilisent que ces alias, qu'aucun runtime 24–27B précédent ne réapparaît dans les surfaces actives, que les trois modèles sont obligatoires dans la qualification et que l'indépendance de l'Auditeur reste respectée.
 
 ## À exécuter sur matériel réel
 
@@ -186,15 +201,15 @@ Les points suivants **ne peuvent pas être validés par GitHub Actions** :
 
 1. installation complète Windows 11 Pro sur la workstation cible ;
 2. ACL d'Intake dans l'environnement final ;
-3. E2E OpenClaw avec les trois modèles réellement chargés ;
+3. E2E OpenClaw avec les trois nouveaux modèles réellement chargés ;
 4. vrai projet multi-documents PDF/images/Office/code ;
 5. qualité sémantique de lecture de PDF scannés et images ;
-6. benchmark Qwen 3.8 27B ;
-7. benchmark Gemma 4 26B ;
-8. benchmark Devstral Small 2 24B ;
+6. benchmark Qwen 3.5 9B Q4_K_M ;
+7. benchmark Gemma 3 12B Q4_K_M ;
+8. benchmark Qwen 2.5 Coder 14B Q4_K_M ;
 9. comparaison Ollama/Vulkan vs llama.cpp/SYCL vs llama.cpp/Vulkan ;
-10. mesure TTFT, tokens/s, VRAM, RAM, stabilité, tool-calling et consommation avec offload ;
-11. qualification 8K/16K puis éventuelle montée 32K/64K selon preuves ;
+10. mesure TTFT, tokens/s, VRAM, RAM, stabilité, tool-calling et résidence GPU ;
+11. qualification 8K/16K avant toute montée de contexte ;
 12. test d'indépendance réelle producteur/auditeur sur des tâches représentatives ;
 13. télémétrie réelle sur un projet complet ;
 14. publication réelle jusqu'au clone propre/audit distant ;
@@ -204,7 +219,7 @@ Les points suivants **ne peuvent pas être validés par GitHub Actions** :
 
 - équivalence systématique d'un modèle local avec un modèle frontier cloud ;
 - débit garanti sur Intel Arc B580 avant benchmark ;
-- résidence VRAM complète des modèles 24–27B sur 12 Go ;
+- résidence VRAM complète des nouveaux modèles avant mesure réelle ;
 - contexte maximal théorique utilisable avec un bon débit sur cette workstation ;
 - compréhension parfaite des PDF/images avant E2E ;
 - sélection automatique d'un backend sans preuve ;
