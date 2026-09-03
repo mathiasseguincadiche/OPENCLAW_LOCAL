@@ -332,7 +332,7 @@ def traceability_failures(project: Path, *, require_completed: bool) -> list[str
         requirement_id = str(row.get("requirement_id", "?"))
         if verdict == "UNMAPPED":
             failures.append(f"{requirement_id}: aucune tâche associée")
-        if require_completed and verdict != "PASS":
+        elif require_completed and verdict != "PASS":
             failures.append(
                 f"{requirement_id}: verdict de traçabilité {verdict}, PASS requis"
             )
