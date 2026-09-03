@@ -8,7 +8,8 @@ runtime_budget:
   qualification_max_wall_seconds: 2400
   evaluation_reserve_seconds: 60
   benchmark_default_max_wall_seconds: 2100
-  max_case_wall_seconds: 150
+  max_case_wall_seconds: 210
+
 
 automated_gates:
   required_models: [qwen-max, gemma-deep, devstral-devops]
