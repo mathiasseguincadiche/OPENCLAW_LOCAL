@@ -26,6 +26,25 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def _load_guard(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise PermissionError(f"{label} absent: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise PermissionError(f"{label} invalide: {path}")
+    return payload
+
+
 def _protected_inputs(agent_id: str) -> tuple[str, ...]:
     policy = load_contract("tool_policy.yaml")
     enforcement = policy.get("write_enforcement", {})
@@ -76,7 +95,7 @@ def _snapshot(workspace_project: Path, agent_id: str) -> dict[str, Any]:
             entries[key] = _sha256(path)
     canonical = json.dumps(entries, sort_keys=True, separators=(",", ":")).encode()
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": _now(),
         "agent_id": agent_id,
         "protected_inputs": list(_protected_inputs(agent_id)),
@@ -85,23 +104,41 @@ def _snapshot(workspace_project: Path, agent_id: str) -> dict[str, Any]:
     }
 
 
-def write_workspace_guard(workspace_project: Path, agent_id: str) -> Path:
+def write_workspace_guard(
+    workspace_project: Path,
+    agent_id: str,
+    *,
+    reference_path: Path | None = None,
+) -> Path:
     payload = _snapshot(workspace_project, agent_id)
     target = workspace_project / _GUARD_FILE
-    target.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    _write_json(target, payload)
+    if reference_path is not None:
+        _write_json(reference_path, payload)
     return target
 
 
-def validate_workspace_guard(workspace_project: Path, agent_id: str) -> None:
-    path = workspace_project / _GUARD_FILE
-    if not path.is_file():
-        raise PermissionError(f"workspace guard absent pour {agent_id}")
-    expected = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(expected, dict):
-        raise PermissionError(f"workspace guard invalide pour {agent_id}")
+def validate_workspace_guard(
+    workspace_project: Path,
+    agent_id: str,
+    *,
+    reference_path: Path | None = None,
+) -> None:
+    local_path = workspace_project / _GUARD_FILE
+    local = _load_guard(local_path, label=f"workspace guard local pour {agent_id}")
+    expected = local
+    if reference_path is not None:
+        expected = _load_guard(
+            reference_path,
+            label=f"workspace guard plateforme pour {agent_id}",
+        )
+        if local.get("aggregate_sha256") != expected.get("aggregate_sha256"):
+            raise PermissionError(
+                f"workspace guard local altéré ou régénéré par {agent_id}"
+            )
+        if local.get("agent_id") != expected.get("agent_id"):
+            raise PermissionError(f"workspace guard local incohérent pour {agent_id}")
+
     observed = _snapshot(workspace_project, agent_id)
     if expected.get("agent_id") != agent_id:
         raise PermissionError(f"workspace guard attribué au mauvais agent: {agent_id}")
