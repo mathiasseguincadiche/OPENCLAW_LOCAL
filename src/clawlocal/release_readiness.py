@@ -65,7 +65,10 @@ def validate_v1_release_readiness(root: Path, version: str) -> None:
     if not path.is_file():
         raise ValueError("release readiness: manifeste config/v1/release_readiness.yaml absent")
 
-    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ValueError("release readiness: YAML invalide") from exc
     manifest = _mapping(payload, "racine")
     if str(manifest.get("schema_version")) != "1.0.0":
         raise ValueError("release readiness: schema_version doit être 1.0.0")
