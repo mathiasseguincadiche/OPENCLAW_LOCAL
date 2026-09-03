@@ -42,6 +42,8 @@ jobs:
         run: python scripts/45_validate_model_fleet.py
       - name: Transversal pedagogy gate
         run: python scripts/46_validate_transversal_pedagogy.py
+      - name: Pre-V1 hardening gate
+        run: python scripts/47_validate_pre_v1_hardening.py
       - name: Release contracts
         run: python scripts/24_validate_release.py
       - name: Ruff
@@ -78,6 +80,7 @@ jobs:
           python scripts/44_validate_document_flow.py
           python scripts/45_validate_model_fleet.py
           python scripts/46_validate_transversal_pedagogy.py
+          python scripts/47_validate_pre_v1_hardening.py
       - name: Tests
         run: pytest -q
 
@@ -98,7 +101,7 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Windows filesystem hardening tests
         shell: pwsh
-        run: python -m pytest -q .\tests\test_security_hardening.py .\tests\test_finops_reservations.py
+        run: python -m pytest -q .\tests\test_security_hardening.py .\tests\test_finops_reservations.py .\tests\test_pre_v1_hardening.py
       - name: Require PowerShell 7
         shell: pwsh
         run: |
