@@ -41,3 +41,17 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Text | Should -Match '36 cas'
     }
 }
+
+Describe 'Inventaire VRAM Windows fiable' {
+    It 'préfère QWORD et ne traite pas le fallback 32 bits comme fiable' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $InventoryHelper = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\windows\lib\hardware_inventory.ps1'
+        )
+        $InventoryHelper | Should -Match 'HardwareInformation\.qwMemorySize'
+        $InventoryHelper | Should -Match 'windows_registry_hardware_information_qword'
+        $InventoryHelper | Should -Match 'HardwareInformation\.MemorySize'
+        $InventoryHelper | Should -Match 'windows_registry_hardware_information_legacy32'
+        $InventoryHelper | Should -Match 'reliable = \$IsQword'
+    }
+}
