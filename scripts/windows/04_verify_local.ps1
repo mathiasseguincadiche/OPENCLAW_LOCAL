@@ -28,6 +28,7 @@ if (-not $Model) {
 
 if ($DryRun) {
     Write-Host "[DRY-RUN] Vérifier Ollama puis exécuter un smoke test /api/chat sans spinner avec $Model."
+    Write-Host '[DRY-RUN] Thinking désactivé pour les modèles de raisonnement pendant ce smoke runtime minimal.'
     Write-Host '[DRY-RUN] Lire ensuite /api/ps pour exposer la part réellement chargée en VRAM.'
     exit 0
 }
@@ -64,12 +65,13 @@ $RequestBody = [ordered]@{
     options = [ordered]@{
         num_ctx = 2048
         temperature = 0
-        num_predict = 16
+        num_predict = 64
     }
 }
-if ($Model -like 'qwen3.8:*') {
-    # Le smoke test vérifie le runtime, pas le raisonnement profond.
-    # /api/chat sépare explicitement thinking et contenu final.
+if ($Model -like 'qwen3.8:*' -or $Model -like 'gemma4:*') {
+    # Ce smoke vérifie le runtime et la capacité à produire une réponse finale,
+    # pas le raisonnement profond. Un budget trop court peut sinon être consommé
+    # par le canal thinking avant que message.content ne soit produit.
     $RequestBody.think = $false
 }
 $Body = $RequestBody | ConvertTo-Json -Depth 6 -Compress
@@ -87,7 +89,26 @@ catch {
 
 $Output = ([string]$Response.message.content).Trim()
 if ($Output -notmatch 'LOCAL_OK') {
-    throw "Smoke test inattendu pour $Model. Réponse reçue: $Output"
+    $ThinkingLength = 0
+    if ($Response.message.PSObject.Properties['thinking']) {
+        $ThinkingLength = ([string]$Response.message.thinking).Length
+    }
+    $DoneReason = if ($Response.PSObject.Properties['done_reason']) {
+        [string]$Response.done_reason
+    }
+    else {
+        ''
+    }
+    $EvalCount = if ($Response.PSObject.Properties['eval_count']) {
+        [int]$Response.eval_count
+    }
+    else {
+        0
+    }
+    throw (
+        "Smoke test inattendu pour $Model. Réponse reçue: '$Output'. " +
+        "thinking_chars=$ThinkingLength done_reason=$DoneReason eval_count=$EvalCount"
+    )
 }
 
 $EvalCount = 0
