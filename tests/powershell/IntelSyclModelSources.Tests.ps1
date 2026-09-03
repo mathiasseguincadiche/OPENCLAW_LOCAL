@@ -49,7 +49,7 @@ Describe 'Intel SYCL model sources' {
 
         $Setup | Should -Match 'intel_sycl_model_sources\.ps1'
         $Setup | Should -Match 'Les trois modèles utilisent le blob GGUF Ollama'
-        $Setup | Should -Match 'Aucun override natif n''est requis'
+        $Setup | Should -Match "Aucun override natif n''est requis"
         $Helper | Should -Match 'function New-IntelSyclModelPreset'
         $Helper | Should -Match '-AllowDownload'
     }
