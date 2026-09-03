@@ -50,9 +50,10 @@ def _require_utc_timestamp(value: Any) -> None:
         parsed = datetime.fromisoformat(normalized)
     except ValueError as exc:
         raise ValueError("release readiness: approved_at_utc invalide") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
+    offset = parsed.utcoffset()
+    if parsed.tzinfo is None or offset is None:
         raise ValueError("release readiness: approved_at_utc doit contenir un fuseau UTC")
-    if parsed.utcoffset().total_seconds() != 0:
+    if offset.total_seconds() != 0:
         raise ValueError("release readiness: approved_at_utc doit être en UTC")
 
 
