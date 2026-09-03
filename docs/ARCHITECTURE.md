@@ -2,7 +2,7 @@
 
 ## Frontière de responsabilité
 
-`OPENCLAW_LOCAL` est une plateforme IA **local-first, multi-agents et project-first** pour Windows 11 Pro x64. Le runtime IA nominal reste natif Windows. WSL2 peut héberger des outils et projets DevOps/Linux, mais il n'est pas l'hôte du runtime IA nominal.
+`OPENCLAW_LOCAL` est une plateforme IA **local-first, multi-agents et project-first** pour Windows 11 Pro x64. Le runtime IA nominal reste natif Windows ; WSL2 peut héberger des outils DevOps/Linux mais n'est pas le runtime LLM nominal.
 
 Le système sépare explicitement :
 
@@ -17,21 +17,15 @@ Le système sépare explicitement :
 ## Architecture de référence
 
 ```text
-HOST Windows 11 Pro x64
+Windows 11 Pro x64
 |
-+-- <OPENCLAW_LOCAL_ROOT>
-|    +-- runtime/
-|    |    +-- node/
-|    |    +-- npm-global/          -> OpenClaw
-|    |    +-- venv/                -> clawlocal
-|    +-- models/
-|    |    +-- ollama/              -> OLLAMA_MODELS
-|    +-- projects/                 -> source de vérité des projets
-|    +-- workspaces/               -> snapshots gérés des 8 agents
-|    +-- state/                    -> état local, FinOps, intake canonique
-|    +-- proofs/                   -> preuves E2E/runtime locales
-|
-+-- Ollama loopback 127.0.0.1:11434
++-- Control plane clawlocal
+|    +-- contrats YAML/JSON
+|    +-- Project Intake / Ingestion
+|    +-- Project Orchestrator
+|    +-- Artifact Exchange
+|    +-- Workspace Guard
+|    +-- preuves / télémétrie / release gates
 |
 +-- OpenClaw Gateway loopback
 |    +-- chef-operations
@@ -44,226 +38,184 @@ HOST Windows 11 Pro x64
 |    +-- auditeur-qualite
 |
 +-- Flotte locale supportée — exactement 3 modèles
-|    +-- qwen-max          -> qwen3.8:27b              [LOCAL_MAX]
-|    +-- gemma-deep        -> gemma4:26b               [LOCAL_DEEP]
-|    +-- devstral-devops   -> devstral-small-2:24b     [LOCAL_SPECIALIST]
+|    +-- qwen-max        -> qwen3.5:9b-q4_K_M
+|    +-- gemma-deep      -> gemma3:12b-it-q4_K_M
+|    +-- devstral-devops -> qwen2.5-coder:14b-instruct-q4_K_M
 |
 +-- Backends
-|    +-- ollama-vulkan     -> nominal pré-qualification
-|    +-- llama-cpp-sycl    -> candidat
-|    +-- llama-cpp-vulkan  -> candidat
-|
-+-- OpenRouter
-     +-- escalade explicite uniquement
-     +-- préconditions + approbation éventuelle + FinOps
+     +-- ollama-vulkan
+     +-- llama-cpp-sycl
+     +-- llama-cpp-vulkan
+     +-- profil candidat b580-hybrid
 ```
 
-Il n'existe **aucun modèle LOCAL_FAST, petit fallback ou quatrième candidat local** dans la flotte supportée. Le catalogue `config/v1/model_catalog.yaml` est la source de vérité des trois modèles locaux.
+Les trois runtimes sont quantifiés **Q4_K_M** et ciblent un contexte nominal de **8192 tokens**. Le 16384 reste un contexte de qualification.
 
-## Stockage
+## Modèles et rôles
 
-Le bootstrap choisit par défaut :
+### `qwen-max`
+
+`qwen3.5:9b-q4_K_M` couvre :
+
+- orchestration ;
+- recherche avec outils Web ;
+- sécurité ;
+- release/forges ;
+- raisonnement transversal ;
+- multimodalité nominale PDF/image.
+
+### `gemma-deep`
+
+`gemma3:12b-it-q4_K_M` couvre :
+
+- architecture ;
+- rédaction ;
+- audit ;
+- contre-revue ;
+- multimodalité locale alternative.
+
+### `devstral-devops`
+
+L'alias historique est conservé pour ne pas casser les contrats persistés, mais il pointe désormais vers `qwen2.5-coder:14b-instruct-q4_K_M`.
+
+Ce spécialiste couvre :
+
+- DevOps ;
+- software engineering ;
+- scripts ;
+- CI/CD ;
+- Kubernetes/IaC ;
+- outils dépôt et édition multi-fichiers.
+
+Il est text-only dans le contrat. Pour un PDF ou une image, Qwen/Gemma produisent un contexte traçable puis l'Artifact Exchange effectue le handoff au spécialiste.
+
+## Routage par rôle
 
 ```text
-E:\AI\OpenClawLocal
+chef-operations          -> qwen-max
+expert-recherche         -> qwen-max
+architecte-solutions     -> gemma-deep
+ingenieur-devops         -> devstral-devops
+ingenieur-securite       -> qwen-max
+ingenieur-release-forges -> qwen-max
+redacteur-technique      -> gemma-deep
+auditeur-qualite         -> gemma-deep
 ```
 
-si `E:` existe ; sinon `%LOCALAPPDATA%\OpenClawLocal`. `OPENCLAW_LOCAL_ROOT` permet de choisir explicitement une autre racine.
-
-Les modèles Ollama sont confinés sous :
-
-```text
-<OPENCLAW_LOCAL_ROOT>\models\ollama
-```
-
-via `OLLAMA_MODELS`. Les projets centraux sont conservés sous :
-
-```text
-<OPENCLAW_LOCAL_ROOT>\projects\<project-id>
-```
-
-`runtime/` et `workspaces/` sont reconstruisibles. `projects/`, `state/` et les preuves utiles sont des données opérationnelles à protéger.
-
-## Flux projet principal
-
-```text
-consignes + PDF + images + Office + code + sources
-                         |
-                         v
-                Project Intake durci
-                         |
-                         v
-               Document Ingestion
-                         |
-                         v
-                 Project Orchestrator
-                         |
-      ANALYZE -> CLARIFY -> PLAN -> ASSIGN
-                         |
-                      EXECUTE
-                         |
-              Artifact Exchange versionné
-                         |
-                      VALIDATE
-                         |
-                       REVIEW
-                         |
-                      PACKAGE
-                         |
-                APPROBATION HUMAINE
-                         |
-                      COMPLETE
-```
-
-Le cloud n'est pas une étape automatique de ce flux.
-
-## Control plane et modèles
-
-Le Project Orchestrator et les modules `clawlocal` constituent un **control plane déterministe**. Ils :
-
-- contrôlent les états et transitions ;
-- valident les contrats et dépendances ;
-- construisent et synchronisent les snapshots ;
-- collectent les sorties ;
-- maintiennent l'Artifact Exchange ;
-- calculent les hashes et preuves ;
-- imposent les gates ;
-- gouvernent FinOps, publication et télémétrie ;
-- refusent les transitions incohérentes.
-
-Les modèles produisent le contenu sémantique : analyse, plan, rédaction, code, diagnostic, revue et explication. Un modèle ne peut pas promouvoir l'état canonique d'un projet par simple affirmation.
-
-## Rôles et séparation des responsabilités
-
-| Rôle | Responsabilité principale |
-|---|---|
-| Chef des opérations | cadrage, plan, délégation, consolidation |
-| Expert recherche | recherche Web, sources, synthèse factuelle |
-| Architecte solutions | architecture, ADR, compromis, schémas |
-| Ingénieur DevOps | implémentation, automatisation, CI/CD, IaC, conteneurs |
-| Ingénieur sécurité | audit et findings, sans correction silencieuse |
-| Ingénieur Release/Forges | Git, PR/MR, CI distante, release et publication |
-| Rédacteur technique | documentation progressive et fidèle |
-| Auditeur qualité | validation indépendante et verdict |
-
-L'Architecte écrit uniquement via un writer borné à `context/architecture/` et `diagrams/`. Sécurité et Audit restent non-mutants vis-à-vis des sources auditées.
-
-## Flotte locale et routage nominal
-
-| Agent | Modèle nominal |
-|---|---|
-| Chef des opérations | Qwen 3.8 27B |
-| Expert recherche | Qwen 3.8 27B + Web |
-| Architecte solutions | Gemma 4 26B |
-| Ingénieur DevOps | Devstral Small 2 24B |
-| Ingénieur sécurité | Qwen 3.8 27B |
-| Release/Forges | Qwen 3.8 27B |
-| Rédacteur technique | Gemma 4 26B |
-| Auditeur qualité | Gemma 4 26B, ou Qwen si le producteur est Gemma |
-
-Les fallbacks locaux restent strictement dans ces trois modèles. Une indisponibilité locale ne déclenche jamais automatiquement OpenRouter.
+L'Auditeur peut basculer vers `qwen-max` lorsque le producteur est Gemma afin de préserver une séparation de famille lorsque cela est praticable.
 
 ## Modèle et backend sont indépendants
 
-Une classe de modèle n'est pas un backend :
+Le choix d'un modèle ne vaut pas sélection définitive du backend. Les candidats sont évalués séparément :
 
 ```text
-Modèles
-  +-- LOCAL_MAX        -> Qwen 3.8 27B
-  +-- LOCAL_DEEP       -> Gemma 4 26B
-  +-- LOCAL_SPECIALIST -> Devstral Small 2 24B
-
-Backends
-  +-- Ollama/Vulkan
-  +-- llama.cpp/SYCL
-  +-- llama.cpp/Vulkan
+ollama-vulkan
+llama-cpp-sycl
+llama-cpp-vulkan
+b580-hybrid
 ```
 
-Le backend final est choisi uniquement après qualification réelle sur la workstation cible.
-
-## Intake et documents
-
-Le Project Intake crée une archive canonique sous `state/intake/<project>/<timestamp>/`, puis une copie gérée sous `projects/<id>/intake/`.
-
-Les entrées sont considérées comme non fiables :
-
-- scan de secrets ;
-- refus des symlinks, junctions et reparse points ;
-- SHA-256 et MIME ;
-- ACL/lecture seule ;
-- limites sur PDF et conteneurs Office ;
-- aucune exécution de document entrant.
-
-La Document Ingestion produit `context/ingestion/` sans remplacer les originaux.
-
-## Artifact Exchange et cohérence entre agents
-
-Le projet central reste la source de vérité. Chaque tentative de tâche conserve une version immuable :
+Le profil candidat hybride encode actuellement :
 
 ```text
-context/exchange/<task-id>/self/run-001/
-context/exchange/<task-id>/self/run-002/
+qwen-max        -> Ollama/Vulkan
+gemma-deep      -> llama.cpp/Vulkan
+devstral-devops -> llama.cpp/Vulkan
 ```
 
-Après `PASS`, les artefacts sont propagés aux dépendants directs et transitifs :
+Cette configuration est un **candidat de qualification**, pas un backend promu. Toute promotion exige des mesures B580, E2E, tool-calling, stabilité et revue humaine.
+
+## Contexte et mémoire
+
+La B580 dispose de 12 Go de VRAM. L'architecture évite donc d'utiliser la fenêtre maximale théorique des modèles comme réglage opérationnel.
+
+Politique :
 
 ```text
-context/exchange/<consumer>/dependencies/<producer>/run-NNN/
+8192  -> nominal
+16384 -> qualification/stress
+>16K  -> interdit comme nominal sans nouvelle preuve
 ```
 
-Les agents impactés sont resynchronisés avant leur prochaine tâche. Une correction amont peut rouvrir les dépendants transitifs afin d'éviter des livrables construits sur une version obsolète.
+Les preuves recherchées sont : `size_vram`, VRAM/RAM, TTFT, tokens/s, temps de chargement, stabilité et tool-calling.
 
-## Pédagogie
+## Projet central et workspaces
 
-La pédagogie est transversale aux huit rôles et aux trois modèles. Trois profils existent :
-
-- `efficient` : 90 % exécution / 10 % apprentissage ;
-- `balanced` : 70 % / 30 % ;
-- `intensive` : 60 % / 40 %.
-
-La documentation progressive suit quatre profondeurs : **Comprendre, Utiliser, Approfondir, Diagnostiquer**.
-
-## Web et cloud
-
-Une donnée récente suit d'abord :
+Le projet central reste source de vérité :
 
 ```text
-agent local
-  -> web_search / web_fetch / browser si autorisé
-  -> sources récentes
-  -> raisonnement local
+projects/<project-id>/
+├── intake/
+├── sources/
+├── context/
+├── work/
+├── deliverables/
+├── evidence/
+└── diagrams/
 ```
 
-Une escalade cloud exige un motif versionné, ses préconditions, le budget disponible, une réservation FinOps atomique juste avant l'appel réel et une approbation humaine lorsque le motif l'exige.
+Les workspaces agents sont des vues contrôlées. Le Workspace Guard applique les scopes de lecture/écriture et les frontières gérées refusent symlinks, junctions et reparse points.
 
-## Sources de vérité
+## Project Intake et Document Ingestion
 
-- `config/v1/model_catalog.yaml` : trois modèles supportés ;
-- `config/v1/model_routing.yaml` : routage par rôle ;
-- `config/v1/runtime_backends.yaml` : backends ;
-- `config/v1/orchestration_policy.yaml` : états et gates ;
-- `config/v1/document_ingestion_policy.yaml` : documents ;
-- `config/v1/artifact_exchange_policy.yaml` : propagation ;
-- `config/v1/pedagogy_policy.yaml` : pédagogie ;
-- `config/v1/tool_policy.yaml` : permissions ;
-- `config/v1/budget_policy.yaml` : FinOps ;
-- `config/v1/qualification_policy.yaml` : qualification ;
-- `agents/*` : contrats humains des rôles ;
-- `config/v1/runtime_versions.json` : versions runtime.
+Le parcours document :
 
-Les contrats Git décrivent l'état attendu. Les performances GPU, la qualité multimodale et la stabilité sont des **états observés** qui doivent être prouvés sur la workstation réelle.
+```text
+entrée non fiable
+ -> validation sécurité
+ -> archive/source canonique
+ -> SHA-256 + MIME
+ -> extraction/indexation locale
+ -> source_coverage
+ -> analyse agent
+```
 
-## Invariants V1
+PDF/images passent par les modèles multimodaux Qwen/Gemma. DOCX/PPTX/XLSX utilisent l'extraction locale déterministe. Les originaux restent immuables.
 
-- Windows natif pour le runtime IA nominal ;
-- exactement trois modèles locaux supportés ;
-- aucun fallback cloud silencieux ;
-- projet central source de vérité ;
-- workspaces jetables ;
-- provenance et historique conservés ;
-- gates fail-closed ;
-- séparation producteur/reviewer lorsque praticable ;
-- sécurité et audit sans correction silencieuse ;
-- cloud désactivé par défaut ;
-- approbation humaine pour `COMPLETE` ;
-- aucune affirmation de performance sans preuve matérielle.
+## Project Orchestrator
+
+Machine principale :
+
+```text
+INTAKE_READY
+ -> ANALYZED
+ -> CLARIFICATION_REQUIRED si nécessaire
+ -> PLANNED
+ -> ASSIGNED
+ -> IN_PROGRESS
+ -> VALIDATING
+ -> REVIEW
+ -> PACKAGING
+ -> COMPLETE
+```
+
+Chaque phase exige ses artefacts et preuves. Une ambiguïté bloquante provoque une clarification humaine ; elle n'est jamais inventée par le modèle.
+
+## Artifact Exchange
+
+Les sorties valides sont versionnées, hashées et propagées uniquement après PASS. Les sorties en échec restent dans l'historique mais ne deviennent pas des dépendances valides.
+
+La chaîne de traçabilité reste :
+
+```text
+REQ -> tâche -> sortie -> preuve -> verdict
+```
+
+## Local-first et cloud
+
+Le parcours nominal ne nécessite aucun LLM cloud. Le Web peut être interrogé via les outils locaux OpenClaw, puis raisonné par les modèles locaux.
+
+Une escalade OpenRouter exige :
+
+- motif autorisé ;
+- activation explicite ;
+- budget FinOps disponible ;
+- préconditions de politique ;
+- journalisation ;
+- approbation humaine lorsque requise.
+
+Aucun fallback cloud silencieux n'est accepté.
+
+## V1
+
+La conformité logicielle de cette architecture peut être prouvée par CI. En revanche, la qualification V1 reste strictement matérielle et humaine : HARD-40M, E2E, backends, Golden Projects, multimodalité, télémétrie, projet représentatif et attestation SHA-256 doivent tous être validés avant `1.0.0`.
