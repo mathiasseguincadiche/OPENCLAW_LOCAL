@@ -57,7 +57,7 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Text | Should -Match 'premier token'
     }
 
-    It 'verrouille le budget mural dans le runner de qualification' {
+    It 'verrouille le budget mural et la marge Qwen native' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Qualification = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'scripts\windows\07_run_qualification.ps1'
@@ -65,11 +65,20 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Benchmark = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'scripts\windows\05_benchmark.ps1'
         )
+        $Policy = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'config\v1\qualification_policy.yaml'
+        )
+        $Launcher = Get-Content -Raw -LiteralPath (
+            Join-Path $TestRepoRoot 'scripts\benchmark_qualification_40m_v2.py'
+        )
         $Qualification | Should -Match '\$QualificationMaxWallSeconds = 2400'
         $Qualification | Should -Match '\$EvaluationReserveSeconds = 60'
         $Qualification | Should -Match 'Assert-QualificationBudget'
         $Qualification | Should -Match 'MaxWallSeconds \$BenchmarkBudgetSeconds'
-        $Benchmark | Should -Match 'benchmark_qualification_40m\.py'
+        $Benchmark | Should -Match 'benchmark_qualification_40m_v2\.py'
+        $Benchmark | Should -Match 'timeout par cas 210 s'
+        $Policy | Should -Match 'max_case_wall_seconds: 210'
+        $Launcher | Should -Match 'QWEN_NATIVE_MAX_OUTPUT_TOKENS = 768'
     }
 
     It 'transmet Quick à la qualification depuis le menu' {
