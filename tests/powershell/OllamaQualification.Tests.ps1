@@ -45,6 +45,17 @@ Describe 'Qualification Ollama lisible et bornée' {
         $Text | Should -Match 'Python géré OPENCLAW_LOCAL'
     }
 
+    It 'annonce le plan complet optimisé à 48 cas' {
+        $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $TestRepoRoot 'menu.ps1') `
+            -Action qualification -DryRun 2>&1
+        $LASTEXITCODE | Should -Be 0
+        $Text = $Output -join "`n"
+        $Text | Should -Match '36 cas 8K \+ 12 cas ciblés 16K = 48 cas'
+        $Text | Should -Match '768 tokens'
+        $Text | Should -Match 'premier token'
+    }
+
     It 'transmet Quick à la qualification depuis le menu' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $TestRepoRoot 'menu.ps1') `
