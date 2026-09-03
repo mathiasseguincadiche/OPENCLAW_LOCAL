@@ -26,7 +26,9 @@ from clawlocal.workspace_guard import (
 )
 
 
-def test_safe_zip_extracts_hashes_and_keeps_nested_archive_opaque(tmp_path: Path) -> None:
+def test_safe_zip_extracts_hashes_and_keeps_nested_archive_opaque(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "project.zip"
     nested_bytes = b"PK\x03\x04opaque-nested-archive"
     with zipfile.ZipFile(source, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -47,7 +49,9 @@ def test_safe_zip_extracts_hashes_and_keeps_nested_archive_opaque(tmp_path: Path
         },
     )
     by_path = {str(item["member_path"]): item for item in members}
-    assert (target / "src" / "main.py").read_text(encoding="utf-8") == "print('ok')\n"
+    assert (target / "src" / "main.py").read_text(
+        encoding="utf-8"
+    ) == "print('ok')\n"
     assert by_path["src/main.py"]["sha256"]
     assert by_path["assets/nested.zip"]["nested_archive"] is True
     assert (target / "assets" / "nested.zip").read_bytes() == nested_bytes
@@ -79,7 +83,11 @@ def test_generic_zip_bridge_updates_ingestion_and_coverage(tmp_path: Path) -> No
     project = tmp_path / "project"
     intake = project / "intake"
     intake.mkdir(parents=True)
-    with zipfile.ZipFile(intake / "client.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(
+        intake / "client.zip",
+        "w",
+        zipfile.ZIP_DEFLATED,
+    ) as archive:
         archive.writestr("README.md", "# Client\n")
         archive.writestr("infra/main.tf", 'resource "null_resource" "x" {}\n')
     ingest_project_documents(project)
@@ -113,10 +121,16 @@ def test_workspace_guard_blocks_protected_input_mutation(tmp_path: Path) -> None
     (workspace / "intake").mkdir(parents=True)
     (workspace / "sources").mkdir()
     (workspace / "context" / "exchange").mkdir(parents=True)
-    (workspace / "intake" / "brief.txt").write_text("original", encoding="utf-8")
+    (workspace / "intake" / "brief.txt").write_text(
+        "original",
+        encoding="utf-8",
+    )
     write_workspace_guard(workspace, "redacteur-technique")
     validate_workspace_guard(workspace, "redacteur-technique")
-    (workspace / "intake" / "brief.txt").write_text("altéré", encoding="utf-8")
+    (workspace / "intake" / "brief.txt").write_text(
+        "altéré",
+        encoding="utf-8",
+    )
     with pytest.raises(PermissionError, match="entrée protégée modifiée"):
         validate_workspace_guard(workspace, "redacteur-technique")
 
@@ -140,7 +154,10 @@ def test_explicit_requirements_map_to_tasks_and_matrix(tmp_path: Path) -> None:
     project = tmp_path / "project"
     intake = project / "intake"
     intake.mkdir(parents=True)
-    (intake / "brief.md").write_text("Le service doit exposer /health.\n", encoding="utf-8")
+    (intake / "brief.md").write_text(
+        "Le service doit exposer /health.\n",
+        encoding="utf-8",
+    )
     ingest_project_documents(project)
     index = load_ingestion_index(project)
     document_id = str(index["entries"][0]["document_id"])
@@ -171,7 +188,8 @@ def test_explicit_requirements_map_to_tasks_and_matrix(tmp_path: Path) -> None:
     )
     (project / "context").mkdir(exist_ok=True)
     (project / "context" / "project_analysis.json").write_text(
-        json.dumps(analysis), encoding="utf-8"
+        json.dumps(analysis),
+        encoding="utf-8",
     )
     plan = {
         "workstreams": ["service"],
@@ -188,7 +206,10 @@ def test_explicit_requirements_map_to_tasks_and_matrix(tmp_path: Path) -> None:
         ],
     }
     validate_plan_requirement_links(project, plan)
-    (project / "context" / "project_plan.json").write_text(json.dumps(plan), encoding="utf-8")
+    (project / "context" / "project_plan.json").write_text(
+        json.dumps(plan),
+        encoding="utf-8",
+    )
     matrix_path = refresh_traceability_matrix(project)
     matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
     assert matrix["requirements_origin"] == "explicit"
@@ -224,19 +245,34 @@ def test_explicit_requirement_cannot_be_left_unmapped(tmp_path: Path) -> None:
         )
 
 
-def test_model_identity_change_invalidates_qualification(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_model_identity_change_invalidates_qualification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     first = {
         "schema_version": "1.0.0",
         "captured_at": "2026-01-01T00:00:00+00:00",
         "provider": "ollama",
         "endpoint": "http://127.0.0.1:11434",
-        "models": {"qwen-max": {"runtime_id": "qwen", "digest": "aaa", "quantization_level": "Q4"}},
+        "models": {
+            "qwen-max": {
+                "runtime_id": "qwen",
+                "digest": "aaa",
+                "quantization_level": "Q4",
+            }
+        },
         "fingerprint_sha256": "fingerprint-a",
     }
     second = {
         **first,
         "captured_at": "2026-01-02T00:00:00+00:00",
-        "models": {"qwen-max": {"runtime_id": "qwen", "digest": "bbb", "quantization_level": "Q5"}},
+        "models": {
+            "qwen-max": {
+                "runtime_id": "qwen",
+                "digest": "bbb",
+                "quantization_level": "Q5",
+            }
+        },
         "fingerprint_sha256": "fingerprint-b",
     }
     monkeypatch.setattr(model_identity, "current_model_identity", lambda: first)
@@ -245,11 +281,13 @@ def test_model_identity_change_invalidates_qualification(tmp_path: Path, monkeyp
     assert model_identity.check_qualified(tmp_path) == "QUALIFIED"
     monkeypatch.setattr(model_identity, "current_model_identity", lambda: second)
     assert model_identity.check_qualified(tmp_path) == "INVALIDATED"
-    qualified = json.loads(
-        (tmp_path / "state" / "qualification" / "qualified_model_identity.json").read_text(
-            encoding="utf-8"
-        )
+    qualified_path = (
+        tmp_path
+        / "state"
+        / "qualification"
+        / "qualified_model_identity.json"
     )
+    qualified = json.loads(qualified_path.read_text(encoding="utf-8"))
     assert qualified["status"] == "INVALIDATED"
     assert qualified["invalidation_reason"] == "runtime_model_identity_changed"
 
