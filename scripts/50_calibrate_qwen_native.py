@@ -24,7 +24,10 @@ THINKING_MODES = ("native", "off")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Calibre les probes Qwen avec thinking natif ou désactivé sans promouvoir la qualification."
+        description=(
+            "Calibre les probes Qwen avec thinking natif ou désactivé "
+            "sans promouvoir la qualification."
+        )
     )
     parser.add_argument("--endpoint", default="http://127.0.0.1:11434")
     parser.add_argument(
