@@ -2,14 +2,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
-
-from clawlocal.golden_projects import (
-    SCENARIOS,
-    evaluate_golden_project,
-    execute_golden_project,
-    prepare_golden_project,
-)
 
 
 def default_root() -> Path:
@@ -21,9 +15,43 @@ def default_root() -> Path:
     return Path(os.environ.get("LOCALAPPDATA", ".")) / "OpenClawLocal"
 
 
+def requested_root(argv: list[str] | None = None) -> Path:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--root", type=Path)
+    known, _ = parser.parse_known_args(sys.argv[1:] if argv is None else argv)
+    return known.root if known.root is not None else default_root()
+
+
+def _activate_repository_runtime(platform_root: Path) -> None:
+    if os.name == "nt":
+        managed = platform_root / "runtime" / "venv" / "Scripts" / "python.exe"
+        if managed.is_file() and Path(sys.executable).resolve() != managed.resolve():
+            os.execv(
+                str(managed),
+                [str(managed), str(Path(__file__).resolve()), *sys.argv[1:]],
+            )
+
+    repo_root = Path(__file__).resolve().parents[1]
+    src = repo_root / "src"
+    src_text = str(src)
+    if src_text not in sys.path:
+        sys.path.insert(0, src_text)
+    os.environ.setdefault("OPENCLAW_LOCAL_REPO_ROOT", str(repo_root))
+
+
 def main() -> int:
+    platform_root = requested_root()
+    _activate_repository_runtime(platform_root)
+
+    from clawlocal.golden_projects import (
+        SCENARIOS,
+        evaluate_golden_project,
+        execute_golden_project,
+        prepare_golden_project,
+    )
+
     parser = argparse.ArgumentParser(description="Prépare et exécute les golden projects pré-V1.")
-    parser.add_argument("--root", type=Path, default=default_root())
+    parser.add_argument("--root", type=Path, default=platform_root)
     parser.add_argument("--scenario", choices=["all", *SCENARIOS], default="all")
     parser.add_argument("--prepare", action="store_true")
     parser.add_argument("--execute", action="store_true")

@@ -3,7 +3,7 @@ param(
     [ValidateSet(
         'menu', 'install-core', 'install-full', 'audit', 'configure-local', 'models',
         'configure-openclaw', 'deploy-agents', 'verify', 'benchmark', 'inventory',
-        'e2e', 'qualification', 'intel-sycl-setup', 'intel-sycl-stop',
+        'e2e', 'qualification', 'golden', 'intel-sycl-setup', 'intel-sycl-stop',
         'intel-sycl-verify', 'intel-sycl-compare', 'intel-sycl-diagnose',
         'intel-vulkan-probe', 'intel-vulkan-setup', 'intel-vulkan-stop',
         'intel-vulkan-verify', 'team', 'docs', 'logs'
@@ -37,6 +37,7 @@ $Scripts = @{
     inventory = Join-Path $RepoRoot 'scripts\windows\06_collect_inventory.ps1'
     e2e = Join-Path $RepoRoot 'scripts\windows\10_test_openclaw_e2e.ps1'
     qualification = Join-Path $RepoRoot 'scripts\windows\07_run_qualification.ps1'
+    golden = Join-Path $RepoRoot 'scripts\windows\21_run_golden_projects.ps1'
     'intel-sycl-setup' = Join-Path $RepoRoot 'scripts\windows\12_setup_intel_sycl.ps1'
     'intel-sycl-stop' = Join-Path $RepoRoot 'scripts\windows\13_stop_intel_sycl.ps1'
     'intel-sycl-verify' = Join-Path $RepoRoot 'scripts\windows\14_verify_intel_sycl.ps1'
@@ -240,7 +241,7 @@ while ($true) {
 9) Lancer le benchmark (utiliser -Quick pour 8K uniquement)
 10) Collecter l'inventaire de qualification
 11) Tester OpenClaw E2E + tool-calling + réparation (paramètre -Backend)
-12) Lancer la qualification matérielle (utiliser -Quick pour 36 cas au lieu de 72)
+12) Lancer la qualification matérielle (30 cas HARD-40M; -Quick = diagnostic 36 cas 8K)
 13) Afficher les contrats de l'équipe IA
 14) Afficher la documentation
 15) Afficher les derniers logs et preuves
@@ -253,6 +254,7 @@ while ($true) {
 22) Installer/démarrer llama.cpp Vulkan géré pour le profil B580 hybride
 23) Vérifier llama.cpp Vulkan géré (Gemma + Devstral)
 24) Arrêter le serveur llama.cpp Vulkan géré
+25) Exécuter les 5 golden projects pré-V1 (reset + prepare + execute + evaluate)
 0) Quitter
 '@ | Write-Host
 
@@ -281,6 +283,7 @@ while ($true) {
         '22' { Invoke-Action -Name 'intel-vulkan-setup' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '23' { Invoke-Action -Name 'intel-vulkan-verify' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '24' { Invoke-Action -Name 'intel-vulkan-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '25' { Invoke-Action -Name 'golden' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }

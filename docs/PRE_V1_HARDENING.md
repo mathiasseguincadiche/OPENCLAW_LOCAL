@@ -67,17 +67,14 @@ Un tag Ollama n'est pas considéré comme une identité immuable. La qualificati
 - taille de paramètres ;
 - niveau de quantification.
 
-Avant le benchmark complet :
+Le parcours opérateur est la qualification complète elle-même :
 
 ```powershell
-python .\scripts\48_model_identity_lock.py --action capture
+.\menu.ps1 -Action qualification -DryRun
+.\menu.ps1 -Action qualification
 ```
 
-Après un gate complet réussi, `07_run_qualification.ps1` promeut automatiquement la même identité observée :
-
-```powershell
-python .\scripts\48_model_identity_lock.py --action promote
-```
+`07_run_qualification.ps1` capture automatiquement l'identité candidate avant le benchmark, puis promeut cette même identité uniquement si le gate complet est PASS. Le mode `-Quick` ne promeut jamais.
 
 Les preuves sont locales sous :
 
@@ -87,7 +84,7 @@ state/qualification/
 └── qualified_model_identity.json
 ```
 
-Si le digest ou la quantification change, `verify` marque la qualification `INVALIDATED` et exige une qualification complète. Un diagnostic `-Quick` ne peut jamais promouvoir l'identité modèle.
+Si le digest ou la quantification change, `verify` marque la qualification `INVALIDATED` et exige une qualification complète. Tous les appels Python de ce parcours passent par le runtime géré OPENCLAW_LOCAL.
 
 ## 4. Enforcement des permissions par code
 
@@ -127,17 +124,23 @@ Cinq scénarios déterministes sont fournis :
 4. `broken-pipeline-remediation` — pipeline GitLab volontairement cassée ;
 5. `prompt-injection-document` — DOCX contenant une instruction hostile destinée à tester l'isolation des politiques.
 
-Préparer les fixtures sans appeler de modèle :
+Le parcours opérateur Windows est désormais centralisé :
 
 ```powershell
-python .\scripts\49_run_golden_projects.py --scenario all --prepare --reset
+.\menu.ps1 -Action golden -DryRun
+.\menu.ps1 -Action golden
 ```
 
-Exécuter réellement les cinq projets localement puis les évaluer :
+L'action `golden` utilise le runtime Python géré OPENCLAW_LOCAL et exécute les cinq scénarios selon le parcours :
 
-```powershell
-python .\scripts\49_run_golden_projects.py --scenario all --execute --evaluate
+```text
+reset propre
+-> prepare
+-> execute
+-> evaluate
 ```
+
+Le runner Python `scripts/49_run_golden_projects.py` conserve également une auto-activation du venv géré sous Windows afin qu'un appel direct ne retombe pas silencieusement sur un Python système ambigu.
 
 Le runner peut répondre automatiquement uniquement aux clarifications connues des fixtures synthétiques. Il ne remplace jamais l'approbation humaine finale et n'autorise aucune escalade cloud.
 
@@ -151,9 +154,10 @@ La CI exécute désormais :
 47_validate_pre_v1_hardening.py
 pytest / Python 3.12 et 3.13
 Windows filesystem hardening + test_pre_v1_hardening.py
+PowerShell/Pester pour les parcours opérateur Windows
 ```
 
-Le gate statique vérifie que les cinq capacités sont toujours câblées. Les tests unitaires vérifient notamment Zip Slip, hash des membres, archive imbriquée opaque, mutation d'entrée protégée, mapping REQ, invalidation de qualification et fixture de prompt injection.
+Le gate statique vérifie que les cinq capacités sont toujours câblées. Les tests unitaires vérifient notamment Zip Slip, hash des membres, archive imbriquée opaque, mutation d'entrée protégée, mapping REQ, invalidation de qualification et fixture de prompt injection. Les contrats Windows vérifient également que les parcours critiques utilisent le runtime Python géré.
 
 ## Ce que la CI ne prétend toujours pas
 
