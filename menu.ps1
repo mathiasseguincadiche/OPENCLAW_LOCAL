@@ -254,7 +254,7 @@ while ($true) {
 22) Installer/démarrer llama.cpp Vulkan géré pour le profil B580 hybride
 23) Vérifier llama.cpp Vulkan géré (Gemma + Devstral)
 24) Arrêter le serveur llama.cpp Vulkan géré
-25) Exécuter les 5 golden projects pré-V1 (reset + execute + evaluate)
+25) Exécuter les 5 golden projects pré-V1 (reset + prepare + execute + evaluate)
 0) Quitter
 '@ | Write-Host
 
