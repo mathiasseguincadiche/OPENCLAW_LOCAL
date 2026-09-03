@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "platform_version": "0.2.0",
   "windows": {
     "edition": "Windows 11 Pro",
@@ -77,22 +77,11 @@
     "oneapi_device_selector": "level_zero:gpu",
     "models_max": 1,
     "parallel": 1,
-    "context_tokens": 16384,
+    "context_tokens": 8192,
     "gpu_layers": "auto",
     "offline": true,
     "model_source_policy": "ollama_blob_unless_native_override",
-    "native_model_overrides": {
-      "devstral-small-2:24b": {
-        "reason": "published_ollama_mistral3_layout_requires_ollama_compat_layer",
-        "source": "bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF",
-        "filename": "mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
-        "url": "https://huggingface.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/main/mistralai_Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf?download=true",
-        "sha256": "bfd11c8679c6b81eb43763505465d7dcfa72e460ab1c220ecc235a3efadd7f7f",
-        "quantization": "Q4_K_M",
-        "architecture": "mistral3",
-        "install_policy": "pinned_sha256_resumable_download"
-      }
-    },
+    "native_model_overrides": {},
     "install_policy": "pinned_release_with_sha256",
     "promotion_requires_real_b580_e2e": true,
     "hardware_tested": null
@@ -111,12 +100,12 @@
     "device_match": "Intel Arc B580",
     "models_max": 1,
     "parallel": 1,
-    "context_tokens": 16384,
+    "context_tokens": 8192,
     "gpu_layers": "auto",
     "offline": true,
     "managed_models": [
-      "gemma4:26b",
-      "devstral-small-2:24b"
+      "gemma3:12b-it-q4_K_M",
+      "qwen2.5-coder:14b-instruct-q4_K_M"
     ],
     "model_source_policy": "same_effective_llama_cpp_sources_as_sycl",
     "install_policy": "pinned_release_with_sha256",
@@ -131,7 +120,7 @@
     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10621/llama-b10621-bin-win-vulkan-x64.zip",
     "sha256": "2672d85bf87c8280d94dee01eb6a86280046878f70a07d786a93637fa9081163",
     "listen_host": "127.0.0.1",
-    "context_tokens": 16384,
+    "context_tokens": 8192,
     "gpu_layers": "auto",
     "parallel": 1,
     "offline": true,
@@ -147,6 +136,8 @@
   },
   "qualification": {
     "hardware_profile": "intel_arc_b580_12gb",
+    "nominal_context_tokens": 8192,
+    "extended_context_tokens": 16384,
     "real_run_required": true,
     "promotion_from_ci_forbidden": true
   }
