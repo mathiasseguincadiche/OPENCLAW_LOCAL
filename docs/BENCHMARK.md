@@ -42,7 +42,7 @@ La suite versionnée reste `benchmarks/suites/devops_v2.yaml`. Elle contient dou
 - réparation après retour d'outil ;
 - contexte synthétique long.
 
-La passe de qualification complète est exécutée par `scripts/benchmark_qualification_40m.py`. `scripts/benchmark_local.py` reste le runner générique et le support du mode `-Quick`.
+La passe de qualification complète active est exécutée par `scripts/benchmark_qualification_40m_v2.py`. `scripts/benchmark_local.py` reste le runner générique et le support du mode `-Quick`.
 
 ## Matrice complète HARD-40M
 
@@ -104,7 +104,7 @@ Pour Qwen, le thinking natif n'est plus payé sur chaque cas. Il est conservé s
 16384 long-context-discipline
 ```
 
-Ces trois probes disposent d'un plafond de **640 tokens**. Tous les autres cas Qwen utilisent `think=false` et conservent la limite propre au scénario. Cette séparation préserve une preuve réelle de la capacité reasoning sans multiplier le coût de réflexion sur des tâches courtes de formatage JSON/YAML ou de contrôle simple.
+Ces trois probes disposent d'un plafond de **768 tokens**. Tous les autres cas Qwen utilisent `think=false` et conservent la limite propre au scénario. Cette séparation préserve une preuve réelle de la capacité reasoning sans multiplier le coût de réflexion sur des tâches courtes de formatage JSON/YAML ou de contrôle simple.
 
 ## Budget temps dur
 
@@ -114,12 +114,12 @@ Le budget est versionné dans `config/v1/qualification_policy.yaml` :
 qualification complète : 2400 s = 40 min maximum
 réserve évaluation      :   60 s
 benchmark direct        : 2100 s = 35 min par défaut
-timeout par cas         :  150 s maximum
+timeout par cas         :  210 s maximum
 ```
 
 Le runner complet est **fail-fast** lorsqu'une erreur API, un timeout ou une sortie tronquée rend déjà le gate impossible (`max_error_rate: 0`). Il ne continue pas pendant des dizaines de minutes pour produire un verdict déjà condamné.
 
-Le parcours PowerShell mesure aussi sa durée depuis le début de la qualification. Le temps consommé par l'audit et l'inventaire est retiré du budget transmis au benchmark. L'évaluation finale reste incluse dans la limite de 40 minutes.
+Le parcours PowerShell mesure aussi sa durée depuis le début de la qualification. Le temps consommé par l'audit, l'inventaire et la capture d'identité modèle est retiré du budget transmis au benchmark. L'évaluation finale et la promotion conditionnelle du fingerprint restent incluses dans la limite de 40 minutes.
 
 ## Smokes et redondance
 
@@ -158,7 +158,7 @@ Benchmark complet direct :
 .\scripts\windows\05_benchmark.ps1
 ```
 
-Il utilise `benchmark_qualification_40m.py` et un budget benchmark de 35 minutes par défaut. La qualification complète lui transmet un budget dynamique plus strict afin de conserver la limite de 40 minutes de bout en bout.
+Il utilise `benchmark_qualification_40m_v2.py` et un budget benchmark de 35 minutes par défaut. La qualification complète lui transmet un budget dynamique plus strict afin de conserver la limite de 40 minutes de bout en bout.
 
 ## Mesures et progression
 
@@ -195,6 +195,12 @@ Le JSON de preuve HARD-40M enregistre notamment :
 - résultat de chaque contrôle ;
 - durée murale totale ;
 - état `budget_exhausted`.
+
+## Identité modèle et qualification
+
+Le benchmark ne choisit pas automatiquement un backend ni un modèle. La qualification complète capture séparément l'identité exacte des trois modèles Ollama avant le benchmark et ne promeut ce fingerprint vers l'état `QUALIFIED` qu'après un PASS complet.
+
+Cette promotion d'identité signifie uniquement « ces poids/digest/quantification sont ceux qui ont passé le gate ». Elle ne modifie ni le catalogue, ni le routage nominal, ni le backend actif, ni le verdict V1. Le mode `-Quick` ne promeut jamais cette identité.
 
 ## Gate automatique
 
