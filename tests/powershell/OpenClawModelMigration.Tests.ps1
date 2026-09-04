@@ -10,9 +10,10 @@ Describe 'Migration de flotte OpenClaw' {
     }
 
     It 'valide le patch avec --replace pour retirer les anciens IDs gérés' {
-        $script:Configure | Should -Match [regex]::Escape(
+        $Pattern = [regex]::Escape(
             "'config', 'patch', '--file', `$PatchPath, '--dry-run', '--replace'"
         )
+        $script:Configure | Should -Match $Pattern
     }
 
     It 'applique le patch avec --replace après le dry-run' {
