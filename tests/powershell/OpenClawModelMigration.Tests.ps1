@@ -9,29 +9,38 @@ Describe 'Migration de flotte OpenClaw' {
         )
     }
 
-    It 'valide le patch avec --replace pour retirer les anciens IDs gérés' {
-        $Pattern = [regex]::Escape(
-            "'config', 'patch', '--file', `$PatchPath, '--dry-run', '--replace'"
-        )
-        $script:Configure | Should -Match $Pattern
+    It 'utilise --replace-path pour les chemins gérés du patch' {
+        $ProvidersPattern = [regex]::Escape("'--replace-path', 'models.providers'")
+        $AgentsPattern = [regex]::Escape("'--replace-path', 'agents.list'")
+        [regex]::Matches($script:Configure, $ProvidersPattern).Count | Should -Be 2
+        [regex]::Matches($script:Configure, $AgentsPattern).Count | Should -Be 2
     }
 
-    It 'applique le patch avec --replace après le dry-run' {
+    It 'n utilise jamais le flag --replace de config set sur config patch' {
+        $script:Configure | Should -Not -Match "'--replace'"
+    }
+
+    It 'valide le patch avant de l appliquer' {
         $DryRunIndex = $script:Configure.IndexOf(
-            "'config', 'patch', '--file', `$PatchPath, '--dry-run', '--replace'"
+            "'config', 'patch', '--file', `$PatchPath, '--dry-run',"
+        )
+        $FirstPatchIndex = $script:Configure.IndexOf(
+            "'config', 'patch', '--file', `$PatchPath,"
         )
         $ApplyIndex = $script:Configure.IndexOf(
-            "'config', 'patch', '--file', `$PatchPath, '--replace'"
+            "'config', 'patch', '--file', `$PatchPath,",
+            $DryRunIndex + 1
         )
         $DryRunIndex | Should -BeGreaterThan -1
-        $ApplyIndex | Should -BeGreaterThan -1
-        $DryRunIndex | Should -BeLessThan $ApplyIndex
+        $FirstPatchIndex | Should -Be $DryRunIndex
+        $ApplyIndex | Should -BeGreaterThan $DryRunIndex
     }
 
     It 'rend le remplacement explicite dans le dry-run pour l''opérateur' {
         $script:Configure | Should -Match 'Migration gérée:'
-        $script:Configure | Should -Match 'retirer les anciens IDs'
-        $script:Configure | Should -Match 'models\.providers\.\*\.models'
+        $script:Configure | Should -Match 'retirer les anciens providers et IDs'
+        $script:Configure | Should -Match 'models\.providers'
         $script:Configure | Should -Match 'agents\.list'
+        $script:Configure | Should -Match '--replace-path'
     }
 }
