@@ -291,7 +291,7 @@ def build_openclaw_patch(
                     "primary": qwen_multimodal_ref,
                     "fallbacks": [gemma_multimodal_ref],
                 },
-                "pdfMaxBytesMb": int(pdf_policy.get("max_bytes_mb", 50)),
+                "pdfMaxMb": int(pdf_policy.get("max_bytes_mb", 50)),
                 "pdfMaxPages": int(pdf_policy.get("max_pages_per_tool_call", 20)),
             },
             "list": agent_list,
