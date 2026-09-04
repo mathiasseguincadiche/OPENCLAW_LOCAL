@@ -23,12 +23,20 @@ def _enforce_nominal_skill_prompt_budget(patch: dict[str, Any]) -> None:
 
     OpenClaw 2026.9.x persists the authored roster canonically under
     ``agents.entries`` even when a legacy ``agents.list`` patch is accepted as an
-    input surface. An explicit ``agents.defaults.skills: []`` therefore provides
-    the durable fleet-wide no-skills baseline, while the explicit per-agent
-    ``skills: []`` values keep the submitted roster unambiguous during legacy-list
-    normalization. Future skills must be reintroduced deliberately per role and
-    pass the prompt-admission gate.
+    input surface. The no-skills allowlists remain explicit, and the global
+    ``skills.limits.maxSkillsPromptChars: 0`` budget is an independent final
+    backstop at prompt-render time. Future skills must be reintroduced
+    deliberately per role, relax this budget explicitly, and pass the
+    prompt-admission gate.
     """
+    skills = patch.setdefault("skills", {})
+    if not isinstance(skills, dict):
+        raise ValueError("Patch OpenClaw invalide: section skills non objet")
+    limits = skills.setdefault("limits", {})
+    if not isinstance(limits, dict):
+        raise ValueError("Patch OpenClaw invalide: skills.limits non objet")
+    limits["maxSkillsPromptChars"] = 0
+
     agents = patch.get("agents")
     if not isinstance(agents, dict):
         raise ValueError("Patch OpenClaw invalide: section agents absente")
