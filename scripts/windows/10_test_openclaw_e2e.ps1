@@ -304,12 +304,27 @@ function Get-AgentEntry {
         [Parameter(Mandatory)]$Config,
         [Parameter(Mandatory)][string]$AgentId
     )
-    $Entry = @($Config.agents.list | Where-Object { [string]$_.id -eq $AgentId }) |
-        Select-Object -First 1
-    if (-not $Entry) {
-        throw "Agent absent de la configuration OpenClaw: $AgentId"
+
+    # OpenClaw 2026.8.x persists the canonical keyed roster under agents.entries,
+    # while config patch still accepts legacy agents.list as an input surface.
+    $EntriesProperty = $Config.agents.PSObject.Properties['entries']
+    if ($EntriesProperty -and $EntriesProperty.Value) {
+        $EntryProperty = $EntriesProperty.Value.PSObject.Properties[$AgentId]
+        if ($EntryProperty -and $EntryProperty.Value) {
+            return $EntryProperty.Value
+        }
     }
-    return $Entry
+
+    $ListProperty = $Config.agents.PSObject.Properties['list']
+    if ($ListProperty -and $ListProperty.Value) {
+        $Entry = @($ListProperty.Value | Where-Object { [string]$_.id -eq $AgentId }) |
+            Select-Object -First 1
+        if ($Entry) {
+            return $Entry
+        }
+    }
+
+    throw "Agent absent de la configuration OpenClaw: $AgentId"
 }
 
 function Get-AgentPrimaryModelRef {
@@ -385,7 +400,8 @@ if ($DryRun) {
         Write-Host '[DRY-RUN] Qwen 3.5 -> Ollama; Gemma 3/Qwen Coder -> intel-vulkan; tool-call Qwen Coder/Vulkan obligatoire.'
     }
     Write-Host '[DRY-RUN] tool-calling via le modèle primaire réellement routé pour ingenieur-devops.'
-    Write-Host '[DRY-RUN] compatibilité CLI OpenClaw 2026.7.1-2: agent --agent/--model/--message.'
+    Write-Host '[DRY-RUN] compatibilité CLI OpenClaw verrouillée via runtime_versions.json: agent --agent/--model/--message.'
+    Write-Host '[DRY-RUN] roster canonique agents.entries supporté après migration OpenClaw 2026.8.x.'
     Write-Host '[DRY-RUN] succès agent validé sur status/meta.error/liveness et réponse attendue.'
     Write-Host '[DRY-RUN] outils fichiers via write/read; exec interactif interdit dans les probes unattended.'
     Write-Host '[DRY-RUN] heartbeat E2E toutes les 15 s pendant les appels OpenClaw.'
@@ -505,7 +521,7 @@ if (-not $GatewayReadiness.ready) {
 Write-Host 'E2E  PASS  Gateway readiness'
 
 $Evidence = [ordered]@{
-    schema_version = '1.6.0'
+    schema_version = '1.7.0'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     platform_root = $PlatformRoot
     backend = $Backend
