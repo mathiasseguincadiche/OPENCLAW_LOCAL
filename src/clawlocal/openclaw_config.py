@@ -121,9 +121,10 @@ def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
                 "id": model["runtime_id"],
                 "name": model["runtime_id"],
                 "input": list(model.get("input", ["text"])),
-                # The direct benchmark contract remains 8K. Full OpenClaw agents
-                # need a larger runtime window because the framework reserves
-                # compaction headroom before admitting system/tool/bootstrap input.
+                # The direct B580 benchmark remains 8K. The managed OpenClaw
+                # full-agent path uses the separately declared orchestration
+                # window so framework/system/tool overhead is not confused with
+                # benchmark promotion.
                 "contextWindow": context_tokens,
                 "contextTokens": context_tokens,
                 "params": {
@@ -303,9 +304,9 @@ def build_openclaw_patch(
             "providers": _model_providers(catalog, backends, backend_id),
         },
         "agents": {
-            # OpenClaw 2026.8.x canonicalizes multi-agent rosters under explicit
-            # ownership. Legacy default=true markers are incompatible with that
-            # mode and must not be emitted by the managed patch.
+            # OpenClaw 2026.9.x canonicalizes managed multi-agent rosters under
+            # explicit ownership. Legacy default=true markers are incompatible
+            # with that mode and must not be emitted by the managed patch.
             "ownership": "explicit",
             "defaults": {
                 # Preserve the former chef-operations default as an explicit
