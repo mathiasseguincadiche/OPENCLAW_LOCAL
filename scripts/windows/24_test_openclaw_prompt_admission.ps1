@@ -1,11 +1,20 @@
 [CmdletBinding()]
 param(
+    [switch]$DryRun,
     [string]$AgentId = 'chef-operations',
     [ValidateRange(30, 300)][int]$TimeoutSeconds = 120
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($DryRun) {
+    Write-Host '[DRY-RUN] Contrôle d admission du prompt full-agent OpenClaw.'
+    Write-Host "[DRY-RUN] Agent=$AgentId timeout=${TimeoutSeconds}s."
+    Write-Host '[DRY-RUN] Utiliser une session fraîche, thinking=off et une réponse déterministe.'
+    Write-Host '[DRY-RUN] Refuser toute meta.error, dont context_overflow, et persister la preuve JSON en exécution réelle.'
+    exit 0
+}
 
 function Get-PlatformRoot {
     if ($env:OPENCLAW_LOCAL_ROOT) {
