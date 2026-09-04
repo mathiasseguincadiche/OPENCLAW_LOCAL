@@ -7,6 +7,10 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $AgentsRoot = Join-Path $RepoRoot 'agents'
 $SharedRoot = Join-Path $AgentsRoot '_shared'
+$ContractPath = Join-Path $SharedRoot 'CONTRACT.md'
+$PedagogyPath = Join-Path $SharedRoot 'PEDAGOGY.md'
+$RuntimeContractPath = Join-Path $SharedRoot 'RUNTIME_CONTRACT.md'
+$BootstrapBudgetChars = 8000
 $AgentIds = @(
     'chef-operations',
     'expert-recherche',
@@ -28,10 +32,15 @@ function Get-PlatformRoot {
     return (Join-Path $env:LOCALAPPDATA 'OpenClawLocal')
 }
 
+foreach ($RequiredShared in @($ContractPath, $PedagogyPath, $RuntimeContractPath)) {
+    if (-not (Test-Path -LiteralPath $RequiredShared)) {
+        throw "Contrat partagé introuvable: $RequiredShared"
+    }
+}
+
 $PlatformRoot = Get-PlatformRoot
 $WorkspacesRoot = Join-Path $PlatformRoot 'workspaces'
-$Contract = Get-Content -Raw -LiteralPath (Join-Path $SharedRoot 'CONTRACT.md')
-$Pedagogy = Get-Content -Raw -LiteralPath (Join-Path $SharedRoot 'PEDAGOGY.md')
+$RuntimeContract = Get-Content -Raw -LiteralPath $RuntimeContractPath
 $Tools = Get-Content -Raw -LiteralPath (Join-Path $SharedRoot 'TOOLS.md')
 $Heartbeat = Get-Content -Raw -LiteralPath (Join-Path $SharedRoot 'HEARTBEAT.md')
 $UserTemplate = @'
@@ -57,23 +66,13 @@ foreach ($AgentId in $AgentIds) {
         throw "Workspace non géré déjà présent: $Workspace. Refus d'écrasement."
     }
 
-    if ($DryRun) {
-        Write-Host "[DRY-RUN] Déployer $AgentId -> $Workspace avec contrat pédagogique transversal"
-        continue
-    }
-
-    New-Item -ItemType Directory -Path $Workspace -Force | Out-Null
     $RoleAgents = Get-Content -Raw -LiteralPath (Join-Path $Source 'AGENTS.md')
+    $Soul = Get-Content -Raw -LiteralPath (Join-Path $Source 'SOUL.md')
+    $Identity = Get-Content -Raw -LiteralPath (Join-Path $Source 'IDENTITY.md')
     $MergedAgents = @"
-# Contrat global OPENCLAW_LOCAL
+# Contrat runtime OPENCLAW_LOCAL
 
-$Contract
-
----
-
-# Contrat pédagogique transversal obligatoire
-
-$Pedagogy
+$RuntimeContract
 
 ---
 
@@ -81,14 +80,46 @@ $Pedagogy
 
 $RoleAgents
 "@
+    $ManagedBootstrapChars = (
+        $MergedAgents.Length +
+        $Soul.Length +
+        $Identity.Length +
+        $UserTemplate.Length +
+        $Tools.Length +
+        $Heartbeat.Length
+    )
+    if ($ManagedBootstrapChars -gt $BootstrapBudgetChars) {
+        throw (
+            "Budget bootstrap OpenClaw dépassé pour ${AgentId}: " +
+            "$ManagedBootstrapChars > $BootstrapBudgetChars caractères."
+        )
+    }
+
+    if ($DryRun) {
+        Write-Host (
+            "[DRY-RUN] Déployer $AgentId -> $Workspace avec contrat runtime compact " +
+            "(${ManagedBootstrapChars}/${BootstrapBudgetChars} caractères injectés)"
+        )
+        continue
+    }
+
+    New-Item -ItemType Directory -Path $Workspace -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $Workspace 'AGENTS.md') -Value $MergedAgents -Encoding utf8
-    Copy-Item -LiteralPath (Join-Path $Source 'SOUL.md') -Destination (Join-Path $Workspace 'SOUL.md') -Force
-    Copy-Item -LiteralPath (Join-Path $Source 'IDENTITY.md') -Destination (Join-Path $Workspace 'IDENTITY.md') -Force
+    Set-Content -LiteralPath (Join-Path $Workspace 'SOUL.md') -Value $Soul -Encoding utf8
+    Set-Content -LiteralPath (Join-Path $Workspace 'IDENTITY.md') -Value $Identity -Encoding utf8
     Set-Content -LiteralPath (Join-Path $Workspace 'TOOLS.md') -Value $Tools -Encoding utf8
     Set-Content -LiteralPath (Join-Path $Workspace 'HEARTBEAT.md') -Value $Heartbeat -Encoding utf8
     Set-Content -LiteralPath (Join-Path $Workspace 'USER.md') -Value $UserTemplate -Encoding utf8
+
+    # Références complètes disponibles à la demande mais non auto-injectées par OpenClaw.
+    Copy-Item -LiteralPath $ContractPath -Destination (Join-Path $Workspace 'CONTRACT.md') -Force
+    Copy-Item -LiteralPath $PedagogyPath -Destination (Join-Path $Workspace 'PEDAGOGY.md') -Force
+
     Set-Content -LiteralPath $Marker -Value "managed_by=OPENCLAW_LOCAL`nagent=$AgentId" -Encoding utf8
-    Write-Host "OK  $AgentId déployé avec pédagogie transversale."
+    Write-Host (
+        "OK  $AgentId déployé: runtime compact + références complètes " +
+        "(${ManagedBootstrapChars}/${BootstrapBudgetChars} caractères injectés)."
+    )
 }
 
 exit 0
