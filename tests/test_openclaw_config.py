@@ -64,10 +64,13 @@ def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
     entries = _entries_by_id(patch)
     assert set(entries) == EXPECTED_AGENTS
     assert patch["gateway"] == {"mode": "local", "bind": "loopback"}
-    assert patch["agents"]["defaults"]["skipBootstrap"] is True
-    assert "compaction" not in patch["agents"]["defaults"]
-    assert patch["agents"]["defaults"]["pdfMaxMb"] == 50
-    assert patch["agents"]["defaults"]["pdfMaxPages"] == 20
+    defaults = patch["agents"]["defaults"]
+    assert defaults["skipBootstrap"] is True
+    assert defaults["bootstrapMaxChars"] == 6500
+    assert defaults["bootstrapTotalMaxChars"] == 8000
+    assert "compaction" not in defaults
+    assert defaults["pdfMaxMb"] == 50
+    assert defaults["pdfMaxPages"] == 20
     assert [entry["id"] for entry in patch["agents"]["list"] if entry.get("default")] == [
         "chef-operations"
     ]
