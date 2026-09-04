@@ -18,6 +18,11 @@ SUPPORTED_LOCAL_MODELS = {
     "devstral-devops",
 }
 
+RUNTIME_BOOTSTRAP_BUDGET_CHARS = 8000
+RUNTIME_CONTRACT_MAX_CHARS = 3000
+USER_TEMPLATE_ALLOWANCE_CHARS = 512
+RUNTIME_WRAPPER_ALLOWANCE_CHARS = 256
+
 REQUIRED_PEDAGOGY_MARKERS = (
     "Portée obligatoire",
     "accessible à un débutant",
@@ -31,6 +36,28 @@ REQUIRED_PEDAGOGY_MARKERS = (
     "learning_profile.json",
     "documentation_profile.json",
     "preuve pratique",
+)
+
+REQUIRED_RUNTIME_MARKERS = (
+    "route locale",
+    "fallback silencieux",
+    "preuve",
+    "validation humaine",
+    "intake/",
+    "source_coverage",
+    "web_evidence",
+    "runtime_evidence",
+    "accessible à un débutant",
+    "fausse simplification",
+    "ton infantilisant",
+    "Comprendre",
+    "Utiliser",
+    "Approfondir",
+    "Diagnostiquer",
+    "LEARNING_CONTRACT.json",
+    "preuve pratique",
+    "PEDAGOGY.md",
+    "CONTRACT.md",
 )
 
 REQUIRED_PHASE_MARKERS = (
@@ -66,6 +93,36 @@ def _check_true_flags(
             failures.append(f"{label}: {field} doit être true")
 
 
+def _validate_runtime_bootstrap_budget(
+    failures: list[str],
+    runtime_contract: str,
+) -> None:
+    tools = (SHARED / "TOOLS.md").read_text(encoding="utf-8")
+    heartbeat = (SHARED / "HEARTBEAT.md").read_text(encoding="utf-8")
+    for agent_id in AGENT_IDS:
+        root = ROOT / "agents" / agent_id
+        role_agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+        soul = (root / "SOUL.md").read_text(encoding="utf-8")
+        identity = (root / "IDENTITY.md").read_text(encoding="utf-8")
+        estimated_chars = sum(
+            (
+                len(runtime_contract),
+                len(role_agents),
+                len(soul),
+                len(identity),
+                len(tools),
+                len(heartbeat),
+                USER_TEMPLATE_ALLOWANCE_CHARS,
+                RUNTIME_WRAPPER_ALLOWANCE_CHARS,
+            )
+        )
+        if estimated_chars > RUNTIME_BOOTSTRAP_BUDGET_CHARS:
+            failures.append(
+                f"{agent_id}: bootstrap estimé {estimated_chars} caractères > "
+                f"{RUNTIME_BOOTSTRAP_BUDGET_CHARS}"
+            )
+
+
 def main() -> int:
     failures: list[str] = []
 
@@ -78,6 +135,22 @@ def main() -> int:
         for marker in REQUIRED_PEDAGOGY_MARKERS:
             if marker not in pedagogy_text:
                 failures.append(f"PEDAGOGY.md: exigence absente: {marker}")
+
+    runtime_contract_path = SHARED / "RUNTIME_CONTRACT.md"
+    if not runtime_contract_path.is_file():
+        failures.append("contrat runtime compact absent: agents/_shared/RUNTIME_CONTRACT.md")
+        runtime_contract = ""
+    else:
+        runtime_contract = runtime_contract_path.read_text(encoding="utf-8")
+        if len(runtime_contract) > RUNTIME_CONTRACT_MAX_CHARS:
+            failures.append(
+                "RUNTIME_CONTRACT.md: contrat runtime trop volumineux "
+                f"({len(runtime_contract)} > {RUNTIME_CONTRACT_MAX_CHARS} caractères)"
+            )
+        for marker in REQUIRED_RUNTIME_MARKERS:
+            if marker not in runtime_contract:
+                failures.append(f"RUNTIME_CONTRACT.md: invariant absent: {marker}")
+        _validate_runtime_bootstrap_budget(failures, runtime_contract)
 
     shared_contract = (SHARED / "CONTRACT.md").read_text(encoding="utf-8")
     for marker in (
@@ -192,22 +265,39 @@ def main() -> int:
     deploy = (ROOT / "scripts" / "windows" / "09_deploy_agents.ps1").read_text(
         encoding="utf-8"
     )
-    if "PEDAGOGY.md" not in deploy or "$Pedagogy" not in deploy:
-        failures.append("09_deploy_agents.ps1: PEDAGOGY.md doit être chargé")
+    for marker in (
+        "RUNTIME_CONTRACT.md",
+        "$RuntimeContract",
+        "$BootstrapBudgetChars = 8000",
+        "Budget bootstrap OpenClaw dépassé",
+        "CONTRACT.md",
+        "PEDAGOGY.md",
+    ):
+        if marker not in deploy:
+            failures.append(f"09_deploy_agents.ps1: verrou runtime absent: {marker}")
+
     merged_marker = '$MergedAgents = @"'
     if merged_marker not in deploy:
         failures.append("09_deploy_agents.ps1: assemblage AGENTS.md introuvable")
     else:
-        merged = deploy.split(merged_marker, 1)[1]
-        contract_pos = merged.find("$Contract")
-        pedagogy_pos = merged.find("$Pedagogy")
+        merged = deploy.split(merged_marker, 1)[1].split(
+            "Set-Content -LiteralPath (Join-Path $Workspace 'AGENTS.md')", 1
+        )[0]
+        runtime_pos = merged.find("$RuntimeContract")
         role_pos = merged.find("$RoleAgents")
-        if min(contract_pos, pedagogy_pos, role_pos) < 0:
-            failures.append("09_deploy_agents.ps1: couches de prompt incomplètes")
-        elif not contract_pos < pedagogy_pos < role_pos:
+        if min(runtime_pos, role_pos) < 0:
+            failures.append("09_deploy_agents.ps1: couches runtime/rôle incomplètes")
+        elif not runtime_pos < role_pos:
+            failures.append("09_deploy_agents.ps1: ordre attendu runtime compact -> rôle")
+        if "$Pedagogy" in merged or "$Contract" in merged:
             failures.append(
-                "09_deploy_agents.ps1: ordre attendu contrat -> pédagogie -> rôle"
+                "09_deploy_agents.ps1: contrats complets ne doivent plus être auto-injectés"
             )
+
+    if "Copy-Item -LiteralPath $ContractPath" not in deploy:
+        failures.append("09_deploy_agents.ps1: référence CONTRACT.md non déployée")
+    if "Copy-Item -LiteralPath $PedagogyPath" not in deploy:
+        failures.append("09_deploy_agents.ps1: référence PEDAGOGY.md non déployée")
 
     for agent_id in AGENT_IDS:
         if f"'{agent_id}'" not in deploy:
@@ -289,7 +379,8 @@ def main() -> int:
         return 1
 
     print("Transversal Pedagogy Gate: CONFORME")
-    print("- 8 agents: contrat pédagogique obligatoire injecté avant le contrat de rôle")
+    print("- 8 agents: contrat runtime compact injecté; contrats complets disponibles à la demande")
+    print("- bootstrap géré: <= 8000 caractères par agent pour le contexte nominal 8K")
     print("- 3 modèles locaux: Qwen 3.5 9B, Gemma 3 12B, Qwen 2.5 Coder 14B")
     print("- Ministral 3 14B reste challenger de benchmark hors routage")
     print("- escalade cloud explicite: même contrat pédagogique conservé au niveau agent")

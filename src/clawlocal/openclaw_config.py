@@ -279,6 +279,11 @@ def build_openclaw_patch(
         "agents": {
             "defaults": {
                 "skipBootstrap": True,
+                # OpenClaw 2026.8.2 reserves half of an 8K window for small-context
+                # compaction headroom. Keep managed bootstrap material well below
+                # that remaining prompt budget and fail closed in the deploy script.
+                "bootstrapMaxChars": 6500,
+                "bootstrapTotalMaxChars": 8000,
                 "model": {
                     "primary": qwen_text_ref,
                     "fallbacks": [gemma_text_ref],
