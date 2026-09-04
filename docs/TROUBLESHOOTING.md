@@ -16,6 +16,8 @@ Le nom `devstral-devops` est un alias de compatibilité. Le runtime réel est Qw
 
 Le contexte nominal OpenClaw est **8192 tokens**. Le 16K n'est pas un contexte nominal garanti ; il reste une cible de qualification.
 
+Le runtime OpenClaw supporté est **2026.8.2**. Après un `git pull` qui modifie `runtime_versions.json`, exécuter `install-core` avant de reconfigurer OpenClaw.
+
 ## 1. Vérification minimale
 
 Depuis la racine du dépôt :
@@ -24,6 +26,7 @@ Depuis la racine du dépôt :
 .\menu.ps1 -Action logs
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
+openclaw --version
 openclaw config validate --json
 openclaw agents list --json
 openclaw gateway status --require-rpc --json
@@ -45,6 +48,7 @@ Correction :
 ```powershell
 .\menu.ps1 -Action models -DryRun
 .\menu.ps1 -Action models
+.\menu.ps1 -Action install-core
 .\menu.ps1 -Action configure-openclaw -DryRun
 .\menu.ps1 -Action configure-openclaw
 .\menu.ps1 -Action audit
@@ -55,7 +59,46 @@ Ne recopier jamais un ancien `qualified_model_identity.json` vers la nouvelle fl
 
 Les anciens modèles peuvent être supprimés ultérieurement avec les outils Ollama après vérification que rien ne les référence encore. La migration ne doit pas détruire automatiquement des preuves ou artefacts historiques.
 
-## 3. `OLLAMA_MODELS` pointe au mauvais endroit
+## 3. Runtime OpenClaw inattendu
+
+Symptôme : `configure-openclaw` ou `e2e` refuse de continuer parce que `openclaw --version` ne correspond pas au lock.
+
+Correction :
+
+```powershell
+.\menu.ps1 -Action install-core
+openclaw --version
+.\menu.ps1 -Action configure-openclaw -DryRun
+```
+
+Le runtime est volontairement fail-closed. Ne modifier pas le lock localement pour contourner le contrôle.
+
+## 4. `context_overflow` avant tout appel Ollama
+
+Symptôme observé avec OpenClaw `2026.7.1-2` :
+
+```text
+kind=context_overflow
+message=Context overflow: prompt too large for the model (precheck).
+```
+
+Lorsque l'erreur revient presque immédiatement au niveau **precheck**, avant une génération Ollama, ne conclure pas que Qwen 3.5 9B ou le contexte 8K sont trop petits. La version `2026.7.1-2` a été retirée du lock après ce comportement ; le runtime supporté est `2026.8.2`.
+
+Reprise :
+
+```powershell
+.\menu.ps1 -Action install-core
+openclaw --version
+.\menu.ps1 -Action configure-openclaw -DryRun
+.\menu.ps1 -Action configure-openclaw
+.\menu.ps1 -Action e2e -DryRun
+```
+
+Attendu : `openclaw --version` contient `2026.8.2`.
+
+Le patch garde **8192** pour `contextWindow`, `contextTokens` et `num_ctx`. Il ne réactive pas les anciens overrides `reserveTokens`/`reserveTokensFloor`. Si le provider Ollama réel retourne ensuite un vrai dépassement de contexte, conserver cette nouvelle preuve et diagnostiquer le volume de prompt avant toute décision de passage à 16K.
+
+## 5. `OLLAMA_MODELS` pointe au mauvais endroit
 
 Afficher :
 
@@ -78,7 +121,7 @@ Reconfigurer :
 
 Puis rouvrir PowerShell si une variable utilisateur vient d'être modifiée.
 
-## 4. Ollama n'est pas joignable
+## 6. Ollama n'est pas joignable
 
 Tester le loopback :
 
@@ -94,7 +137,7 @@ Si l'API échoue :
 4. exécuter `audit` puis `configure-local` ;
 5. ne pas lancer la qualification tant que `/api/tags` ne répond pas.
 
-## 5. Un modèle requis est absent
+## 7. Un modèle requis est absent
 
 ```powershell
 ollama list
@@ -105,7 +148,7 @@ Les trois runtimes attendus sont exactement ceux du catalogue. Aucun quatrième 
 
 Si `ollama pull` échoue, conserver l'erreur réseau/disque et corriger la cause ; ne pas modifier le catalogue pour contourner le téléchargement.
 
-## 6. OpenClaw utilise encore un ancien modèle
+## 8. OpenClaw utilise encore un ancien modèle
 
 Régénérer la configuration :
 
@@ -118,7 +161,9 @@ openclaw agents list --json
 
 Le patch est généré depuis `config/v1/model_catalog.yaml` et `model_routing.yaml`. Ne pas corriger manuellement `openclaw.json` comme solution durable.
 
-## 7. Gateway indisponible
+OpenClaw 2026.8.x peut persister le roster canonique sous `agents.entries` même si le patch est fourni via `agents.list`. Le E2E supporte les deux représentations.
+
+## 9. Gateway indisponible
 
 ```powershell
 openclaw gateway status --require-rpc --json
@@ -132,7 +177,7 @@ Puis examiner :
 
 Le E2E exige le transport Gateway réel. Un fallback vers un transport embedded n'est pas considéré comme une réussite.
 
-## 8. `verify` répond mais la VRAM semble étrange
+## 10. `verify` répond mais la VRAM semble étrange
 
 `verify` peut afficher la taille totale du modèle et la partie réellement chargée en VRAM via `/api/ps`.
 
@@ -144,7 +189,7 @@ Invoke-RestMethod http://127.0.0.1:11434/api/ps
 
 L'objectif de la nouvelle flotte Q4_K_M est de réduire la pression mémoire observée avec les anciens 24–27B. Cette amélioration doit néanmoins être mesurée, pas supposée.
 
-## 9. Le spécialiste DevOps ne traite pas directement une image
+## 11. Le spécialiste DevOps ne traite pas directement une image
 
 C'est normal. `devstral-devops` / Qwen 2.5 Coder 14B est text-only.
 
@@ -160,7 +205,7 @@ PDF/image
 
 Si une tâche demande au spécialiste d'interpréter directement une image, corriger le workflow plutôt que d'ajouter artificiellement `image` à son contrat.
 
-## 10. E2E agent ou tool-calling en échec
+## 12. E2E agent ou tool-calling en échec
 
 ```powershell
 .\menu.ps1 -Action e2e -DryRun
@@ -171,6 +216,7 @@ Le script écrit un diagnostic JSON dans `proofs` lorsqu'un payload applicatif e
 
 Vérifier :
 
+- version OpenClaw conforme au lock ;
 - modèle primaire réellement configuré ;
 - provider attendu ;
 - absence de fallback transport/provider ;
@@ -181,7 +227,7 @@ Vérifier :
 
 Ne considérer aucune réponse textuelle « ça a marché » comme preuve si le fichier ou l'artefact attendu n'existe pas réellement.
 
-## 11. Backend SYCL ne charge pas un modèle
+## 13. Backend SYCL ne charge pas un modèle
 
 Prévisualiser puis installer :
 
@@ -206,7 +252,7 @@ ou :
 
 Le diagnostic distingue notamment full-offload, auto-offload et CPU-only. Conserver stdout/stderr et le JSON de preuve.
 
-## 12. Backend Vulkan géré ne charge pas Gemma/Qwen Coder
+## 14. Backend Vulkan géré ne charge pas Gemma/Qwen Coder
 
 ```powershell
 .\menu.ps1 -Action intel-vulkan-setup -DryRun
@@ -218,7 +264,7 @@ Le profil géré attend exactement les deux modèles textuels routés vers Vulka
 
 Avant Vulkan, le serveur SYCL suivi est arrêté pour éviter une contention de VRAM. Si un autre processus GPU consomme la mémoire, l'identifier avant de conclure à un défaut du modèle.
 
-## 13. Profil hybride incohérent
+## 15. Profil hybride incohérent
 
 Routage attendu :
 
@@ -244,7 +290,7 @@ Rollback immédiat :
 .\menu.ps1 -Action intel-vulkan-stop
 ```
 
-## 14. Qualification HARD-40M échoue
+## 16. Qualification HARD-40M échoue
 
 La qualification reste fail-closed. Ne modifier ni les seuils ni le nombre de cas pour transformer un échec en succès.
 
@@ -269,13 +315,13 @@ Classer l'échec :
 
 Le 16K est un stress qualifiant. Un échec 16K ne doit pas conduire à configurer OpenClaw nominalement en 16K.
 
-## 15. Qwen native thinking atteint la limite
+## 17. Qwen native thinking atteint la limite
 
 Les trois probes Qwen natifs restent bornés à 1024 tokens dans le protocole actif. Atteindre la borne reste une troncature et un échec.
 
 Si cela arrive avec la nouvelle flotte, inspecter la sortie, `done_reason`, `eval_count`, temps mural et volume de thinking. Ne relever pas automatiquement la limite sans diagnostic et justification.
 
-## 16. Anciennes preuves après migration
+## 18. Anciennes preuves après migration
 
 Les preuves produites avec les anciens modèles 24–27B sont conservées comme historique de la décision de right-sizing. Elles peuvent expliquer pourquoi la flotte a changé, mais elles ne valent pas :
 
@@ -286,7 +332,7 @@ Les preuves produites avec les anciens modèles 24–27B sont conservées comme 
 
 Toute nouvelle attestation doit référencer les nouveaux digests/quantifications.
 
-## 17. Projet bloqué
+## 19. Projet bloqué
 
 Afficher l'état :
 
@@ -296,13 +342,13 @@ python .\scripts\32_orchestrate_project.py --project <id> --action status
 
 Vérifier les phases, clarifications, tentatives, `source_coverage`, Artifact Exchange et preuves de validation. Une clarification humaine ne doit pas être contournée par une réponse inventée.
 
-## 18. Document illisible ou ingestion incomplète
+## 20. Document illisible ou ingestion incomplète
 
 Un document `UNREADABLE`, un index périmé ou une `source_coverage` incomplète bloque l'analyse. Corriger l'ingestion ou déclarer explicitement l'information manquante.
 
 Ne jamais présenter un PDF scanné comme « lu » si seule une extraction vide a été obtenue.
 
-## 19. Cloud refusé
+## 21. Cloud refusé
 
 Un refus est normal si une précondition manque. Vérifier :
 
@@ -316,19 +362,26 @@ Un refus est normal si une précondition manque. Vérifier :
 
 Le cloud n'est pas un mécanisme de haute disponibilité automatique.
 
-## 20. Collecter un support bundle
+## 22. Collecter un support bundle
 
 Utiliser les scripts de support du dépôt et joindre uniquement les preuves nécessaires après redaction des secrets. Les prompts, réponses et documents privés ne doivent pas être inclus par défaut.
 
-## 21. Ordre de reprise recommandé
+## 23. Ordre de reprise recommandé
 
-Après correction d'un incident de modèle/backend :
+Après correction d'un incident de runtime/modèle/backend :
 
 ```powershell
-.\menu.ps1 -Action audit
-.\menu.ps1 -Action verify
+.\menu.ps1 -Action install-core
 .\menu.ps1 -Action configure-openclaw -DryRun
 .\menu.ps1 -Action configure-openclaw
+.\menu.ps1 -Action audit
+.\menu.ps1 -Action verify
+.\menu.ps1 -Action e2e -DryRun
+```
+
+Puis lancer le E2E réel uniquement si tous ces prérequis sont sains :
+
+```powershell
 .\menu.ps1 -Action e2e
 ```
 
