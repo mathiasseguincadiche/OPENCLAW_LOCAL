@@ -24,13 +24,15 @@ Describe 'Régression OpenClaw context precheck local' {
         )
     }
 
-    It 'retire le runtime OpenClaw 2026.7.1-2 concerné par le faux precheck' {
-        [string]$script:Runtime.openclaw.preferred | Should -Be '2026.8.2'
+    It 'verrouille la stable OpenClaw 2026.9.1 et son artefact npm exact' {
+        [string]$script:Runtime.openclaw.preferred | Should -Be '2026.9.1'
         [string]$script:Runtime.openclaw.integrity | Should -Be (
-            'sha512-I9aqK1attaONePpWs2gPqh23s1s1EDcN/' +
-            '6icF2AAfONdtowu4156QD7g6oD7KlA2vQ9yiqnvlAVH6yduvGH9Ig=='
+            'sha512-0Ve0631CdgkJDwd4NNG1BawIdF5yCL2sO+Tts8amStw+H6vKURTj0K4r' +
+            'Oa4+hFpJk1Dnw5LyKl5twzwX1VtA2w=='
         )
-        [string]$script:Runtime.openclaw.plugins.parallel.preferred | Should -Be '2026.8.2'
+        [string]$script:Runtime.openclaw.release_sha |
+            Should -Be 'ad6fe23aecb9b833d68139b0ddc9f239b894d2f1'
+        [string]$script:Runtime.openclaw.plugins.parallel.preferred | Should -Be '2026.9.1'
     }
 
     It 'reste fail-closed sur la version runtime avant de muter OpenClaw' {
@@ -80,7 +82,7 @@ Describe 'Régression OpenClaw context precheck local' {
         $script:Admission | Should -Match 'Contrôle d admission OpenClaw refusé'
     }
 
-    It 'lit le roster canonique 2026.8.x tout en gardant la compatibilité list' {
+    It 'lit le roster canonique 2026.9.x tout en gardant la compatibilité list' {
         $script:E2E | Should -Match "PSObject\.Properties\['entries'\]"
         $script:E2E | Should -Match "PSObject\.Properties\['list'\]"
         $script:E2E | Should -Match 'roster canonique agents\.entries'

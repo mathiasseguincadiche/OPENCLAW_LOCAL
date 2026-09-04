@@ -83,9 +83,11 @@ $RuntimeContract
 $RoleAgents
 "@
 
-    # OpenClaw injecte encore AGENTS.md et TOOLS.md. SOUL/USER/HEARTBEAT/IDENTITY
-    # restent matérialisés dans le workspace, mais le patch 2026.8.2 les exclut
-    # explicitement de l'injection automatique pour économiser le budget prompt.
+    # OpenClaw 2026.9.1 injecte encore AGENTS.md et TOOLS.md. SOUL/USER/
+    # HEARTBEAT/IDENTITY restent matérialisés dans le workspace, mais le patch
+    # géré les exclut explicitement de l'injection automatique pour économiser
+    # le budget prompt. Les skill cards nominales sont également désactivées
+    # explicitement par le renderer final.
     $InjectedBootstrapChars = $MergedAgents.Length + $Tools.Length
     if ($MergedAgents.Length -gt $BootstrapFileBudgetChars) {
         throw (

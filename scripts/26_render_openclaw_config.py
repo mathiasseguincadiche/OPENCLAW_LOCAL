@@ -21,7 +21,7 @@ def _activate_repository_sources() -> None:
 def _enforce_nominal_skill_prompt_budget(patch: dict[str, Any]) -> None:
     """Keep OpenClaw skill cards out of the nominal local-agent system prompt.
 
-    OpenClaw 2026.8.x treats an explicit per-agent ``skills: []`` as "no
+    OpenClaw 2026.9.x treats an explicit per-agent ``skills: []`` as "no
     skills", while omitting the field means unrestricted/inherited skills.
     OPENCLAW_LOCAL already grants capabilities explicitly through the bounded
     tool policy and role contracts, so advertising unrelated skill cards only
