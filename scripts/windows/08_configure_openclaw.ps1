@@ -226,7 +226,8 @@ if ($DryRun) {
         Write-Host '[DRY-RUN] Contexte nominal B580: 8192 tokens; 16384 reste un contexte de qualification.'
         Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
     }
-    Write-Host '[DRY-RUN] Vérifier/installer Parallel, déployer 8 agents, capturer le schéma vivant, valider le patch puis l''appliquer.'
+    Write-Host '[DRY-RUN] Migration gérée: les listes contractuelles OpenClaw (dont models.providers.*.models et agents.list) sont remplacées intentionnellement avec --replace afin de retirer les anciens IDs.'
+    Write-Host '[DRY-RUN] Vérifier/installer Parallel, déployer 8 agents, capturer le schéma vivant, valider le patch avec --replace puis l''appliquer.'
     exit 0
 }
 
@@ -278,12 +279,12 @@ Invoke-Checked -Command $Python -Arguments @(
 ) -Description 'Génération du patch OpenClaw'
 
 Invoke-Checked -Command $OpenClaw -Arguments @(
-    'config', 'patch', '--file', $PatchPath, '--dry-run'
-) -Description 'Validation dry-run du patch OpenClaw'
+    'config', 'patch', '--file', $PatchPath, '--dry-run', '--replace'
+) -Description 'Validation dry-run du patch OpenClaw avec remplacement des listes gérées'
 
 Invoke-Checked -Command $OpenClaw -Arguments @(
-    'config', 'patch', '--file', $PatchPath
-) -Description 'Application du patch OpenClaw'
+    'config', 'patch', '--file', $PatchPath, '--replace'
+) -Description 'Application du patch OpenClaw avec remplacement des listes gérées'
 
 Invoke-Checked -Command $OpenClaw -Arguments @(
     'config', 'validate', '--json'
