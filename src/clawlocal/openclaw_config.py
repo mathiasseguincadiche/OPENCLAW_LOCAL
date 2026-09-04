@@ -9,6 +9,7 @@ SUPPORTED_BACKENDS = ("ollama-vulkan", "llama-cpp-sycl", "b580-hybrid")
 INTEL_SYCL_PROVIDER_ID = "intel-sycl"
 INTEL_VULKAN_PROVIDER_ID = "intel-vulkan"
 SYSTEM_AGENT_ID = "chef-operations"
+OPTIONAL_BOOTSTRAP_FILES = ["SOUL.md", "USER.md", "HEARTBEAT.md", "IDENTITY.md"]
 
 
 def _runtime_id(model: dict[str, Any], backend_id: str) -> str:
@@ -85,19 +86,44 @@ def _agent_tools(
     return tools
 
 
+def _openclaw_agent_context_tokens(
+    catalog: dict[str, Any],
+    model: dict[str, Any],
+) -> int:
+    policy = catalog.get("policy", {})
+    nominal = int(model.get("nominal_context_tokens", 8192))
+    context_tokens = int(
+        model.get(
+            "openclaw_agent_context_tokens",
+            policy.get("openclaw_agent_context_tokens", nominal),
+        )
+    )
+    if context_tokens < nominal:
+        raise ValueError(
+            "Le contexte d'orchestration OpenClaw ne peut pas être inférieur au contexte nominal"
+        )
+    declared = {int(value) for value in model.get("qualification_context_tokens", [])}
+    if context_tokens != nominal and context_tokens not in declared:
+        raise ValueError(
+            "Le contexte d'orchestration OpenClaw doit être un contexte de qualification déclaré"
+        )
+    return context_tokens
+
+
 def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
     models: list[dict[str, Any]] = []
     for model in catalog["models"].values():
         if model["provider"] != "ollama":
             continue
-        context_tokens = int(model.get("nominal_context_tokens", 8192))
+        context_tokens = _openclaw_agent_context_tokens(catalog, model)
         models.append(
             {
                 "id": model["runtime_id"],
                 "name": model["runtime_id"],
                 "input": list(model.get("input", ["text"])),
-                # Keep both fields explicit. OpenClaw uses contextWindow as the
-                # model capacity signal and contextTokens as the active-input cap.
+                # The direct benchmark contract remains 8K. Full OpenClaw agents
+                # need a larger runtime window because the framework reserves
+                # compaction headroom before admitting system/tool/bootstrap input.
                 "contextWindow": context_tokens,
                 "contextTokens": context_tokens,
                 "params": {
@@ -287,9 +313,10 @@ def build_openclaw_patch(
                 "systemAgent": {"agentId": SYSTEM_AGENT_ID},
                 "sessionStore": {"agentId": SYSTEM_AGENT_ID},
                 "skipBootstrap": True,
-                # OpenClaw 2026.8.2 reserves half of an 8K window for small-context
-                # compaction headroom. Keep managed bootstrap material well below
-                # that remaining prompt budget and fail closed in the deploy script.
+                # These files remain present in every managed workspace but are
+                # not automatically injected. Their normative runtime content is
+                # already represented by AGENTS.md + the compact runtime contract.
+                "skipOptionalBootstrapFiles": OPTIONAL_BOOTSTRAP_FILES,
                 "bootstrapMaxChars": 6500,
                 "bootstrapTotalMaxChars": 8000,
                 "model": {
@@ -311,6 +338,14 @@ def build_openclaw_patch(
         },
         "tools": {
             "profile": tool_policy["security_defaults"]["profile"],
+            # Structured Tool Search keeps the authorized catalog reachable while
+            # deferring non-core schemas until an agent actually needs them.
+            "toolSearch": {
+                "enabled": True,
+                "mode": "tools",
+                "searchDefaultLimit": 5,
+                "maxSearchLimit": 10,
+            },
             "fs": {
                 "workspaceOnly": bool(
                     tool_policy["security_defaults"]["fs_workspace_only"]
