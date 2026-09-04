@@ -11,7 +11,8 @@ $ContractPath = Join-Path $SharedRoot 'CONTRACT.md'
 $PedagogyPath = Join-Path $SharedRoot 'PEDAGOGY.md'
 $RuntimeContractPath = Join-Path $SharedRoot 'RUNTIME_CONTRACT.md'
 $BootstrapFileBudgetChars = 6500
-$BootstrapTotalBudgetChars = 8000
+$BootstrapBudgetChars = 8000
+$BootstrapTotalBudgetChars = $BootstrapBudgetChars
 $AgentIds = @(
     'chef-operations',
     'expert-recherche',
