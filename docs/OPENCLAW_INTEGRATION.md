@@ -16,6 +16,19 @@
 - `agents/*` : identité et contrat des huit rôles ;
 - `src/clawlocal/openclaw_config.py` : génération du patch OpenClaw.
 
+## Runtime OpenClaw verrouillé
+
+Le runtime supporté est **OpenClaw 2026.8.2** avec le plugin Parallel aligné sur **2026.8.2**. Cette montée remplace `2026.7.1-2`, qui a produit sur la workstation B580 un faux `context_overflow` pendant le précheck local avant tout appel Ollama.
+
+Après une modification du lock runtime, exécuter d'abord :
+
+```powershell
+.\menu.ps1 -Action install-core
+openclaw --version
+```
+
+`configure-openclaw` vérifie ensuite la version verrouillée avant toute mutation. Il ne doit pas compenser une dérive de runtime en modifiant silencieusement les seuils de contexte ou de qualification.
+
 ## Flotte locale active
 
 Les alias logiques restent stables afin de préserver les contrats, workspaces et états existants, mais leurs runtimes sont dimensionnés pour l'Intel Arc B580 12 Go :
@@ -30,7 +43,11 @@ devstral-devops   -> ollama/qwen2.5-coder:14b-instruct-q4_K_M
 
 ## Contrat de contexte
 
-Le contexte nominal OpenClaw est volontairement fixé à **8192 tokens** pour les trois modèles. Le 16K reste une cible de stress dans la qualification matérielle ; il n'est pas promu en contexte nominal sans preuve réelle de stabilité, latence et consommation mémoire.
+Le contexte nominal OpenClaw reste volontairement fixé à **8192 tokens** pour les trois modèles. Le patch déclare explicitement `contextWindow=8192`, `contextTokens=8192` et `num_ctx=8192` sur Ollama afin que capacité déclarée, budget actif et runtime soient cohérents.
+
+Le 16K reste une cible de stress dans la qualification matérielle ; il n'est pas promu en contexte nominal sans preuve réelle de stabilité, latence et consommation mémoire. Le passage à OpenClaw 2026.8.2 ne constitue donc **pas** une augmentation de contexte pour fabriquer un PASS.
+
+Les anciens overrides `compaction.reserveTokens` et `reserveTokensFloor` ne font plus partie du contrat courant et ne sont plus générés.
 
 ## Contrat multimodal
 
@@ -43,15 +60,21 @@ Aucun document privé n'est envoyé automatiquement à un provider cloud.
 
 ## Contrat de schéma OpenClaw
 
-La configuration est générée pour la version OpenClaw verrouillée dans `config/v1/runtime_versions.json`. Les huit rôles sont matérialisés dans :
+Le générateur produit encore le roster sous la surface d'entrée compatible :
 
 ```text
 agents.list[]
 ```
 
-Chaque entrée contient notamment son `id`, son workspace, son modèle et sa politique d'outils. `chef-operations` est explicitement l'agent par défaut.
+OpenClaw 2026.8.x peut persister ce roster sous sa représentation canonique :
 
-Une montée de version OpenClaw est un changement de contrat : mettre à jour le lock, examiner le schéma vivant, adapter le générateur puis repasser CI, dry-run et E2E.
+```text
+agents.entries.<agent-id>
+```
+
+Le E2E accepte les deux représentations pour lire l'état, sans modifier le nombre ni l'identité des huit agents. Chaque agent conserve son workspace, son modèle et sa politique d'outils ; `chef-operations` reste l'agent par défaut.
+
+Une montée de version OpenClaw est un changement de contrat : mettre à jour le lock et son intégrité, examiner le schéma vivant, adapter le générateur puis repasser CI, dry-run et E2E.
 
 ## Générer et appliquer la configuration
 
@@ -63,14 +86,23 @@ Une montée de version OpenClaw est un changement de contrat : mettre à jour le
 Le parcours :
 
 1. vérifie le backend sélectionné ;
-2. crée la baseline OpenClaw si nécessaire ;
-3. capture le schéma vivant avec `openclaw config schema` ;
-4. déploie les huit workspaces gérés ;
-5. génère le patch depuis les contrats ;
-6. exécute `openclaw config patch --dry-run` ;
-7. applique le patch uniquement si la validation réussit ;
-8. exécute `openclaw config validate --json` ;
-9. vérifie `openclaw agents list --json`.
+2. exige la version OpenClaw verrouillée ;
+3. converge le plugin Parallel vers sa version verrouillée ;
+4. crée la baseline OpenClaw si nécessaire ;
+5. capture le schéma vivant avec `openclaw config schema` ;
+6. déploie les huit workspaces gérés ;
+7. génère le patch depuis les contrats ;
+8. exécute `openclaw config patch --dry-run` ;
+9. applique le patch uniquement si la validation réussit ;
+10. exécute `openclaw config validate --json` ;
+11. vérifie `openclaw agents list --json`.
+
+Les listes gérées sont remplacées intentionnellement via :
+
+```text
+--replace-path models.providers
+--replace-path agents.list
+```
 
 Le patch nominal configure notamment :
 
@@ -79,6 +111,7 @@ Le patch nominal configure notamment :
 - exactement trois modèles locaux ;
 - contexte nominal 8192 ;
 - huit agents ;
+- `experimental.localModelLean=true` pour les agents locaux ;
 - `tools.fs.workspaceOnly=true` ;
 - `tools.exec.mode=ask` ;
 - elevated désactivé ;
@@ -148,6 +181,8 @@ La migration de flotte **invalide toute conclusion de performance antérieure** 
 ```
 
 Le test doit prouver les huit agents, le provider local attendu, le modèle primaire conforme au catalogue, le vrai tool-calling, la réparation après erreur d'outil, la stabilité et l'absence de dépendance cloud nominale.
+
+Un `context_overflow` issu du **provider réel** après le précheck corrigé reste un échec matériel/runtime à diagnostiquer. Il ne doit pas être masqué par une hausse automatique de `contextTokens`.
 
 ## Promotion
 
