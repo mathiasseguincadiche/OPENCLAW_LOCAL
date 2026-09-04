@@ -97,7 +97,7 @@ $RoleAgents
 
     if ($DryRun) {
         Write-Host (
-            "[DRY-RUN] Déployer $AgentId -> $Workspace avec contrat runtime compact " +
+            "[DRY-RUN] Déployer $AgentId -> $Workspace avec pédagogie transversale compacte " +
             "(${ManagedBootstrapChars}/${BootstrapBudgetChars} caractères injectés)"
         )
         continue
@@ -117,7 +117,7 @@ $RoleAgents
 
     Set-Content -LiteralPath $Marker -Value "managed_by=OPENCLAW_LOCAL`nagent=$AgentId" -Encoding utf8
     Write-Host (
-        "OK  $AgentId déployé: runtime compact + références complètes " +
+        "OK  $AgentId déployé: pédagogie transversale compacte + références complètes " +
         "(${ManagedBootstrapChars}/${BootstrapBudgetChars} caractères injectés)."
     )
 }
