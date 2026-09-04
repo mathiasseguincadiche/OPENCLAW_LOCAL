@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $DeployScript = Join-Path $PSScriptRoot '09_deploy_agents.ps1'
+$PromptAdmissionScript = Join-Path $PSScriptRoot '24_test_openclaw_prompt_admission.ps1'
 $Renderer = Join-Path $RepoRoot 'scripts\26_render_openclaw_config.py'
 $RuntimeLockPath = Join-Path $RepoRoot 'config\v1\runtime_versions.json'
 $LegacyStateMigration = Join-Path $PSScriptRoot 'lib\openclaw_legacy_state.ps1'
@@ -254,14 +255,19 @@ if ($DryRun) {
     Write-Host "Workspaces : $(Join-Path $PlatformRoot 'workspaces')"
     Write-Host "Patch      : $PatchPath"
     Write-Host "Schema     : $SchemaPath"
-    if ($Backend -eq 'llama-cpp-sycl') {
+    if ($Backend -eq 'ollama-vulkan') {
+        Write-Host '[DRY-RUN] Benchmark direct B580 inchangé à 8192; orchestration OpenClaw nominale à 16384 pour absorber réserve, système et outils.'
+        Write-Host '[DRY-RUN] Tool Search structuré + profils minimaux par rôle réduisent les schémas injectés.'
+        Write-Host '[DRY-RUN] Après application, contrôler réellement l admission des trois familles de modèles avant PASS.'
+    }
+    elseif ($Backend -eq 'llama-cpp-sycl') {
         Write-Host '[DRY-RUN] Exiger le routeur Intel SYCL prêt avec les trois modèles; texte -> intel-sycl; image/PDF -> Ollama.'
         Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
     }
     elseif ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Exiger Ollama + routeur Intel Vulkan géré prêt.'
         Write-Host '[DRY-RUN] Routage texte: Qwen 3.5 -> Ollama; Gemma 3 + Qwen Coder -> intel-vulkan; image/PDF -> Ollama.'
-        Write-Host '[DRY-RUN] Contexte nominal B580: 8192 tokens; 16384 reste un contexte de qualification.'
+        Write-Host '[DRY-RUN] Contexte de benchmark B580: 8192 tokens; les backends candidats restent soumis à qualification.'
         Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
     }
     Write-Host '[DRY-RUN] Exiger la version OpenClaw verrouillée avant toute mutation de configuration.'
@@ -340,6 +346,22 @@ Invoke-Checked -Command $OpenClaw -Arguments @(
 Invoke-Checked -Command $OpenClaw -Arguments @(
     'agents', 'list', '--json'
 ) -Description 'Lecture de la flotte OpenClaw'
+
+if ($Backend -eq 'ollama-vulkan') {
+    if (-not (Test-Path -LiteralPath $PromptAdmissionScript)) {
+        throw "Contrôle d admission OpenClaw introuvable: $PromptAdmissionScript"
+    }
+    foreach ($AdmissionAgent in @('chef-operations', 'architecte-solutions', 'ingenieur-devops')) {
+        & $PromptAdmissionScript -AgentId $AdmissionAgent -TimeoutSeconds 180
+        if ($LASTEXITCODE -ne 0) {
+            throw "Admission prompt OpenClaw en échec pour $AdmissionAgent."
+        }
+    }
+    Write-Host 'OK  Admission prompt validée sur Qwen 3.5, Gemma 3 et Qwen 2.5 Coder.'
+}
+else {
+    Write-Host 'INFO Contrôle d admission complet réservé au backend nominal ollama-vulkan; le backend candidat reste soumis à son E2E de qualification.'
+}
 
 Write-Host "OK  Configuration OpenClaw appliquée: backend texte=$Backend, 8 agents."
 if ($Backend -in @('llama-cpp-sycl', 'b580-hybrid')) {
