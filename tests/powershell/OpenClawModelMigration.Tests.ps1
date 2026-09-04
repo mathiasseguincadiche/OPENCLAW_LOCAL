@@ -28,7 +28,7 @@ Describe 'Migration de flotte OpenClaw' {
         $DryRunIndex | Should -BeLessThan $ApplyIndex
     }
 
-    It 'rend le remplacement explicite dans le DryRun opérateur' {
+    It 'rend le remplacement explicite dans le dry-run pour l’opérateur' {
         $script:Configure | Should -Match 'Migration gérée:'
         $script:Configure | Should -Match 'retirer les anciens IDs'
         $script:Configure | Should -Match 'models\.providers\.\*\.models'
