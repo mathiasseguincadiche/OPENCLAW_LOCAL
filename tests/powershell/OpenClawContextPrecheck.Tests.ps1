@@ -16,6 +16,9 @@ Describe 'Régression OpenClaw context precheck local' {
         $script:Admission = Get-Content -Raw -LiteralPath (
             Join-Path $script:RepoRoot 'scripts\windows\24_test_openclaw_prompt_admission.ps1'
         )
+        $script:Renderer = Get-Content -Raw -LiteralPath (
+            Join-Path $script:RepoRoot 'scripts\26_render_openclaw_config.py'
+        )
         $script:E2E = Get-Content -Raw -LiteralPath (
             Join-Path $script:RepoRoot 'scripts\windows\10_test_openclaw_e2e.ps1'
         )
@@ -70,6 +73,8 @@ Describe 'Régression OpenClaw context precheck local' {
         $script:Generator | Should -Match '"toolSearch"'
         $script:Generator | Should -Match '"mode": "tools"'
         $script:Generator | Should -Match '"profile": tool_policy'
+        $script:Renderer | Should -Match 'maxSkillsPromptChars'
+        $script:Renderer | Should -Match 'limits\["maxSkillsPromptChars"\] = 0'
     }
 
     It 'refuse un configure nominal tant que les trois familles ne passent pas un vrai prompt agent' {
@@ -79,6 +84,10 @@ Describe 'Régression OpenClaw context precheck local' {
         $script:Admission | Should -Match 'PROMPT_ADMISSION_EVIDENCE='
         $script:Admission | Should -Match 'systemPromptReport'
         $script:Admission | Should -Match 'PROMPT_ADMISSION_SYSTEM_CHARS='
+        $script:Admission | Should -Match 'PROMPT_ADMISSION_CONFIG_SKILL_LIMIT='
+        $script:Admission | Should -Match 'PROMPT_ADMISSION_CONFIG_DEFAULT_SKILLS='
+        $script:Admission | Should -Match 'PROMPT_ADMISSION_SKILLS_CHARS='
+        $script:Admission | Should -Match 'skillsPromptChars=.*attendu=0'
         $script:Admission | Should -Match 'Contrôle d admission OpenClaw refusé'
     }
 
