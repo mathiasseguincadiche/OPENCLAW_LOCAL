@@ -21,16 +21,23 @@ def _activate_repository_sources() -> None:
 def _enforce_nominal_skill_prompt_budget(patch: dict[str, Any]) -> None:
     """Keep OpenClaw skill cards out of the nominal local-agent system prompt.
 
-    OpenClaw 2026.9.x treats an explicit per-agent ``skills: []`` as "no
-    skills", while omitting the field means unrestricted/inherited skills.
-    OPENCLAW_LOCAL already grants capabilities explicitly through the bounded
-    tool policy and role contracts, so advertising unrelated skill cards only
-    consumes scarce local-model prompt budget. Future skills must therefore be
-    reintroduced deliberately per role and pass the prompt-admission gate.
+    OpenClaw 2026.9.x persists the authored roster canonically under
+    ``agents.entries`` even when a legacy ``agents.list`` patch is accepted as an
+    input surface. An explicit ``agents.defaults.skills: []`` therefore provides
+    the durable fleet-wide no-skills baseline, while the explicit per-agent
+    ``skills: []`` values keep the submitted roster unambiguous during legacy-list
+    normalization. Future skills must be reintroduced deliberately per role and
+    pass the prompt-admission gate.
     """
     agents = patch.get("agents")
     if not isinstance(agents, dict):
         raise ValueError("Patch OpenClaw invalide: section agents absente")
+
+    defaults = agents.get("defaults")
+    if not isinstance(defaults, dict):
+        raise ValueError("Patch OpenClaw invalide: agents.defaults absent")
+    defaults["skills"] = []
+
     roster = agents.get("list")
     if not isinstance(roster, list) or not roster:
         raise ValueError("Patch OpenClaw invalide: roster agents.list absent")
