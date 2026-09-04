@@ -44,12 +44,12 @@
   },
   "openclaw": {
     "package": "openclaw",
-    "preferred": "2026.7.1-2",
-    "integrity": "sha512-ycF3yPcbjN6bUPeaUx6Mh6vze1hQWoD3CT/wWcmD7a8xaHHHRUaAlaq+lFxMHf1ssEgODVAwjlzYqp2twkYZ7g==",
+    "preferred": "2026.8.2",
+    "integrity": "sha512-I9aqK1attaONePpWs2gPqh23s1s1EDcN/6icF2AAfONdtowu4156QD7g6oD7KlA2vQ9yiqnvlAVH6yduvGH9Ig==",
     "plugins": {
       "parallel": {
         "package": "@openclaw/parallel-plugin",
-        "preferred": "2026.7.1",
+        "preferred": "2026.8.2",
         "provider": "parallel-free"
       }
     },

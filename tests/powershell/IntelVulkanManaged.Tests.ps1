@@ -131,8 +131,8 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match '-FailureEvidenceRoot \$ProofsRoot'
     }
 
-    It 'reste compatible avec la CLI OpenClaw verrouillée 2026.7.1-2' {
-        [string]$script:HybridRuntime.openclaw.preferred | Should -Be '2026.7.1-2'
+    It 'reste compatible avec la CLI OpenClaw verrouillée 2026.8.2' {
+        [string]$script:HybridRuntime.openclaw.preferred | Should -Be '2026.8.2'
         $script:HybridE2E | Should -Not -Match "'agent', 'exec'"
         $script:HybridE2E | Should -Not -Match "'--cwd'"
         $script:HybridE2E | Should -Not -Match "'--auth-env-only'"
@@ -141,6 +141,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match "'--session-key'"
         $script:HybridE2E | Should -Match 'Get-AgentWorkspace'
         $script:HybridE2E | Should -Match "ToolAgentId = 'ingenieur-devops'"
+        $script:HybridE2E | Should -Match 'agents\.entries'
         $script:HybridE2E | Should -Match 'progression visible pour chaque appel long'
     }
 

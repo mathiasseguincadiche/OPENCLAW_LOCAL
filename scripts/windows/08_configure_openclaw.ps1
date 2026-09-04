@@ -59,6 +59,24 @@ function Invoke-Checked {
     }
 }
 
+function Assert-OpenClawVersion {
+    param(
+        [Parameter(Mandatory)][string]$OpenClaw,
+        [Parameter(Mandatory)][string]$ExpectedVersion
+    )
+    $Actual = (& $OpenClaw '--version' 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Impossible de lire la version OpenClaw: $Actual"
+    }
+    if ($Actual -notmatch [regex]::Escape($ExpectedVersion)) {
+        throw (
+            "Runtime OpenClaw inattendu. Attendu=$ExpectedVersion Reçu=$Actual. " +
+            'Exécutez .\menu.ps1 -Action install-core avant configure-openclaw.'
+        )
+    }
+    Write-Host "OK  OpenClaw verrouillé: $Actual"
+}
+
 function Get-PluginInventory {
     param([Parameter(Mandatory)][string]$OpenClaw)
 
@@ -96,17 +114,24 @@ function Initialize-ParallelSearchPlugin {
 
     $Inventory = Get-PluginInventory -OpenClaw $OpenClaw
     $Plugin = @($Inventory.plugins | Where-Object { [string]$_.id -eq $PluginId })
+    $Spec = "$Package@$Version"
     if ($Plugin.Count -eq 0) {
-        $Spec = "npm:$Package@$Version"
-        Write-Host "Installation du plugin Web requis : $Spec"
+        Write-Host "Installation du plugin Web requis : npm:$Spec"
         Invoke-Checked -Command $OpenClaw -Arguments @(
-            'plugins', 'install', $Spec, '--pin'
+            'plugins', 'install', "npm:$Spec", '--pin'
         ) -Description 'Installation du plugin Parallel'
-        $Inventory = Get-PluginInventory -OpenClaw $OpenClaw
-        $Plugin = @($Inventory.plugins | Where-Object { [string]$_.id -eq $PluginId })
     }
+    else {
+        Write-Host "Convergence du plugin Web requis : $Spec"
+        Invoke-Checked -Command $OpenClaw -Arguments @(
+            'plugins', 'update', $Spec
+        ) -Description 'Mise à niveau du plugin Parallel'
+    }
+
+    $Inventory = Get-PluginInventory -OpenClaw $OpenClaw
+    $Plugin = @($Inventory.plugins | Where-Object { [string]$_.id -eq $PluginId })
     if ($Plugin.Count -eq 0) {
-        throw 'Plugin Parallel absent après installation.'
+        throw 'Plugin Parallel absent après installation/mise à niveau.'
     }
 
     if (-not [bool]$Plugin[0].enabled) {
@@ -208,10 +233,13 @@ $SystemWorkspace = Join-Path $PlatformRoot 'workspaces\system'
 $GeneratedDir = Join-Path $PlatformRoot 'runtime\generated'
 $PatchPath = Join-Path $GeneratedDir "openclaw.$Backend.patch.json"
 $SchemaPath = Join-Path $GeneratedDir 'openclaw.schema.json'
+$RuntimeLock = Get-Content -Raw -LiteralPath $RuntimeLockPath | ConvertFrom-Json
+$ExpectedOpenClawVersion = [string]$RuntimeLock.openclaw.preferred
 
 if ($DryRun) {
     Write-Host '[DRY-RUN] Configuration OpenClaw local-first'
     Write-Host "Backend    : $Backend"
+    Write-Host "OpenClaw   : $ExpectedOpenClawVersion (version verrouillée)"
     Write-Host "State      : $StateDir"
     Write-Host "Workspaces : $(Join-Path $PlatformRoot 'workspaces')"
     Write-Host "Patch      : $PatchPath"
@@ -226,8 +254,10 @@ if ($DryRun) {
         Write-Host '[DRY-RUN] Contexte nominal B580: 8192 tokens; 16384 reste un contexte de qualification.'
         Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
     }
+    Write-Host '[DRY-RUN] Exiger la version OpenClaw verrouillée avant toute mutation de configuration.'
+    Write-Host '[DRY-RUN] Converger Parallel sur la version verrouillée avant validation runtime.'
     Write-Host '[DRY-RUN] Migration gérée: models.providers et agents.list sont remplacés exactement via --replace-path afin de retirer les anciens providers et IDs.'
-    Write-Host '[DRY-RUN] Vérifier/installer Parallel, déployer 8 agents, capturer le schéma vivant, valider le patch avec --replace-path puis l''appliquer.'
+    Write-Host '[DRY-RUN] Déployer 8 agents, capturer le schéma vivant, valider le patch avec --replace-path puis l''appliquer.'
     exit 0
 }
 
@@ -241,6 +271,7 @@ $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'false'
 Test-SelectedBackendReady -BackendId $Backend -LockPath $RuntimeLockPath
 
 $OpenClaw = Get-OpenClawCommand $PlatformRoot
+Assert-OpenClawVersion -OpenClaw $OpenClaw -ExpectedVersion $ExpectedOpenClawVersion
 $Python = Get-PythonCommand $PlatformRoot
 New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
 New-Item -ItemType Directory -Path $SystemWorkspace -Force | Out-Null

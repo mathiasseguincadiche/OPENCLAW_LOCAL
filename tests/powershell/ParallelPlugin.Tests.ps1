@@ -7,11 +7,11 @@ Describe 'Contrat Parallel Search OpenClaw' {
         $Lock = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'config\v1\runtime_versions.json') |
             ConvertFrom-Json
         [string]$Lock.openclaw.plugins.parallel.package | Should -Be '@openclaw/parallel-plugin'
-        [string]$Lock.openclaw.plugins.parallel.preferred | Should -Be '2026.7.1'
+        [string]$Lock.openclaw.plugins.parallel.preferred | Should -Be '2026.8.2'
         [string]$Lock.openclaw.plugins.parallel.provider | Should -Be 'parallel-free'
     }
 
-    It 'prépare le plugin avant la validation dry-run du patch OpenClaw' {
+    It 'converge le plugin avant la validation dry-run du patch OpenClaw' {
         $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Script = Get-Content -Raw -LiteralPath (
             Join-Path $RepoRoot 'scripts\windows\08_configure_openclaw.ps1'
@@ -22,9 +22,11 @@ Describe 'Contrat Parallel Search OpenClaw' {
         $PatchIndex | Should -BeGreaterThan -1
         $InitializeIndex | Should -BeLessThan $PatchIndex
         $Script | Should -Match "'plugins', 'install'"
+        $Script | Should -Match "'plugins', 'update'"
         $Script | Should -Match "'plugins', 'enable'"
         $Script | Should -Match "'plugins'\s+'inspect'"
         $Script | Should -Match '--runtime'
         $Script | Should -Match '--pin'
+        $Script | Should -Match 'Convergence du plugin Web requis'
     }
 }

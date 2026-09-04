@@ -95,6 +95,9 @@ def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
                 "id": model["runtime_id"],
                 "name": model["runtime_id"],
                 "input": list(model.get("input", ["text"])),
+                # Keep both fields explicit. OpenClaw uses contextWindow as the
+                # model capacity signal and contextTokens as the active-input cap.
+                "contextWindow": context_tokens,
                 "contextTokens": context_tokens,
                 "params": {
                     "num_ctx": context_tokens,
@@ -276,10 +279,6 @@ def build_openclaw_patch(
         "agents": {
             "defaults": {
                 "skipBootstrap": True,
-                "compaction": {
-                    "reserveTokens": 4096,
-                    "reserveTokensFloor": 4096,
-                },
                 "model": {
                     "primary": qwen_text_ref,
                     "fallbacks": [gemma_text_ref],
@@ -292,7 +291,7 @@ def build_openclaw_patch(
                     "primary": qwen_multimodal_ref,
                     "fallbacks": [gemma_multimodal_ref],
                 },
-                "pdfMaxBytesMb": int(pdf_policy.get("max_bytes_mb", 50)),
+                "pdfMaxMb": int(pdf_policy.get("max_bytes_mb", 50)),
                 "pdfMaxPages": int(pdf_policy.get("max_pages_per_tool_call", 20)),
             },
             "list": agent_list,

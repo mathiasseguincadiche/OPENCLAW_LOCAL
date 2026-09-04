@@ -167,7 +167,7 @@ def main() -> int:
     for marker in (
         "imageModel",
         "pdfModel",
-        "pdfMaxBytesMb",
+        "pdfMaxMb",
         "pdfMaxPages",
         "document_ingestion_policy.yaml",
     ):
