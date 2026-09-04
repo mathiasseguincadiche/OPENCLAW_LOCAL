@@ -11,8 +11,9 @@ $ErrorActionPreference = 'Stop'
 if ($DryRun) {
     Write-Host '[DRY-RUN] Contrôle d admission du prompt full-agent OpenClaw.'
     Write-Host "[DRY-RUN] Agent=$AgentId timeout=${TimeoutSeconds}s."
+    Write-Host '[DRY-RUN] Exiger skills.limits.maxSkillsPromptChars=0 et agents.defaults.skills vide.'
     Write-Host '[DRY-RUN] Utiliser une session fraîche, thinking=off et une réponse déterministe.'
-    Write-Host '[DRY-RUN] Refuser toute meta.error, dont context_overflow, et persister la preuve JSON en exécution réelle.'
+    Write-Host '[DRY-RUN] Exiger PROMPT_ADMISSION_SKILLS_CHARS=0 et refuser toute meta.error, dont context_overflow.'
     exit 0
 }
 
@@ -58,6 +59,47 @@ function Get-AgentEntry {
         }
     }
     throw "Agent absent de la configuration OpenClaw: $Id"
+}
+
+function Assert-ZeroSkillPromptConfig {
+    param([Parameter(Mandatory)]$Config)
+
+    $SkillsProperty = $Config.PSObject.Properties['skills']
+    if (-not $SkillsProperty -or -not $SkillsProperty.Value) {
+        throw 'Contrat prompt skills absent: section skills requise.'
+    }
+    $LimitsProperty = $SkillsProperty.Value.PSObject.Properties['limits']
+    if (-not $LimitsProperty -or -not $LimitsProperty.Value) {
+        throw 'Contrat prompt skills absent: skills.limits requis.'
+    }
+    $LimitProperty = $LimitsProperty.Value.PSObject.Properties['maxSkillsPromptChars']
+    if (-not $LimitProperty) {
+        throw 'Contrat prompt skills absent: skills.limits.maxSkillsPromptChars requis.'
+    }
+    $Limit = [int]$LimitProperty.Value
+    if ($Limit -ne 0) {
+        throw "Contrat prompt skills invalide: maxSkillsPromptChars=$Limit attendu=0."
+    }
+
+    $AgentsProperty = $Config.PSObject.Properties['agents']
+    if (-not $AgentsProperty -or -not $AgentsProperty.Value) {
+        throw 'Contrat prompt skills absent: section agents requise.'
+    }
+    $DefaultsProperty = $AgentsProperty.Value.PSObject.Properties['defaults']
+    if (-not $DefaultsProperty -or -not $DefaultsProperty.Value) {
+        throw 'Contrat prompt skills absent: agents.defaults requis.'
+    }
+    $DefaultSkillsProperty = $DefaultsProperty.Value.PSObject.Properties['skills']
+    if (-not $DefaultSkillsProperty) {
+        throw 'Contrat prompt skills absent: agents.defaults.skills requis.'
+    }
+    $DefaultSkillsCount = @($DefaultSkillsProperty.Value).Count
+    if ($DefaultSkillsCount -ne 0) {
+        throw "Contrat prompt skills invalide: agents.defaults.skills contient $DefaultSkillsCount entrée(s), attendu=0."
+    }
+
+    Write-Host "PROMPT_ADMISSION_CONFIG_SKILL_LIMIT=$Limit"
+    Write-Host "PROMPT_ADMISSION_CONFIG_DEFAULT_SKILLS=$DefaultSkillsCount"
 }
 
 function Get-VisibleText {
@@ -114,6 +156,7 @@ function Write-PromptBudgetSummary {
     $SystemPrompt = $Report.PSObject.Properties['systemPrompt']
     $Tools = $Report.PSObject.Properties['tools']
     $Skills = $Report.PSObject.Properties['skills']
+    $SkillPromptChars = $null
 
     if ($SystemPrompt -and $SystemPrompt.Value) {
         $Chars = $SystemPrompt.Value.PSObject.Properties['chars']
@@ -132,8 +175,13 @@ function Write-PromptBudgetSummary {
     if ($Skills -and $Skills.Value) {
         $Chars = $Skills.Value.PSObject.Properties['promptChars']
         if ($Chars) {
-            Write-Host "PROMPT_ADMISSION_SKILLS_CHARS=$($Chars.Value)"
+            $SkillPromptChars = [int]$Chars.Value
+            Write-Host "PROMPT_ADMISSION_SKILLS_CHARS=$SkillPromptChars"
         }
+    }
+
+    if ($null -ne $SkillPromptChars) {
+        return $SkillPromptChars
     }
 }
 
@@ -155,6 +203,7 @@ $env:INTEL_VULKAN_API_KEY = 'intel-vulkan-local'
 $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'false'
 
 $Config = Get-Content -Raw -LiteralPath $ConfigPath | ConvertFrom-Json
+Assert-ZeroSkillPromptConfig -Config $Config
 $Agent = Get-AgentEntry -Config $Config -Id $AgentId
 $ModelRef = [string]$Agent.model.primary
 $Stamp = Get-Date -Format 'yyyyMMdd_HHmmssfff'
@@ -193,7 +242,13 @@ catch {
 
 $Payload | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath $EvidencePath -Encoding utf8
 Write-Host "PROMPT_ADMISSION_EVIDENCE=$EvidencePath"
-Write-PromptBudgetSummary -Payload $Payload
+$SkillPromptChars = Write-PromptBudgetSummary -Payload $Payload
+if ($null -eq $SkillPromptChars) {
+    throw "Contrat prompt skills OpenClaw non mesurable: systemPromptReport.skills.promptChars absent. preuve=$EvidencePath"
+}
+if ([int]$SkillPromptChars -ne 0) {
+    throw "Contrat prompt skills OpenClaw non respecté: skillsPromptChars=$SkillPromptChars attendu=0. preuve=$EvidencePath"
+}
 
 $Result = $Payload.PSObject.Properties['result']
 if (-not $Result -or -not $Result.Value) {

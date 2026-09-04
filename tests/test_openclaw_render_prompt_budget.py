@@ -27,6 +27,11 @@ def _render_patch(tmp_path: Path, backend: str = "ollama-vulkan") -> dict[str, o
 
 def test_renderer_explicitly_disables_unbounded_skill_cards(tmp_path: Path) -> None:
     patch = _render_patch(tmp_path)
+
+    skills = patch["skills"]
+    assert isinstance(skills, dict)
+    assert skills == {"limits": {"maxSkillsPromptChars": 0}}
+
     agents = patch["agents"]
     assert isinstance(agents, dict)
 
