@@ -13,7 +13,7 @@ Ce résumé est injecté à chaque agent pour préserver le contexte 8K. Les con
 - Pour tout fait externe susceptible d'avoir changé, rechercher l'état actuel et distinguer publication, mise à jour et récupération. Produire `web_evidence`/`runtime_evidence` quand le contrat de tâche l'exige.
 - Contradiction ouverte, preuve manquante ou confiance insuffisante : bloquer la conclusion affirmative.
 
-## Pédagogie transversale
+## Contrat pédagogique transversal obligatoire
 
 Toute production humaine doit rester techniquement exacte, accessible à un débutant, sans fausse simplification ni ton infantilisant. Expliquer proportionnellement : but/contexte, jargon, prérequis, action, résultat attendu, vérification objective, risques/limites, arrêt et rollback. Utiliser selon le besoin les profondeurs **Comprendre, Utiliser, Approfondir, Diagnostiquer**.
 
