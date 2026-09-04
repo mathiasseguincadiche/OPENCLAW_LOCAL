@@ -12,6 +12,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $DeployScript = Join-Path $PSScriptRoot '09_deploy_agents.ps1'
 $Renderer = Join-Path $RepoRoot 'scripts\26_render_openclaw_config.py'
 $RuntimeLockPath = Join-Path $RepoRoot 'config\v1\runtime_versions.json'
+$LegacyStateMigration = Join-Path $PSScriptRoot 'lib\openclaw_legacy_state.ps1'
 
 function Get-PlatformRoot {
     if ($env:OPENCLAW_LOCAL_ROOT) {
@@ -75,6 +76,15 @@ function Assert-OpenClawVersion {
         )
     }
     Write-Host "OK  OpenClaw verrouillé: $Actual"
+}
+
+function Invoke-OpenClawLegacyStateMigration {
+    param([Parameter(Mandatory)][string]$ConfigPath)
+
+    if (-not (Test-Path -LiteralPath $LegacyStateMigration)) {
+        throw "Migration état OpenClaw introuvable: $LegacyStateMigration"
+    }
+    & $LegacyStateMigration -ConfigPath $ConfigPath
 }
 
 function Get-PluginInventory {
@@ -255,6 +265,7 @@ if ($DryRun) {
         Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
     }
     Write-Host '[DRY-RUN] Exiger la version OpenClaw verrouillée avant toute mutation de configuration.'
+    Write-Host '[DRY-RUN] Pré-migrer uniquement les clés d''état 2026.7.x retirées, avec sauvegarde, avant toute commande CLI qui parse openclaw.json.'
     Write-Host '[DRY-RUN] Converger Parallel sur la version verrouillée avant validation runtime.'
     Write-Host '[DRY-RUN] Migration gérée: models.providers et agents.list sont remplacés exactement via --replace-path afin de retirer les anciens providers et IDs.'
     Write-Host '[DRY-RUN] Déployer 8 agents, capturer le schéma vivant, valider le patch avec --replace-path puis l''appliquer.'
@@ -284,6 +295,7 @@ if (-not (Test-Path -LiteralPath $ConfigPath)) {
     ) -Description 'Initialisation baseline OpenClaw'
 }
 
+Invoke-OpenClawLegacyStateMigration -ConfigPath $ConfigPath
 Initialize-ParallelSearchPlugin -OpenClaw $OpenClaw -LockPath $RuntimeLockPath
 
 $SchemaOutput = & $OpenClaw 'config' 'schema'
