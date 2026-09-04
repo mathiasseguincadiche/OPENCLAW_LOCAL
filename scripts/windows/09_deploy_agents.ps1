@@ -10,7 +10,8 @@ $SharedRoot = Join-Path $AgentsRoot '_shared'
 $ContractPath = Join-Path $SharedRoot 'CONTRACT.md'
 $PedagogyPath = Join-Path $SharedRoot 'PEDAGOGY.md'
 $RuntimeContractPath = Join-Path $SharedRoot 'RUNTIME_CONTRACT.md'
-$BootstrapBudgetChars = 8000
+$BootstrapFileBudgetChars = 6500
+$BootstrapTotalBudgetChars = 8000
 $AgentIds = @(
     'chef-operations',
     'expert-recherche',
@@ -80,25 +81,29 @@ $RuntimeContract
 
 $RoleAgents
 "@
-    $ManagedBootstrapChars = (
-        $MergedAgents.Length +
-        $Soul.Length +
-        $Identity.Length +
-        $UserTemplate.Length +
-        $Tools.Length +
-        $Heartbeat.Length
-    )
-    if ($ManagedBootstrapChars -gt $BootstrapBudgetChars) {
+
+    # OpenClaw injecte encore AGENTS.md et TOOLS.md. SOUL/USER/HEARTBEAT/IDENTITY
+    # restent matérialisés dans le workspace, mais le patch 2026.8.2 les exclut
+    # explicitement de l'injection automatique pour économiser le budget prompt.
+    $InjectedBootstrapChars = $MergedAgents.Length + $Tools.Length
+    if ($MergedAgents.Length -gt $BootstrapFileBudgetChars) {
+        throw (
+            "Budget fichier bootstrap OpenClaw dépassé pour ${AgentId}: " +
+            "$($MergedAgents.Length) > $BootstrapFileBudgetChars caractères dans AGENTS.md."
+        )
+    }
+    if ($InjectedBootstrapChars -gt $BootstrapTotalBudgetChars) {
         throw (
             "Budget bootstrap OpenClaw dépassé pour ${AgentId}: " +
-            "$ManagedBootstrapChars > $BootstrapBudgetChars caractères."
+            "$InjectedBootstrapChars > $BootstrapTotalBudgetChars caractères injectés."
         )
     }
 
     if ($DryRun) {
         Write-Host (
             "[DRY-RUN] Déployer $AgentId -> $Workspace avec pédagogie transversale compacte " +
-            "(${ManagedBootstrapChars}/${BootstrapBudgetChars} caractères injectés)"
+            "(${InjectedBootstrapChars}/${BootstrapTotalBudgetChars} caractères runtime injectés; " +
+            'SOUL/USER/HEARTBEAT/IDENTITY conservés mais non auto-injectés)'
         )
         continue
     }
@@ -118,7 +123,8 @@ $RoleAgents
     Set-Content -LiteralPath $Marker -Value "managed_by=OPENCLAW_LOCAL`nagent=$AgentId" -Encoding utf8
     Write-Host (
         "OK  $AgentId déployé: pédagogie transversale compacte + références complètes " +
-        "(${ManagedBootstrapChars}/${BootstrapBudgetChars} caractères injectés)."
+        "(${InjectedBootstrapChars}/${BootstrapTotalBudgetChars} caractères runtime injectés; " +
+        'fichiers facultatifs conservés hors injection automatique).'
     )
 }
 
