@@ -28,7 +28,11 @@ EXPECTED_VULKAN_MODELS = {
     "qwen2.5-coder:14b-instruct-q4_K_M",
 }
 
-PINNED_OPENCLAW_VERSION = "2026.7.1-2"
+PINNED_OPENCLAW_VERSION = "2026.8.2"
+PINNED_OPENCLAW_INTEGRITY = (
+    "sha512-I9aqK1attaONePpWs2gPqh23s1s1EDcN/"
+    "6icF2AAfONdtowu4156QD7g6oD7KlA2vQ9yiqnvlAVH6yduvGH9Ig=="
+)
 PINNED_MODEL_KEYS = {
     "id",
     "name",
@@ -61,10 +65,9 @@ def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
     assert set(entries) == EXPECTED_AGENTS
     assert patch["gateway"] == {"mode": "local", "bind": "loopback"}
     assert patch["agents"]["defaults"]["skipBootstrap"] is True
-    assert patch["agents"]["defaults"]["compaction"] == {
-        "reserveTokens": 4096,
-        "reserveTokensFloor": 4096,
-    }
+    assert "compaction" not in patch["agents"]["defaults"]
+    assert patch["agents"]["defaults"]["pdfMaxMb"] == 50
+    assert patch["agents"]["defaults"]["pdfMaxPages"] == 20
     assert [entry["id"] for entry in patch["agents"]["list"] if entry.get("default")] == [
         "chef-operations"
     ]
@@ -78,6 +81,7 @@ def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
             for model in entry["model"]["fallbacks"]
         )
         assert "openrouter/" not in str(entry["model"])
+        assert entry["experimental"] == {"localModelLean": True}
         assert entry["tools"]["fs"]["workspaceOnly"] is True
         assert entry["tools"]["exec"]["mode"] == "ask"
         assert entry["tools"]["elevated"]["enabled"] is False
@@ -115,6 +119,7 @@ def test_provider_exposes_exactly_three_b580_sized_models() -> None:
     assert by_id["qwen3.5:9b-q4_K_M"]["input"] == ["text", "image"]
     assert by_id["gemma3:12b-it-q4_K_M"]["input"] == ["text", "image"]
     assert by_id["qwen2.5-coder:14b-instruct-q4_K_M"]["input"] == ["text"]
+    assert all(model["contextWindow"] == 8192 for model in provider["models"])
     assert all(model["contextTokens"] == 8192 for model in provider["models"])
     assert all(model["params"]["num_ctx"] == 8192 for model in provider["models"])
     assert all("metadata" not in model for model in provider["models"])
@@ -216,6 +221,8 @@ def test_patch_matches_pinned_openclaw_schema_surface() -> None:
         Path("config/v1/runtime_versions.json").read_text(encoding="utf-8")
     )
     assert runtime_lock["openclaw"]["preferred"] == PINNED_OPENCLAW_VERSION
+    assert runtime_lock["openclaw"]["integrity"] == PINNED_OPENCLAW_INTEGRITY
+    assert runtime_lock["openclaw"]["plugins"]["parallel"]["preferred"] == "2026.8.2"
 
     patch = build_openclaw_patch(Path("C:/OpenClawLocal"))
     agents = patch["agents"]
