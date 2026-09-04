@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from clawlocal.openclaw_config import build_openclaw_patch
 
@@ -27,6 +28,8 @@ EXPECTED_VULKAN_MODELS = {
     "gemma3:12b-it-q4_K_M",
     "qwen2.5-coder:14b-instruct-q4_K_M",
 }
+OPENCLAW_AGENT_CONTEXT_TOKENS = 16384
+BENCHMARK_NOMINAL_CONTEXT_TOKENS = 8192
 
 PINNED_OPENCLAW_VERSION = "2026.8.2"
 PINNED_OPENCLAW_INTEGRITY = (
@@ -70,6 +73,12 @@ def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
     assert defaults["systemAgent"] == {"agentId": "chef-operations"}
     assert defaults["sessionStore"] == {"agentId": "chef-operations"}
     assert defaults["skipBootstrap"] is True
+    assert defaults["skipOptionalBootstrapFiles"] == [
+        "SOUL.md",
+        "USER.md",
+        "HEARTBEAT.md",
+        "IDENTITY.md",
+    ]
     assert defaults["bootstrapMaxChars"] == 6500
     assert defaults["bootstrapTotalMaxChars"] == 8000
     assert "compaction" not in defaults
@@ -87,9 +96,30 @@ def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
         )
         assert "openrouter/" not in str(entry["model"])
         assert entry["experimental"] == {"localModelLean": True}
+        assert entry["tools"]["profile"] == "minimal"
         assert entry["tools"]["fs"]["workspaceOnly"] is True
         assert entry["tools"]["exec"]["mode"] == "ask"
         assert entry["tools"]["elevated"]["enabled"] is False
+
+
+def test_tool_surface_is_role_bounded_and_search_compacted() -> None:
+    patch = build_openclaw_patch(Path("C:/OpenClawLocal"))
+    entries = _entries_by_id(patch)
+    assert patch["tools"]["profile"] == "minimal"
+    assert patch["tools"]["toolSearch"] == {
+        "enabled": True,
+        "mode": "tools",
+        "searchDefaultLimit": 5,
+        "maxSearchLimit": 10,
+    }
+
+    chef = set(entries["chef-operations"]["tools"]["alsoAllow"])
+    assert {"read", "sessions_spawn", "sessions_send", "agents_list"} <= chef
+    assert not {"write", "edit", "apply_patch", "exec", "process"} & chef
+
+    devops = set(entries["ingenieur-devops"]["tools"]["alsoAllow"])
+    assert {"read", "write", "edit", "apply_patch", "exec", "process"} <= devops
+    assert {"web_search", "web_fetch", "pdf", "view_image"} <= devops
 
 
 def test_research_agent_gets_browser_and_local_web_is_configured() -> None:
@@ -115,6 +145,19 @@ def test_read_only_roles_cannot_mutate_or_exec() -> None:
         assert {"write", "edit", "apply_patch", "exec", "process"} <= denied
 
 
+def test_direct_benchmark_context_stays_8k_while_openclaw_agents_get_16k() -> None:
+    catalog = yaml.safe_load(
+        Path("config/v1/model_catalog.yaml").read_text(encoding="utf-8")
+    )
+    policy = catalog["policy"]
+    assert policy["nominal_context_tokens"] == BENCHMARK_NOMINAL_CONTEXT_TOKENS
+    assert policy["openclaw_agent_context_tokens"] == OPENCLAW_AGENT_CONTEXT_TOKENS
+    assert policy["openclaw_agent_context_is_benchmark_promotion"] is False
+    for model in catalog["models"].values():
+        assert model["nominal_context_tokens"] == BENCHMARK_NOMINAL_CONTEXT_TOKENS
+        assert OPENCLAW_AGENT_CONTEXT_TOKENS in model["qualification_context_tokens"]
+
+
 def test_provider_exposes_exactly_three_b580_sized_models() -> None:
     patch = build_openclaw_patch(Path("C:/OpenClawLocal"))
     provider = patch["models"]["providers"]["ollama"]
@@ -124,9 +167,18 @@ def test_provider_exposes_exactly_three_b580_sized_models() -> None:
     assert by_id["qwen3.5:9b-q4_K_M"]["input"] == ["text", "image"]
     assert by_id["gemma3:12b-it-q4_K_M"]["input"] == ["text", "image"]
     assert by_id["qwen2.5-coder:14b-instruct-q4_K_M"]["input"] == ["text"]
-    assert all(model["contextWindow"] == 8192 for model in provider["models"])
-    assert all(model["contextTokens"] == 8192 for model in provider["models"])
-    assert all(model["params"]["num_ctx"] == 8192 for model in provider["models"])
+    assert all(
+        model["contextWindow"] == OPENCLAW_AGENT_CONTEXT_TOKENS
+        for model in provider["models"]
+    )
+    assert all(
+        model["contextTokens"] == OPENCLAW_AGENT_CONTEXT_TOKENS
+        for model in provider["models"]
+    )
+    assert all(
+        model["params"]["num_ctx"] == OPENCLAW_AGENT_CONTEXT_TOKENS
+        for model in provider["models"]
+    )
     assert all("metadata" not in model for model in provider["models"])
 
 
@@ -156,6 +208,10 @@ def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None
     assert all(model["input"] == ["text"] for model in sycl["models"])
     assert all(model["contextWindow"] == 8192 for model in sycl["models"])
     assert all(model["compat"]["toolSchemaProfile"] == "llamacpp" for model in sycl["models"])
+    assert all(
+        model["contextWindow"] == OPENCLAW_AGENT_CONTEXT_TOKENS
+        for model in providers["ollama"]["models"]
+    )
 
     entries = _entries_by_id(patch)
     for entry in entries.values():
