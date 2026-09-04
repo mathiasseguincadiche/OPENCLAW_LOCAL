@@ -1,4 +1,4 @@
-schema_version: "1.4.0"
+schema_version: "1.5.0"
 platform_version: "0.2.0"
 policy:
   local_first: true
@@ -9,6 +9,8 @@ policy:
   hardware_qualification_required_before_performance_claims: true
   target_hardware_profile: intel_arc_b580_12gb
   nominal_context_tokens: 8192
+  openclaw_agent_context_tokens: 16384
+  openclaw_agent_context_is_benchmark_promotion: false
   extended_context_requires_qualification: true
 
 models:
