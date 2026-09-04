@@ -64,16 +64,18 @@ def test_patch_materializes_all_agents_without_cloud_fallback() -> None:
     entries = _entries_by_id(patch)
     assert set(entries) == EXPECTED_AGENTS
     assert patch["gateway"] == {"mode": "local", "bind": "loopback"}
-    defaults = patch["agents"]["defaults"]
+    agents = patch["agents"]
+    assert agents["ownership"] == "explicit"
+    defaults = agents["defaults"]
+    assert defaults["systemAgent"] == {"agentId": "chef-operations"}
+    assert defaults["sessionStore"] == {"agentId": "chef-operations"}
     assert defaults["skipBootstrap"] is True
     assert defaults["bootstrapMaxChars"] == 6500
     assert defaults["bootstrapTotalMaxChars"] == 8000
     assert "compaction" not in defaults
     assert defaults["pdfMaxMb"] == 50
     assert defaults["pdfMaxPages"] == 20
-    assert [entry["id"] for entry in patch["agents"]["list"] if entry.get("default")] == [
-        "chef-operations"
-    ]
+    assert all("default" not in entry for entry in agents["list"])
     for agent_id, entry in entries.items():
         assert entry["workspace"].replace("\\", "/").endswith(
             f"workspaces/{agent_id}"
@@ -229,12 +231,15 @@ def test_patch_matches_pinned_openclaw_schema_surface() -> None:
 
     patch = build_openclaw_patch(Path("C:/OpenClawLocal"))
     agents = patch["agents"]
-    assert set(agents) == {"defaults", "list"}
-    assert "ownership" not in agents
+    assert set(agents) == {"ownership", "defaults", "list"}
+    assert agents["ownership"] == "explicit"
     assert "entries" not in agents
     assert isinstance(agents["list"], list)
     assert len(agents["list"]) == 8
     assert len({entry["id"] for entry in agents["list"]}) == 8
+    assert all("default" not in entry for entry in agents["list"])
+    assert agents["defaults"]["systemAgent"] == {"agentId": "chef-operations"}
+    assert agents["defaults"]["sessionStore"] == {"agentId": "chef-operations"}
 
     models = patch["models"]["providers"]["ollama"]["models"]
     for model in models:

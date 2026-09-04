@@ -8,6 +8,7 @@ from clawlocal.config import load_contract
 SUPPORTED_BACKENDS = ("ollama-vulkan", "llama-cpp-sycl", "b580-hybrid")
 INTEL_SYCL_PROVIDER_ID = "intel-sycl"
 INTEL_VULKAN_PROVIDER_ID = "intel-vulkan"
+SYSTEM_AGENT_ID = "chef-operations"
 
 
 def _runtime_id(model: dict[str, Any], backend_id: str) -> str:
@@ -247,7 +248,6 @@ def build_openclaw_patch(
         agent_list.append(
             {
                 "id": agent_id,
-                "default": agent_id == "chef-operations",
                 "name": agent_id,
                 "workspace": str(workspaces_root / agent_id),
                 "model": {
@@ -277,7 +277,15 @@ def build_openclaw_patch(
             "providers": _model_providers(catalog, backends, backend_id),
         },
         "agents": {
+            # OpenClaw 2026.8.x canonicalizes multi-agent rosters under explicit
+            # ownership. Legacy default=true markers are incompatible with that
+            # mode and must not be emitted by the managed patch.
+            "ownership": "explicit",
             "defaults": {
+                # Preserve the former chef-operations default as an explicit
+                # ambient/session owner for system operations and legacy rows.
+                "systemAgent": {"agentId": SYSTEM_AGENT_ID},
+                "sessionStore": {"agentId": SYSTEM_AGENT_ID},
                 "skipBootstrap": True,
                 # OpenClaw 2026.8.2 reserves half of an 8K window for small-context
                 # compaction headroom. Keep managed bootstrap material well below
