@@ -14,9 +14,9 @@ devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
 
 Le nom `devstral-devops` est un alias de compatibilité. Le runtime réel est Qwen 2.5 Coder 14B.
 
-Le contexte nominal OpenClaw est **8192 tokens**. Le 16K n'est pas un contexte nominal garanti ; il reste une cible de qualification.
+Le **benchmark direct B580** reste nominal à **8192 tokens**. Le **full-agent OpenClaw nominal** est configuré à **16384 tokens** pour l'orchestration ; cette valeur ne constitue pas une promotion du benchmark 16K. Un éventuel essai OpenClaw 32K reste un candidat matériel séparé et ne doit pas être activé sans preuve B580.
 
-Le runtime OpenClaw supporté est **2026.8.2**. Après un `git pull` qui modifie `runtime_versions.json`, exécuter `install-core` avant de reconfigurer OpenClaw.
+Le runtime OpenClaw supporté est **2026.9.1**. Après un `git pull` qui modifie `runtime_versions.json`, exécuter `install-core` avant de reconfigurer OpenClaw.
 
 ## 1. Vérification minimale
 
@@ -73,16 +73,16 @@ openclaw --version
 
 Le runtime est volontairement fail-closed. Ne modifier pas le lock localement pour contourner le contrôle.
 
-## 4. `context_overflow` avant tout appel Ollama
+## 4. `context_overflow` au precheck OpenClaw
 
-Symptôme observé avec OpenClaw `2026.7.1-2` :
+Symptôme :
 
 ```text
 kind=context_overflow
 message=Context overflow: prompt too large for the model (precheck).
 ```
 
-Lorsque l'erreur revient presque immédiatement au niveau **precheck**, avant une génération Ollama, ne conclure pas que Qwen 3.5 9B ou le contexte 8K sont trop petits. La version `2026.7.1-2` a été retirée du lock après ce comportement ; le runtime supporté est `2026.8.2`.
+OpenClaw 2026.9.1 ne doit plus rejeter un tour uniquement parce que son estimation conservative de pression pré-prompt ordinaire dépasse le budget : cette estimation est diagnostique. Un `context_overflow (precheck)` reste toutefois possible lorsqu'un checkpoint canonique de replay/compaction ne tient réellement pas dans la fenêtre active. Il faut donc conserver la preuve au lieu d'assimiler automatiquement l'erreur à un défaut du modèle.
 
 Reprise :
 
@@ -91,12 +91,24 @@ Reprise :
 openclaw --version
 .\menu.ps1 -Action configure-openclaw -DryRun
 .\menu.ps1 -Action configure-openclaw
-.\menu.ps1 -Action e2e -DryRun
 ```
 
-Attendu : `openclaw --version` contient `2026.8.2`.
+Attendu : `openclaw --version` contient `2026.9.1`.
 
-Le patch garde **8192** pour `contextWindow`, `contextTokens` et `num_ctx`. Il ne réactive pas les anciens overrides `reserveTokens`/`reserveTokensFloor`. Si le provider Ollama réel retourne ensuite un vrai dépassement de contexte, conserver cette nouvelle preuve et diagnostiquer le volume de prompt avant toute décision de passage à 16K.
+Le patch nominal Ollama garde **16384** pour `contextWindow`, `contextTokens` et `num_ctx`, tout en conservant le benchmark direct à 8192. Il ne réactive pas les anciens overrides `reserveTokens`/`reserveTokensFloor`.
+
+Le renderer final force également `skills: []` pour les huit agents nominaux. Quand `configure-openclaw` échoue, vérifier les preuves `openclaw_prompt_admission_*.json` et les lignes :
+
+```text
+PROMPT_ADMISSION_SYSTEM_CHARS=
+PROMPT_ADMISSION_TOOLS_LISTCHARS=
+PROMPT_ADMISSION_TOOLS_SCHEMACHARS=
+PROMPT_ADMISSION_SKILLS_CHARS=
+```
+
+`PROMPT_ADMISSION_SKILLS_CHARS` doit rester à zéro sur le chemin nominal géré. Si 16K échoue encore sur une session fraîche sous 2026.9.1, conserver le payload complet : il devient une preuve exploitable pour distinguer replay/compaction, schéma, provider et pression mémoire réelle.
+
+Ne passer à 32K qu'après un PASS 16K propre et comme **qualification d'orchestration B580 séparée**, jamais comme contournement automatique.
 
 ## 5. `OLLAMA_MODELS` pointe au mauvais endroit
 
@@ -161,7 +173,7 @@ openclaw agents list --json
 
 Le patch est généré depuis `config/v1/model_catalog.yaml` et `model_routing.yaml`. Ne pas corriger manuellement `openclaw.json` comme solution durable.
 
-OpenClaw 2026.8.x peut persister le roster canonique sous `agents.entries` même si le patch est fourni via `agents.list`. Le E2E supporte les deux représentations.
+OpenClaw 2026.9.x peut persister le roster canonique sous `agents.entries` même si le patch est fourni via `agents.list`. Le E2E supporte les deux représentations.
 
 ## 9. Gateway indisponible
 
@@ -313,7 +325,7 @@ Classer l'échec :
 - budget global 40 min ;
 - dérive d'identité.
 
-Le 16K est un stress qualifiant. Un échec 16K ne doit pas conduire à configurer OpenClaw nominalement en 16K.
+Le 16K HARD-40M reste un **stress qualifiant du benchmark**. Le fait qu'OpenClaw utilise 16K pour son orchestration ne transforme pas ce stress en promotion de performance, et un résultat HARD-40M 16K ne doit pas être falsifié pour justifier un changement de contexte runtime.
 
 ## 17. Qwen native thinking atteint la limite
 
