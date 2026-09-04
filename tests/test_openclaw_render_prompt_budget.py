@@ -29,6 +29,11 @@ def test_renderer_explicitly_disables_unbounded_skill_cards(tmp_path: Path) -> N
     patch = _render_patch(tmp_path)
     agents = patch["agents"]
     assert isinstance(agents, dict)
+
+    defaults = agents["defaults"]
+    assert isinstance(defaults, dict)
+    assert defaults.get("skills") == []
+
     roster = agents["list"]
     assert isinstance(roster, list)
     assert len(roster) == 8
