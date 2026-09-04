@@ -10,10 +10,10 @@ Describe 'Migration de flotte OpenClaw' {
     }
 
     It 'utilise --replace-path pour les chemins gérés du patch' {
-        ($script:Configure.Split("'--replace-path', 'models.providers'").Count - 1) |
-            Should -Be 2
-        ($script:Configure.Split("'--replace-path', 'agents.list'").Count - 1) |
-            Should -Be 2
+        $ProvidersPattern = [regex]::Escape("'--replace-path', 'models.providers'")
+        $AgentsPattern = [regex]::Escape("'--replace-path', 'agents.list'")
+        [regex]::Matches($script:Configure, $ProvidersPattern).Count | Should -Be 2
+        [regex]::Matches($script:Configure, $AgentsPattern).Count | Should -Be 2
     }
 
     It 'n utilise jamais le flag --replace de config set sur config patch' {
@@ -24,16 +24,16 @@ Describe 'Migration de flotte OpenClaw' {
         $DryRunIndex = $script:Configure.IndexOf(
             "'config', 'patch', '--file', `$PatchPath, '--dry-run',"
         )
-        $ApplyIndex = $script:Configure.IndexOf(
+        $FirstPatchIndex = $script:Configure.IndexOf(
             "'config', 'patch', '--file', `$PatchPath,"
         )
-        $SecondApplyIndex = $script:Configure.IndexOf(
+        $ApplyIndex = $script:Configure.IndexOf(
             "'config', 'patch', '--file', `$PatchPath,",
             $DryRunIndex + 1
         )
         $DryRunIndex | Should -BeGreaterThan -1
-        $ApplyIndex | Should -Be $DryRunIndex
-        $SecondApplyIndex | Should -BeGreaterThan $DryRunIndex
+        $FirstPatchIndex | Should -Be $DryRunIndex
+        $ApplyIndex | Should -BeGreaterThan $DryRunIndex
     }
 
     It 'rend le remplacement explicite dans le dry-run pour l''opérateur' {
