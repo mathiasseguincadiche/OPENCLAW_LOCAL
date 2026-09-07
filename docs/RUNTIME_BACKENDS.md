@@ -2,52 +2,53 @@
 
 ## Objectif
 
-Le choix du modèle et le choix du backend sont deux axes distincts. `OPENCLAW_LOCAL` conserve plusieurs moteurs locaux afin de mesurer ce qui fonctionne réellement sur l'Intel Arc B580 12 Go.
+Le choix du modèle et le choix du backend sont deux axes distincts. `OPENCLAW_LOCAL` conserve plusieurs moteurs **strictement locaux** afin de mesurer ce qui fonctionne réellement sur l'Intel Arc B580 12 Go.
 
-La migration de flotte vers des modèles Q4_K_M plus petits **réinitialise la décision de performance** : aucun benchmark de l'ancienne flotte 24–27B ne qualifie les nouveaux modèles.
+La migration vers Architecture V2 **réinitialise la décision de performance** : aucun benchmark d'une ancienne flotte ne qualifie les nouveaux modèles.
 
-## Flotte active
+## Flotte active V2
 
 ```text
 qwen-max          -> qwen3.5:9b-q4_K_M
-gemma-deep        -> gemma3:12b-it-q4_K_M
-devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+gemma-deep        -> gemma4:12b-it-q4_K_M
+devstral-devops   -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-Le contexte nominal est 8192 tokens. Le 16K reste un stress de qualification.
+Challenger benchmark hors routage :
+
+```text
+granite-devops -> granite4.2:8b-q4_K_M
+```
+
+Le benchmark nominal utilise 8192 tokens. Le full-agent OpenClaw nominal utilise 16384 tokens. Le second contrat ne constitue pas une promotion du premier.
 
 ## Backends déclarés
 
 | ID | Provider OpenClaw | Accélération | Endpoint | Statut |
 |---|---|---|---|---|
 | `ollama-vulkan` | `ollama` | Vulkan | `127.0.0.1:11434` | nominal / rollback |
-| `llama-cpp-sycl` | `intel-sycl` | SYCL → Level Zero | `127.0.0.1:8080/v1` | candidat |
+| `llama-cpp-sycl` | `intel-sycl` | SYCL -> Level Zero | `127.0.0.1:8080/v1` | candidat |
 | `llama-cpp-vulkan` | `intel-vulkan` | Vulkan | `127.0.0.1:8081/v1` | candidat |
-| `b580-hybrid` | mixte local | par modèle | Ollama + `8081/v1` | profil candidat |
+| `b580-hybrid` | mixte local | par modèle | Ollama + llama.cpp local | profil candidat |
 
-`nominal` signifie ici chemin d'installation et de rollback sûr. Cela ne signifie pas qu'Ollama est le moteur le plus rapide pour tous les nouveaux modèles.
+`nominal` signifie chemin d'installation et de rollback sûr. Cela ne signifie pas qu'Ollama est le moteur le plus rapide pour tous les modèles V2.
 
 ## Profil B580 hybride candidat
 
+Le profil mixte ne combine que des moteurs locaux. La répartition concrète est gouvernée par `runtime_versions.json`, `runtime_backends.yaml` et les scripts de configuration. Le runtime Vulkan géré déclare actuellement comme modèles gérés :
+
 ```text
-qwen-max        -> Ollama / Vulkan
-gemma-deep      -> llama.cpp / Vulkan
-devstral-devops -> llama.cpp / Vulkan
-image/PDF       -> Ollama
+gemma4:12b-it-q4_K_M
+hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-OpenClaw expose alors simultanément un provider `ollama` et un provider `intel-vulkan`. Le profil n'ajoute aucun provider cloud.
+Qwen peut rester sur Ollama/Vulkan pendant que Gemma/Ministral sont évalués sur llama.cpp/Vulkan. Cette répartition est une **hypothèse d'exploitation à requalifier**, pas un résultat déjà démontré.
 
-Le choix conserve Qwen sur Ollama et Gemma/Qwen Coder sur Vulkan comme **hypothèse d'exploitation à requalifier**, pas comme résultat déjà démontré pour la nouvelle flotte.
+Le profil n'ajoute aucun provider LLM externe.
 
-## Mesures historiques de la flotte retirée
+## Mesures historiques
 
-Des mesures B580 ont été obtenues auparavant avec une flotte constituée de modèles de classe **24–27B**. Elles ont servi à montrer deux choses utiles :
-
-1. un backend unique n'est pas nécessairement optimal pour tous les modèles ;
-2. cette classe de taille peut provoquer une pression mémoire/offload excessive sur une B580 12 Go.
-
-Ces mesures sont désormais **historiques seulement**. Elles ne doivent pas être copiées dans une attestation de qualification de la flotte actuelle et ne permettent pas de promouvoir `b580-hybrid` avec les nouveaux runtimes. Les IDs retirés restent consultables dans l'historique Git et les anciennes preuves, pas dans les surfaces actives.
+Des mesures B580 produites avec d'autres modèles peuvent rester utiles pour comprendre la pression mémoire, l'offload et la variabilité des backends. Elles sont **historiques seulement** et ne doivent jamais être copiées dans une attestation de qualification V2.
 
 ## Ollama/Vulkan
 
@@ -59,13 +60,13 @@ Ollama reste le chemin nominal et le rollback parce qu'il simplifie :
 - démarrage et récupération ;
 - conservation d'un chemin de référence commun aux trois modèles.
 
-L'API reste liée à :
+API :
 
 ```text
 http://127.0.0.1:11434
 ```
 
-Le contexte nominal exposé à OpenClaw est 8192.
+Le benchmark direct conserve 8192 tokens. La configuration full-agent OpenClaw gère 16384 tokens pour les trois modèles routés.
 
 ## llama.cpp/SYCL/Level Zero
 
@@ -83,7 +84,7 @@ Le chemin SYCL reste géré et qualifiable :
 - contexte 8192 ;
 - unload explicite entre modèles.
 
-Les trois modèles actuels doivent être chargés et mesurés avec leurs identités/quantifications exactes. Un résultat produit avec un ancien artefact ne qualifie pas le runtime actuel.
+Les modèles doivent être chargés et mesurés avec leurs identités/quantifications exactes. Un résultat produit avec un ancien artefact ne qualifie pas le runtime V2.
 
 ## llama.cpp/Vulkan géré
 
@@ -92,26 +93,26 @@ Le runtime Vulkan candidat :
 - utilise la release verrouillée dans `runtime_versions.json` ;
 - écoute sur `http://127.0.0.1:8081/v1` ;
 - détecte l'Intel Arc B580 ;
-- utilise `models_max=1`, `parallel=1`, `gpu_layers=auto` et `fit=on` ;
+- utilise `models_max=1`, `parallel=1`, `gpu_layers=auto` et `fit=on` selon le lanceur ;
 - utilise le contexte 8192 ;
 - reste `--offline` ;
 - suit son PID dans l'état géré ;
-- charge `gemma3:12b-it-q4_K_M` et `qwen2.5-coder:14b-instruct-q4_K_M` dans le profil hybride ;
+- charge Gemma 4 12B et Ministral 3 14B Reasoning dans le profil hybride actuel ;
 - décharge explicitement les modèles entre smokes/switches.
 
 Le setup Vulkan arrête le routeur SYCL suivi avant de démarrer afin d'éviter une contention B580 entre deux runtimes llama.cpp.
 
 ## Multimodalité
 
-Le profil hybride garde PDF/images sur Ollama :
+Le profil hybride garde le parcours PDF/images sur les modèles locaux multimodaux :
 
 ```text
 imageModel/pdfModel
   -> ollama/qwen3.5:9b-q4_K_M
-  -> fallback ollama/gemma3:12b-it-q4_K_M
+  -> fallback ollama/gemma4:12b-it-q4_K_M
 ```
 
-Qwen 2.5 Coder 14B reste text-only. Le passage d'une entrée visuelle vers le spécialiste DevOps se fait par ingestion/handoff textuel avec provenance.
+Ministral 3 Reasoning reste text-only dans le contrat nominal. Le passage d'une entrée visuelle vers le spécialiste DevOps se fait par ingestion/handoff textuel avec provenance.
 
 ## Protocole de comparaison
 
@@ -127,7 +128,7 @@ Comparer, autant que possible, le **même modèle effectif et la même quantific
 - changement de modèle ;
 - isolation mémoire entre backends ;
 - tool-calling OpenClaw ;
-- contexte 8K puis stress 16K ;
+- contexte benchmark 8K puis stress 16K ;
 - simplicité d'exploitation et rollback.
 
 Le runner de comparaison conserve `promotion_allowed: false`. Une comparaison n'autorise jamais à elle seule une bascule de production.
@@ -174,22 +175,26 @@ Le runner de comparaison conserve `promotion_allowed: false`. Une comparaison n'
 
 ## Conditions de promotion du profil hybride
 
-Avant toute promotion, il faut de nouvelles preuves portant sur **la flotte actuelle** :
+Avant toute promotion, il faut des preuves portant sur **la flotte V2** :
 
 1. B580 détectée et pilote enregistré ;
-2. identités/digests des trois nouveaux modèles ;
+2. identités/digests des trois modèles routés ;
 3. chargement des modèles attendus sur chaque backend ;
 4. benchmark isolé reproductible ;
 5. configuration OpenClaw valide ;
 6. provider attendu prouvé agent par agent ;
-7. tool-calling réel avec Qwen 2.5 Coder/Vulkan ;
+7. tool-calling réel avec le spécialiste DevOps ;
 8. réparation après erreur d'outil ;
-9. multi-agent/E2E sans fallback cloud ;
-10. trois runs stables ;
+9. multi-agent/E2E sans dépendance LLM externe ;
+10. répétitions stables ;
 11. contexte soutenable mesuré ;
 12. revue humaine.
 
 Le dépôt conserve `default_backend: ollama-vulkan` et `no_automatic_promotion: true` jusqu'à décision humaine.
+
+## Local-only
+
+Tous les endpoints d'inférence gérés sont loopback. Les profils backend n'ont aucune fonction d'escalade vers un modèle en ligne. Si les backends locaux échouent, la qualification échoue : elle ne bascule pas ailleurs.
 
 ## Preuves
 
