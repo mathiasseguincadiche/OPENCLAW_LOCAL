@@ -39,8 +39,8 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         [string]$script:HybridRuntime.llama_cpp_vulkan.gpu_layers | Should -Be 'auto'
         @($script:HybridRuntime.llama_cpp_vulkan.managed_models) |
             Should -Be @(
-                'gemma3:12b-it-q4_K_M',
-                'qwen2.5-coder:14b-instruct-q4_K_M'
+                'gemma4:12b-it-q4_K_M',
+                'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
             )
     }
 
@@ -62,7 +62,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:VulkanHelper | Should -Match 'Get-IntelVulkanManagedModel'
     }
 
-    It 'encode le profil mesuré Qwen Ollama et Gemma Qwen Coder Vulkan sans auto-promotion' {
+    It 'encode le profil Qwen Ollama et Gemma 4 Ministral Vulkan sans auto-promotion' {
         $script:HybridBackends | Should -Match 'b580-hybrid:'
         $script:HybridBackends | Should -Match 'qwen-max:\s*ollama-vulkan'
         $script:HybridBackends | Should -Match 'gemma-deep:\s*llama-cpp-vulkan'
@@ -76,12 +76,12 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
 
     It 'rend configuration et E2E conscients du provider hybride sans cloud silencieux' {
         $script:HybridConfigure | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid'\)"
-        $script:HybridConfigure | Should -Match 'Qwen 3\.5->Ollama, Gemma 3/Qwen Coder->intel-vulkan'
+        $script:HybridConfigure | Should -Match 'Qwen 3\.5->Ollama, Gemma 4/Ministral Reasoning->intel-vulkan'
         $script:HybridConfigure | Should -Match 'INTEL_VULKAN_API_KEY'
         $script:HybridE2E | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid'\)"
         $script:HybridE2E | Should -Match 'Get-AgentPrimaryModelRef'
         $script:HybridE2E | Should -Match 'provider_by_agent'
-        $script:HybridE2E | Should -Match 'intel-vulkan/qwen2\.5-coder:14b-instruct-q4_K_M'
+        $script:HybridE2E | Should -Match 'intel-vulkan/hf\.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
         $script:HybridE2E | Should -Match 'vulkan-tool-ok\.txt'
         $script:HybridE2E | Should -Match 'Test-ExpectedProvider'
         $script:HybridE2E | Should -Match 'Test-GatewayTransport'
@@ -118,7 +118,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Not -Match 'ColdModelTimeoutSeconds'
         $script:HybridE2E | Should -Not -Match 'SeenModelRefs'
         $script:HybridE2E | Should -Match 'smokes groupés par modèle'
-        $script:HybridE2E | Should -Match 'Qwen Coder reste résident'
+        $script:HybridE2E | Should -Match 'Ministral Reasoning reste résident'
         $script:HybridE2E | Should -Match "'auditeur-qualite',[\s\S]*'ingenieur-devops'"
     }
 
@@ -157,7 +157,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $Configure = & pwsh -NoLogo -NoProfile -File (Join-Path $script:HybridRepoRoot 'menu.ps1') `
             -Action configure-openclaw -Backend b580-hybrid -DryRun 2>&1
         $LASTEXITCODE | Should -Be 0
-        ($Configure -join "`n") | Should -Match 'Qwen 3\.5 -> Ollama; Gemma 3 \+ Qwen Coder -> intel-vulkan'
+        ($Configure -join "`n") | Should -Match 'Qwen 3\.5 -> Ollama; Gemma 4 \+ Ministral 3 Reasoning -> intel-vulkan'
 
         $E2E = & pwsh -NoLogo -NoProfile -File (Join-Path $script:HybridRepoRoot 'menu.ps1') `
             -Action e2e -Backend b580-hybrid -DryRun 2>&1

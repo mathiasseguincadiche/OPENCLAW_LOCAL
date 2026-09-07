@@ -2,19 +2,37 @@
 
 ## But
 
-Ce document décrit les chemins d'inférence locaux spécialisés de `OPENCLAW_LOCAL` pour l'**Intel Arc B580 12 Go**. L'objectif est d'utiliser des backends LLM mesurables et réversibles, pas d'activer toutes les API Intel disponibles.
+Ce document décrit les chemins d'inférence **strictement locaux** de `OPENCLAW_LOCAL` pour l'Intel Arc B580 12 Go. L'objectif est d'utiliser des backends LLM mesurables, réversibles et fail-closed, sans fournisseur LLM cloud.
 
-## Flotte actuelle
+## Flotte Architecture V2
 
 ```text
 qwen-max          -> qwen3.5:9b-q4_K_M
-gemma-deep        -> gemma3:12b-it-q4_K_M
-devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+gemma-deep        -> gemma4:12b-it-q4_K_M
+devstral-devops   -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-La flotte a été redimensionnée après observation d'une pression mémoire/offload excessive avec la précédente classe 24–27B. Les nouveaux modèles restent **non qualifiés matériellement** tant qu'une nouvelle campagne B580 n'a pas produit ses preuves.
+Les trois modèles routés sont Q4_K_M. Ils restent **non qualifiés matériellement** tant qu'une nouvelle campagne B580 n'a pas produit ses preuves.
 
-Le contexte nominal est 8192 tokens ; le 16K reste un stress de qualification.
+Challenger benchmark local hors routage :
+
+```text
+granite-devops -> granite4.2:8b-q4_K_M
+```
+
+Granite n'est ni un quatrième modèle routé, ni un fallback, et ne peut pas être promu automatiquement.
+
+## Contextes
+
+Deux contrats restent séparés :
+
+```text
+8192  -> benchmark nominal / HARD-40M
+16384 -> orchestration full-agent OpenClaw nominale
+>16K  -> non promu sans qualification dédiée
+```
+
+Les six cas HARD-40M à 16K restent du stress benchmark. Le contexte OpenClaw 16K ne constitue pas une promotion du benchmark. Aucune montée automatique à 32K n'est autorisée.
 
 ## Chemins locaux
 
@@ -34,7 +52,9 @@ OpenClaw
           image/PDF       -> Ollama
 ```
 
-Qwen et Gemma portent le parcours multimodal. Qwen 2.5 Coder est text-only et reçoit un handoff textuel/structuré lorsque la source initiale est visuelle.
+Qwen 3.5 et Gemma 4 portent le parcours multimodal local. Ministral 3 Reasoning est text-only dans le contrat nominal et reçoit un handoff textuel/structuré lorsque la source initiale est visuelle.
+
+Aucun chemin d'échec ne bascule vers un modèle LLM en ligne.
 
 ## Pourquoi SYCL/Level Zero
 
@@ -42,12 +62,11 @@ Pour les LLM GGUF, le chemin Intel spécialisé est le backend **SYCL de llama.c
 
 ## Runtime verrouillé
 
-La version est définie dans `config/v1/runtime_versions.json` :
+La version est définie dans `config/v1/runtime_versions.json`. Le contrat courant verrouille notamment :
 
 ```text
 source     : ggml-org/llama.cpp
 release    : b10621
-asset      : llama-b10621-bin-win-sycl-x64.zip
 device     : SYCL0
 selector   : level_zero:gpu
 endpoint   : http://127.0.0.1:8080/v1
@@ -61,7 +80,9 @@ L'archive n'est jamais exécutée avant validation de son SHA-256 versionné.
 
 ## Sources modèles
 
-Le contrat actuel réutilise les sources GGUF effectives exposées par le stockage local lorsque cela est compatible. Toute source native alternative doit être explicitement verrouillée dans `runtime_versions.json` avec intégrité vérifiable ; aucun téléchargement implicite d'un autre modèle n'est accepté pendant un benchmark.
+Le contrat réutilise les sources GGUF effectives exposées par le stockage local lorsque cela est compatible. Toute source native alternative doit être explicitement verrouillée avec intégrité vérifiable ; aucun téléchargement implicite d'un autre modèle n'est accepté pendant un benchmark.
+
+Pour `devstral-devops`, la source V2 est le GGUF officiel Mistral AI référencé par le catalogue. Les identités exactes et quantifications doivent être capturées dans les preuves matérielles.
 
 ## Installation SYCL
 
@@ -88,7 +109,7 @@ Une erreur arrête le serveur candidat et interdit toute promotion.
 
 ## Pourquoi `models-max=1`
 
-Même redimensionnée, la flotte ne doit pas garder trois modèles simultanément en VRAM sur une carte 12 Go. La politique est donc :
+La flotte ne doit pas garder plusieurs grands modèles simultanément en VRAM sur une carte 12 Go. La politique est donc :
 
 - un modèle actif à la fois sur les routeurs llama.cpp ;
 - chargement/déchargement explicite ;
@@ -112,8 +133,8 @@ Le contrôle exige runtime, binaire, B580, processus suivi, API locale, trois mo
 
 ```powershell
 .\menu.ps1 -Action intel-sycl-diagnose -Model qwen3.5:9b-q4_K_M
-.\menu.ps1 -Action intel-sycl-diagnose -Model gemma3:12b-it-q4_K_M
-.\menu.ps1 -Action intel-sycl-diagnose -Model qwen2.5-coder:14b-instruct-q4_K_M
+.\menu.ps1 -Action intel-sycl-diagnose -Model gemma4:12b-it-q4_K_M
+.\menu.ps1 -Action intel-sycl-diagnose -Model hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
 Le diagnostic isole full/auto offload, comportement `fit` et CPU-only sans modifier automatiquement OpenClaw.
@@ -125,18 +146,7 @@ Le diagnostic isole full/auto offload, comportement `fit` et CPU-only sans modif
 .\menu.ps1 -Action intel-sycl-compare
 ```
 
-Comparer le même modèle effectif et la même quantification avec :
-
-- contexte 8192 pour la baseline ;
-- température déterministe ;
-- thinking désactivé lorsque le protocole de comparaison l'exige ;
-- mêmes prompts ;
-- durée murale ;
-- TTFT ;
-- prompt tok/s ;
-- génération tok/s ;
-- chargement/déchargement ;
-- mémoire observée si disponible.
+Comparer le même modèle effectif et la même quantification avec contexte 8192 pour la baseline, température déterministe, mêmes prompts et métriques de durée, TTFT, prompt tok/s, génération tok/s, chargement/déchargement et mémoire observée si disponible.
 
 Le rapport conserve :
 
@@ -154,9 +164,27 @@ La vitesse seule ne suffit pas.
 .\menu.ps1 -Action intel-vulkan-verify
 ```
 
-Le runtime géré Vulkan écoute sur `127.0.0.1:8081/v1`, utilise `models-max=1`, `parallel=1`, `gpu-layers=auto`, `fit=on`, contexte 8192 et reste offline.
+Le runtime géré Vulkan écoute sur `127.0.0.1:8081/v1`, utilise `models-max=1`, `parallel=1`, `gpu-layers=auto`, `fit=on`, contexte benchmark 8192 et reste offline.
 
-Dans le profil hybride, il gère Gemma 3 12B et Qwen 2.5 Coder 14B. Le serveur SYCL suivi est arrêté avant Vulkan afin de ne pas créer une contention artificielle de VRAM.
+Dans le profil hybride V2, il gère :
+
+```text
+gemma4:12b-it-q4_K_M
+hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
+```
+
+Le serveur SYCL suivi est arrêté avant Vulkan afin de ne pas créer une contention artificielle de VRAM.
+
+## Multimodalité
+
+Les images/PDF restent sur Ollama via les modèles locaux multimodaux :
+
+```text
+qwen3.5:9b-q4_K_M
+gemma4:12b-it-q4_K_M
+```
+
+Le handoff vers Ministral reste textuel et traçable.
 
 ## Basculer OpenClaw vers un candidat
 
@@ -188,6 +216,18 @@ Les images/PDF restent sur Ollama tant qu'un parcours multimodal llama.cpp n'est
 
 Les setups candidats ne modifient jamais automatiquement la sélection OpenClaw.
 
+## Challenger Ministral / Granite
+
+Granite est installé séparément pour la comparaison locale :
+
+```powershell
+ollama pull granite4.2:8b-q4_K_M
+.\scripts\windows\23_compare_model_challenger.ps1 -DryRun
+.\scripts\windows\23_compare_model_challenger.ps1
+```
+
+La comparaison porte notamment sur coding, tool-calling natif, réparation après erreur, latence/débit et adéquation B580. Elle ne modifie jamais le routage et ne peut pas contourner un échec HARD-40M.
+
 ## Ce qui constitue une vraie validation B580
 
 Une promotion exige au minimum :
@@ -209,4 +249,4 @@ Le terme « optimisé B580 » ne doit être utilisé qu'après ces preuves. La C
 
 ## État pré-V1
 
-`ollama-vulkan` reste le nominal/rollback. SYCL, Vulkan et `b580-hybrid` restent des candidats jusqu'aux nouvelles mesures de cette flotte. Les anciennes preuves 24–27B restent historiques et ne peuvent pas être réutilisées comme attestation V1.
+`ollama-vulkan` reste le nominal/rollback. SYCL, Vulkan et `b580-hybrid` restent des candidats jusqu'aux nouvelles mesures de la flotte V2. Les anciennes preuves d'autres flottes restent historiques et ne peuvent pas être réutilisées comme attestation V1.

@@ -2,101 +2,106 @@
 
 ## Objectif
 
-`OPENCLAW_LOCAL` matérialise huit rôles versionnés dans OpenClaw, avec workspaces séparés, outils bornés, projets synchronisés et routage strictement local-first. Aucun fallback cloud silencieux ni secret n'est injecté dans la configuration.
+`OPENCLAW_LOCAL` matérialise huit rôles versionnés dans OpenClaw, avec workspaces séparés, outils bornés, projets synchronisés et routage **LLM strictement local**. Architecture V2 ne configure aucun fournisseur LLM cloud et toute demande de routage cloud échoue fail-closed.
+
+Les outils Web restent autorisés comme sources d'information. Ils ne changent pas le backend de raisonnement : les agents continuent d'utiliser la flotte locale.
 
 ## Sources de vérité
 
 - `config/v1/runtime_versions.json` : versions des runtimes locaux ;
-- `config/v1/model_catalog.yaml` : exactement trois modèles locaux supportés ;
+- `config/v1/model_catalog.yaml` : exactement trois modèles locaux routés + challenger local séparé ;
 - `config/v1/model_routing.yaml` : routes nominales et fallbacks dans la flotte fermée ;
 - `config/v1/runtime_backends.yaml` : profils Ollama, SYCL, Vulkan et hybride ;
 - `config/v1/tool_policy.yaml` : permissions par rôle ;
-- `config/v1/web_policy.yaml` : Web local-first ;
+- `config/v1/web_policy.yaml` : outils Web local-first ;
 - `config/v1/document_ingestion_policy.yaml` : PDF/images/Office/texte ;
 - `agents/*` : identité et contrat des huit rôles ;
 - `src/clawlocal/openclaw_config.py` : génération du patch OpenClaw.
 
 ## Runtime OpenClaw verrouillé
 
-Le runtime supporté est **OpenClaw 2026.9.1** avec le plugin Parallel aligné sur **2026.9.1**.
+Le lock V2 actuel conserve **OpenClaw 2026.9.1** avec le plugin Parallel aligné sur **2026.9.1**. Une évolution de la stable OpenClaw est traitée séparément comme un changement de runtime : elle ne doit pas être confondue avec la migration de flotte.
 
-Le lock conserve l'intégrité SRI du paquet npm et le SHA de release publié afin que `install-core` rejette des octets différents de l'artefact qualifié.
+Le lock conserve l'intégrité SRI du paquet npm et le SHA de release publié afin que `install-core` rejette des octets différents de l'artefact attendu.
 
-Après une modification du lock runtime, exécuter d'abord :
+Après une modification du lock runtime :
 
 ```powershell
 .\menu.ps1 -Action install-core
 openclaw --version
 ```
 
-`configure-openclaw` vérifie ensuite la version verrouillée avant toute mutation. Il ne doit pas compenser une dérive de runtime en abaissant silencieusement les seuils de qualification.
+`configure-openclaw` vérifie la version verrouillée avant toute mutation. Il ne doit jamais compenser une dérive de runtime en abaissant les seuils de qualification.
 
-La montée `2026.8.2 -> 2026.9.1` conserve les versions de schéma d'état publiées par OpenClaw (`state=15`, `agent=19`), mais reste traitée comme un changement de runtime complet : plugin Parallel, schéma vivant, admission full-agent et E2E doivent tous être revalidés.
+## Flotte locale active V2
 
-## Flotte locale active
-
-Les alias logiques restent stables afin de préserver les contrats, workspaces et états existants, mais leurs runtimes sont dimensionnés pour l'Intel Arc B580 12 Go :
+Les alias logiques restent stables afin de préserver les contrats, workspaces et états existants :
 
 ```text
 qwen-max          -> ollama/qwen3.5:9b-q4_K_M
-gemma-deep        -> ollama/gemma3:12b-it-q4_K_M
-devstral-devops   -> ollama/qwen2.5-coder:14b-instruct-q4_K_M
+gemma-deep        -> ollama/gemma4:12b-it-q4_K_M
+devstral-devops   -> ollama/hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-`devstral-devops` est un **alias de compatibilité** : son runtime actif est Qwen 2.5 Coder 14B. Aucun quatrième modèle local n'est supporté.
+`devstral-devops` est un **alias de compatibilité** : son runtime V2 est Ministral 3 14B Reasoning Q4_K_M. La flotte routée reste exactement à trois modèles.
+
+Le challenger local séparé est :
+
+```text
+granite-devops -> granite4.2:8b-q4_K_M
+```
+
+Il n'est pas injecté dans le routage OpenClaw nominal et ne peut pas être auto-promu.
 
 ## Contrat de contexte : benchmark 8K, agent OpenClaw 16K
 
 Le projet distingue deux notions qui ne doivent pas être confondues :
 
-- **8192 tokens** restent le contexte nominal du benchmark direct B580 et du contrat HARD-40M ;
-- **16384 tokens** sont la fenêtre d'exécution nominale du **full agent OpenClaw sur Ollama**, afin d'absorber le prompt système OpenClaw, le contrat du rôle et la surface d'outils autorisée.
+- **8192 tokens** : contexte nominal du benchmark direct B580 et du contrat HARD-40M ;
+- **16384 tokens** : fenêtre d'exécution nominale du full-agent OpenClaw sur Ollama afin d'absorber prompt système, contrat du rôle, réserve et surface d'outils autorisée.
 
-Cette fenêtre OpenClaw 16K **n'est pas une promotion des résultats 16K HARD-40M** et ne constitue aucune preuve de performance ou de full-offload sur la B580. Les seuils HARD-40M, les cas 8K/16K et les critères de qualification restent inchangés.
+Cette fenêtre OpenClaw 16K **n'est pas une promotion du benchmark** et ne constitue aucune preuve de performance ou de full-offload sur la B580. Les seuils HARD-40M, les cas 8K/16K et les critères de qualification restent inchangés.
 
-OpenClaw 2026.9.1 considère désormais l'estimation de pression pré-prompt ordinaire comme un signal diagnostique : une estimation conservatrice trop haute n'entraîne pas à elle seule une compaction ou un rejet. Un vrai checkpoint de replay/compaction qui ne tient pas dans la fenêtre canonique peut toujours produire un `context_overflow (precheck)`, ce qui doit rester un échec visible et documenté.
+Le provider Ollama amont peut accepter une capacité supérieure, mais `OPENCLAW_LOCAL` conserve **16K comme valeur nominale gérée** tant que la B580 n'a pas fourni de preuve justifiant une extension. Un éventuel test 32K est un candidat d'orchestration distinct, jamais une promotion automatique ni une modification du HARD-40M.
 
-Le provider Ollama de la stable 2026.9.1 utilise en amont une capacité locale par défaut supérieure et le setup automatique exige au moins 16K pour un modèle outillé. `OPENCLAW_LOCAL` conserve néanmoins **16K comme valeur nominale gérée** tant que la B580 n'a pas produit de preuve suffisante pour 32K. Un test 32K éventuel est un **candidat d'orchestration**, pas une promotion du benchmark ni une modification automatique du contrat HARD-40M.
-
-Les trois modèles Ollama sont donc déclarés à `contextWindow=16384`, `contextTokens=16384` et `num_ctx=16384` dans le chemin full-agent nominal, tandis que les runners de benchmark continuent explicitement à exécuter leurs cas 8192/16384 selon le protocole de qualification.
-
-Les anciens overrides `compaction.reserveTokens` et `reserveTokensFloor` ne sont pas réintroduits : le correctif agit sur la vraie capacité du full-agent et sur le volume réellement injecté, pas sur un contournement du precheck.
+Les trois modèles Ollama sont donc déclarés à `contextWindow=16384`, `contextTokens=16384` et `num_ctx=16384` dans le chemin full-agent nominal, tandis que les runners de benchmark exécutent explicitement leurs cas 8192/16384 selon le protocole de qualification.
 
 Les backends candidats `llama-cpp-sycl`, `llama-cpp-vulkan` et `b580-hybrid` conservent leur propre contrat de contexte tant qu'ils n'ont pas produit leur qualification B580.
 
 ## Budget du prompt runtime
 
-Le contexte plus large n'est pas utilisé comme unique solution. La surface runtime est également bornée :
+Le contexte 16K n'est pas utilisé comme unique solution. La surface runtime reste bornée :
 
 - le contrat compact `RUNTIME_CONTRACT.md` + le rôle sont injectés via `AGENTS.md` ;
 - `CONTRACT.md` et `PEDAGOGY.md` complets restent disponibles à la demande mais ne sont pas auto-injectés ;
-- `SOUL.md`, `USER.md`, `HEARTBEAT.md` et `IDENTITY.md` restent matérialisés dans chaque workspace mais sont exclus de l'injection automatique OpenClaw ;
+- `SOUL.md`, `USER.md`, `HEARTBEAT.md` et `IDENTITY.md` restent matérialisés mais exclus de l'injection automatique ;
 - `AGENTS.md` reste plafonné à 6500 caractères et le bootstrap runtime géré à 8000 caractères ;
-- chaque agent géré reçoit explicitement `skills: []` sur le chemin nominal afin de ne pas injecter des skill cards héritées sans décision de rôle ;
-- les profils d'outils partent de `minimal` et réautorisent seulement les capacités nécessaires à chaque rôle ;
-- `tools.toolSearch` en mode structuré `tools` diffère les schémas non essentiels derrière la recherche d'outils au lieu de tous les placer dans le prompt initial ;
+- chaque agent géré reçoit explicitement `skills: []` ;
+- `skills.limits.maxSkillsPromptChars=0` constitue le hard-stop nominal de rendu des skills ;
+- les profils d'outils partent de `minimal` et réautorisent uniquement les capacités nécessaires ;
+- `tools.toolSearch` en mode structuré `tools` diffère les schémas non essentiels ;
 - `experimental.localModelLean=true` reste activé pour les agents locaux.
 
-La politique de sécurité ne change pas : workspace-only, `exec` soumis au contrat d'approbation, elevated désactivé, et rôles de revue non mutateurs.
+La politique de sécurité reste : workspace-only, `exec` soumis au contrat d'approbation, elevated désactivé et rôles de revue non mutateurs.
 
 ## Contrat multimodal
 
 - `qwen-max` et `gemma-deep` acceptent texte + image dans le parcours Ollama ;
-- `devstral-devops` est **text-only** ;
+- `devstral-devops` / Ministral Reasoning est **text-only** dans le contrat nominal ;
 - `imageModel` et `pdfModel` utilisent `qwen-max`, avec `gemma-deep` en fallback local ;
-- lorsqu'une tâche DevOps provient d'un PDF ou d'une image, l'ingestion/multimodalité est effectuée avant le handoff textuel vers le spécialiste DevOps.
+- lorsqu'une tâche DevOps provient d'un PDF ou d'une image, l'ingestion multimodale est effectuée localement avant le handoff textuel vers le spécialiste.
 
-Aucun document privé n'est envoyé automatiquement à un provider cloud.
+Aucun document n'est transmis à un modèle LLM en ligne par la plateforme V2.
 
 ## Contrat de schéma OpenClaw
 
-Le générateur produit encore le roster sous la surface d'entrée compatible :
+Le générateur produit le roster sous la surface d'entrée compatible :
 
 ```text
 agents.list[]
 ```
 
-OpenClaw 2026.9.x persiste ce roster sous sa représentation canonique :
+OpenClaw 2026.9.x peut persister ce roster sous sa représentation canonique :
 
 ```text
 agents.entries.<agent-id>
@@ -117,9 +122,9 @@ Une montée de version OpenClaw est un changement de contrat : mettre à jour le
 
 Le parcours :
 
-1. vérifie le backend sélectionné ;
+1. vérifie le backend local sélectionné ;
 2. exige la version OpenClaw verrouillée ;
-3. converge le plugin Parallel vers sa version verrouillée ;
+3. converge le plugin Web requis vers sa version verrouillée ;
 4. crée la baseline OpenClaw si nécessaire ;
 5. capture le schéma vivant avec `openclaw config schema` ;
 6. déploie les huit workspaces gérés ;
@@ -128,9 +133,9 @@ Le parcours :
 9. applique le patch uniquement si la validation réussit ;
 10. exécute `openclaw config validate --json` ;
 11. vérifie `openclaw agents list --json` ;
-12. sur `ollama-vulkan`, exécute un **vrai prompt full-agent** sur Qwen 3.5, Gemma 3 et Qwen 2.5 Coder avant d'annoncer le PASS.
+12. sur `ollama-vulkan`, exécute un vrai prompt full-agent sur Qwen 3.5, Gemma 4 et Ministral 3 Reasoning avant d'annoncer le PASS.
 
-Chaque contrôle d'admission sauvegarde son payload sous `proofs/openclaw_prompt_admission_*.json`. Si OpenClaw refuse encore le prompt, la configuration échoue immédiatement avec l'évidence, au lieu de laisser l'opérateur découvrir le même défaut au E2E suivant. Lorsque le runtime renvoie `systemPromptReport`, les dimensions système/outils/skills sont également affichées.
+Chaque contrôle d'admission sauvegarde son payload sous `proofs/openclaw_prompt_admission_*.json`. Si OpenClaw refuse le prompt, la configuration échoue immédiatement avec l'évidence. Lorsque le runtime renvoie `systemPromptReport`, les dimensions système/outils/skills sont affichées et `skills.promptChars` doit rester nul sur le chemin nominal.
 
 Les listes gérées sont remplacées intentionnellement via :
 
@@ -143,19 +148,19 @@ Le patch nominal Ollama configure notamment :
 
 - Gateway local sur loopback ;
 - Ollama sur `http://127.0.0.1:11434` ;
-- exactement trois modèles locaux ;
+- exactement trois modèles locaux routés ;
 - benchmark direct nominal 8192 ;
 - full-agent OpenClaw Ollama 16384 ;
 - huit agents ;
 - ownership explicite ;
-- `skills: []` par agent nominal ;
+- `skills: []` et budget skills nul ;
 - `experimental.localModelLean=true` ;
 - profils d'outils minimaux et Tool Search structuré ;
 - `tools.fs.workspaceOnly=true` ;
 - `tools.exec.mode=ask` ;
 - elevated désactivé ;
-- Web local-first ;
-- aucun provider LLM cloud sur le chemin nominal.
+- outils Web local-first ;
+- **aucun provider LLM cloud**.
 
 ## Workspaces et projets
 
@@ -181,7 +186,7 @@ Les workspaces sont des snapshots jetables et ne remplacent jamais le projet cen
 
 ## Document Ingestion et Artifact Exchange
 
-L'ingestion construit des représentations locales traçables sans modifier les originaux : PDF via l'outil `pdf`, images via `view_image`, Office via extraction locale déterministe, texte/code via normalisation locale.
+L'ingestion construit des représentations locales traçables sans modifier les originaux : PDF/images via les capacités prévues, Office via extraction locale déterministe, texte/code via normalisation locale.
 
 Les sorties des tâches sont versionnées sous `context/exchange/`. Une sortie `PASS` peut être propagée aux dépendants ; une sortie `FAIL` reste historique et ne devient jamais une entrée valide. Provenance et SHA-256 sont conservés.
 
@@ -189,7 +194,7 @@ Les sorties des tâches sont versionnées sous `context/exchange/`. Une sortie `
 
 ```text
 Chef opérations       -> qwen-max
-Expert recherche      -> qwen-max + Web
+Expert recherche      -> qwen-max + outils Web
 Architecte solutions  -> gemma-deep
 Ingénieur DevOps      -> devstral-devops
 Ingénieur sécurité    -> qwen-max
@@ -199,7 +204,7 @@ Auditeur qualité      -> gemma-deep
                          -> qwen-max si producteur Gemma
 ```
 
-La séparation producteur/auditeur change de famille lorsque cela est praticable.
+La séparation producteur/auditeur change de famille lorsque cela est praticable. Tous les fallbacks restent dans la flotte locale fermée.
 
 ## Backends locaux
 
@@ -208,9 +213,9 @@ Trois moteurs sont qualifiables, plus un profil mixte :
 - `ollama-vulkan` : chemin nominal et rollback ;
 - `llama-cpp-sycl` : candidat Intel Arc ;
 - `llama-cpp-vulkan` : candidat Intel Arc ;
-- `b580-hybrid` : Qwen sur Ollama, Gemma et Qwen Coder sur llama.cpp/Vulkan.
+- `b580-hybrid` : combinaison locale candidate.
 
-La migration de flotte **invalide toute conclusion de performance antérieure** pour le choix final du backend. Les nouvelles mesures doivent être produites sur la B580 avec les trois nouveaux runtimes avant toute promotion.
+La migration de flotte invalide les conclusions de performance antérieures pour le choix final du backend. Les nouvelles mesures doivent être produites sur la B580 avec les runtimes V2 avant toute promotion.
 
 ## Gate E2E
 
@@ -219,10 +224,10 @@ La migration de flotte **invalide toute conclusion de performance antérieure** 
 .\menu.ps1 -Action e2e
 ```
 
-Le test doit prouver les huit agents, le provider local attendu, le modèle primaire conforme au catalogue, le vrai tool-calling, la réparation après erreur d'outil, la stabilité et l'absence de dépendance cloud nominale.
+Le test doit prouver les huit agents, le provider local attendu, le modèle primaire conforme au catalogue, le vrai tool-calling, la réparation après erreur d'outil, la stabilité et l'absence de dépendance LLM cloud.
 
-Le gate d'admission de `configure-openclaw` réduit fortement les boucles de diagnostic, mais ne remplace pas le E2E : le E2E reste nécessaire pour les huit rôles et les parcours d'outils réels.
+Le gate d'admission de `configure-openclaw` ne remplace pas le E2E : le E2E reste nécessaire pour les huit rôles et les parcours d'outils réels.
 
 ## Promotion
 
-Un succès d'admission ou E2E ne promeut automatiquement ni modèle, ni backend, ni V1. La décision reste fondée sur la qualification matérielle, les preuves hashées et la revue humaine.
+Un succès d'admission, E2E ou challenger ne promeut automatiquement ni modèle, ni backend, ni contexte 32K, ni V1. La décision reste fondée sur la qualification matérielle, les preuves hashées et la revue humaine.

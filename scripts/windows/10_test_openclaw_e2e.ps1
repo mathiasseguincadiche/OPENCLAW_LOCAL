@@ -24,7 +24,7 @@ $AgentIds = @(
     'architecte-solutions',
     'redacteur-technique',
     'auditeur-qualite',
-    # Qwen Coder reste résident pour les probes outils qui suivent.
+    # Ministral Reasoning reste résident pour les probes outils qui suivent.
     'ingenieur-devops'
 )
 $ToolAgentId = 'ingenieur-devops'
@@ -395,9 +395,9 @@ if ($DryRun) {
         "probes ciblés ${TimeoutSeconds}s; réparation multi-outils ${RepairTimeoutSeconds}s."
     )
     Write-Host '[DRY-RUN] échec applicatif: payload JSON sauvegardé immédiatement dans proofs.'
-    Write-Host '[DRY-RUN] smokes groupés par modèle; Qwen Coder en dernier pour rester résident avant tool-calling.'
+    Write-Host '[DRY-RUN] smokes groupés par modèle; Ministral Reasoning en dernier pour rester résident avant tool-calling.'
     if ($Backend -eq 'b580-hybrid') {
-        Write-Host '[DRY-RUN] Qwen 3.5 -> Ollama; Gemma 3/Qwen Coder -> intel-vulkan; tool-call Qwen Coder/Vulkan obligatoire.'
+        Write-Host '[DRY-RUN] Qwen 3.5 -> Ollama; Gemma 4/Ministral Reasoning -> intel-vulkan; tool-call Ministral/Vulkan obligatoire.'
     }
     Write-Host '[DRY-RUN] tool-calling via le modèle primaire réellement routé pour ingenieur-devops.'
     Write-Host '[DRY-RUN] compatibilité CLI OpenClaw verrouillée via runtime_versions.json: agent --agent/--model/--message.'
@@ -494,7 +494,7 @@ Write-Host "E2E  Modèle outils=$ToolModelRef provider=$ToolProvider"
 Write-Host "E2E  Scratch borné=$ScratchRoot"
 
 if ($Backend -eq 'b580-hybrid') {
-    $ExpectedHybridToolRef = 'intel-vulkan/qwen2.5-coder:14b-instruct-q4_K_M'
+    $ExpectedHybridToolRef = 'intel-vulkan/hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
     if ($ToolModelRef -ne $ExpectedHybridToolRef) {
         throw (
             'Routage hybride inattendu pour ingenieur-devops. ' +
@@ -677,7 +677,7 @@ Ne fais aucune vérification supplémentaire.
         $null = Write-OpenClawFailureEvidence -Payload $VulkanResult `
             -Description 'Tool-calling OpenClaw/intel-vulkan marqueur absent' `
             -FailureEvidenceRoot $ProofsRoot
-        throw "Qwen Coder/Vulkan n'a pas créé vulkan-tool-ok.txt. Réponse modèle=$VulkanText"
+        throw "Ministral Reasoning/Vulkan n'a pas créé vulkan-tool-ok.txt. Réponse modèle=$VulkanText"
     }
     if ((Get-Content -Raw -LiteralPath $VulkanMarker).Trim() -ne 'VULKAN_TOOL_OK') {
         throw 'Le contenu de vulkan-tool-ok.txt est incorrect.'

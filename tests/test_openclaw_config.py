@@ -18,15 +18,16 @@ EXPECTED_AGENTS = {
     "auditeur-qualite",
 }
 
+MINISTRAL = "hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M"
 EXPECTED_MODELS = {
     "qwen3.5:9b-q4_K_M",
-    "gemma3:12b-it-q4_K_M",
-    "qwen2.5-coder:14b-instruct-q4_K_M",
+    "gemma4:12b-it-q4_K_M",
+    MINISTRAL,
 }
 EXPECTED_SYCL_MODELS = EXPECTED_MODELS
 EXPECTED_VULKAN_MODELS = {
-    "gemma3:12b-it-q4_K_M",
-    "qwen2.5-coder:14b-instruct-q4_K_M",
+    "gemma4:12b-it-q4_K_M",
+    MINISTRAL,
 }
 OPENCLAW_AGENT_CONTEXT_TOKENS = 16384
 BENCHMARK_NOMINAL_CONTEXT_TOKENS = 8192
@@ -166,8 +167,8 @@ def test_provider_exposes_exactly_three_b580_sized_models() -> None:
     by_id = {model["id"]: model for model in provider["models"]}
     assert set(by_id) == EXPECTED_MODELS
     assert by_id["qwen3.5:9b-q4_K_M"]["input"] == ["text", "image"]
-    assert by_id["gemma3:12b-it-q4_K_M"]["input"] == ["text", "image"]
-    assert by_id["qwen2.5-coder:14b-instruct-q4_K_M"]["input"] == ["text"]
+    assert by_id["gemma4:12b-it-q4_K_M"]["input"] == ["text", "image"]
+    assert by_id[MINISTRAL]["input"] == ["text"]
     assert all(
         model["contextWindow"] == OPENCLAW_AGENT_CONTEXT_TOKENS
         for model in provider["models"]
@@ -183,11 +184,11 @@ def test_provider_exposes_exactly_three_b580_sized_models() -> None:
     assert all("metadata" not in model for model in provider["models"])
 
 
-def test_multimodal_defaults_use_qwen35_then_gemma3() -> None:
+def test_multimodal_defaults_use_qwen35_then_gemma4() -> None:
     defaults = build_openclaw_patch(Path("C:/OpenClawLocal"))["agents"]["defaults"]
     expected = {
         "primary": "ollama/qwen3.5:9b-q4_K_M",
-        "fallbacks": ["ollama/gemma3:12b-it-q4_K_M"],
+        "fallbacks": ["ollama/gemma4:12b-it-q4_K_M"],
     }
     assert defaults["model"] == expected
     assert defaults["imageModel"] == expected
@@ -225,11 +226,11 @@ def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None
     defaults = patch["agents"]["defaults"]
     assert defaults["model"] == {
         "primary": "intel-sycl/qwen3.5:9b-q4_K_M",
-        "fallbacks": ["intel-sycl/gemma3:12b-it-q4_K_M"],
+        "fallbacks": ["intel-sycl/gemma4:12b-it-q4_K_M"],
     }
     expected_multimodal = {
         "primary": "ollama/qwen3.5:9b-q4_K_M",
-        "fallbacks": ["ollama/gemma3:12b-it-q4_K_M"],
+        "fallbacks": ["ollama/gemma4:12b-it-q4_K_M"],
     }
     assert defaults["imageModel"] == expected_multimodal
     assert defaults["pdfModel"] == expected_multimodal
@@ -249,24 +250,24 @@ def test_b580_hybrid_routes_each_model_to_measured_backend() -> None:
     entries = _entries_by_id(patch)
     assert entries["chef-operations"]["model"] == {
         "primary": "ollama/qwen3.5:9b-q4_K_M",
-        "fallbacks": ["intel-vulkan/gemma3:12b-it-q4_K_M"],
+        "fallbacks": ["intel-vulkan/gemma4:12b-it-q4_K_M"],
     }
     assert entries["architecte-solutions"]["model"] == {
-        "primary": "intel-vulkan/gemma3:12b-it-q4_K_M",
+        "primary": "intel-vulkan/gemma4:12b-it-q4_K_M",
         "fallbacks": ["ollama/qwen3.5:9b-q4_K_M"],
     }
     assert entries["ingenieur-devops"]["model"] == {
-        "primary": "intel-vulkan/qwen2.5-coder:14b-instruct-q4_K_M",
+        "primary": f"intel-vulkan/{MINISTRAL}",
         "fallbacks": ["ollama/qwen3.5:9b-q4_K_M"],
     }
     defaults = patch["agents"]["defaults"]
     assert defaults["model"] == {
         "primary": "ollama/qwen3.5:9b-q4_K_M",
-        "fallbacks": ["intel-vulkan/gemma3:12b-it-q4_K_M"],
+        "fallbacks": ["intel-vulkan/gemma4:12b-it-q4_K_M"],
     }
     expected_multimodal = {
         "primary": "ollama/qwen3.5:9b-q4_K_M",
-        "fallbacks": ["ollama/gemma3:12b-it-q4_K_M"],
+        "fallbacks": ["ollama/gemma4:12b-it-q4_K_M"],
     }
     assert defaults["imageModel"] == expected_multimodal
     assert defaults["pdfModel"] == expected_multimodal

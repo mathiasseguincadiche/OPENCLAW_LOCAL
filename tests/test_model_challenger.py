@@ -28,38 +28,56 @@ def load_yaml(path: Path) -> dict[str, object]:
     return value
 
 
-def test_active_fleet_stays_exactly_three_models() -> None:
+def test_active_fleet_stays_exactly_three_models_and_local_only() -> None:
     catalog = load_yaml(ROOT / "config" / "v1" / "model_catalog.yaml")
+    policy = catalog["policy"]
+    assert isinstance(policy, dict)
+    assert policy["local_only"] is True
+    assert policy["cloud_models_supported"] is False
+    assert "cloud_catalog" not in catalog
     models = catalog["models"]
     assert isinstance(models, dict)
     assert set(models) == {"qwen-max", "gemma-deep", "devstral-devops"}
 
 
-def test_ministral_is_mandatory_benchmark_challenger_not_routed_model() -> None:
+def test_v2_runtime_selection_is_exact() -> None:
+    catalog = load_yaml(ROOT / "config" / "v1" / "model_catalog.yaml")
+    models = catalog["models"]
+    assert isinstance(models, dict)
+    assert models["qwen-max"]["runtime_id"] == "qwen3.5:9b-q4_K_M"
+    assert models["gemma-deep"]["runtime_id"] == "gemma4:12b-it-q4_K_M"
+    assert (
+        models["devstral-devops"]["runtime_id"]
+        == "hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M"
+    )
+
+
+def test_granite_is_mandatory_benchmark_challenger_not_routed_model() -> None:
     catalog = load_yaml(ROOT / "config" / "v1" / "model_catalog.yaml")
     challengers = catalog["benchmark_challengers"]
     assert isinstance(challengers, dict)
-    model = challengers["ministral-tool-calling"]
+    model = challengers["granite-devops"]
     assert isinstance(model, dict)
-    assert model["runtime_id"] == "ministral-3:14b-instruct-2512-q4_K_M"
+    assert model["runtime_id"] == "granite4.2:8b-q4_K_M"
     assert model["quantization"] == "Q4_K_M"
     assert model["required_for_selection"] is True
     assert model["routing_active"] is False
-    assert model["incumbent_alias"] == "gemma-deep"
+    assert model["incumbent_alias"] == "devstral-devops"
     assert model["automatic_promotion"] is False
 
 
-def test_policy_requires_native_tool_calling_comparison_and_human_decision() -> None:
+def test_policy_requires_native_tool_calling_coding_and_human_decision() -> None:
     policy = load_yaml(ROOT / "config" / "v1" / "qualification_policy.yaml")
     gate = policy["model_selection_challenger"]
     assert isinstance(gate, dict)
     assert gate["required_before_manual_model_selection"] is True
-    assert gate["incumbent_alias"] == "gemma-deep"
-    assert gate["challenger_alias"] == "ministral-tool-calling"
+    assert gate["incumbent_alias"] == "devstral-devops"
+    assert gate["challenger_alias"] == "granite-devops"
     assert gate["protocol"] == "native_tool_calling_v1"
     assert gate["required_capabilities"] == [
         "native_tool_calling",
         "tool_feedback_repair",
+        "coding",
     ]
     assert gate["automatic_promotion"] is False
     assert gate["human_decision_required"] is True

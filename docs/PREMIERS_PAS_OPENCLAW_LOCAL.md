@@ -4,7 +4,9 @@
 
 Ce guide présente l'utilisation de `OPENCLAW_LOCAL` sur Windows 11 : installation, vérification, choix des agents, questions ponctuelles, projets multi-agents, preuves et diagnostic.
 
-Le principe à retenir est simple : **OpenClaw orchestre huit rôles ; les rôles utilisent une flotte locale fermée de trois modèles ; le Project Orchestrator gère les projets structurés ; aucune panne locale n'est masquée par un fallback cloud silencieux.**
+Le principe à retenir est simple : **OpenClaw orchestre huit rôles ; les rôles utilisent une flotte locale fermée de trois modèles ; le Project Orchestrator gère les projets structurés ; Architecture V2 ne possède aucune route vers un modèle LLM cloud.**
+
+Les outils Web peuvent fournir des sources publiques fraîches, mais le raisonnement reste exécuté par les modèles locaux.
 
 ## 1. Modèle mental
 
@@ -26,21 +28,30 @@ Vous
         +--> llama.cpp/SYCL ou Vulkan en qualification
 ```
 
-### Flotte locale active
+### Flotte locale active V2
 
 | Alias | Runtime actif | Usage principal |
 |---|---|---|
 | `qwen-max` | `qwen3.5:9b-q4_K_M` | orchestration, recherche, sécurité, release, multimodal |
-| `gemma-deep` | `gemma3:12b-it-q4_K_M` | architecture, rédaction, audit, multimodal |
-| `devstral-devops` | `qwen2.5-coder:14b-instruct-q4_K_M` | DevOps, code, scripts, modifications multi-fichiers |
+| `gemma-deep` | `gemma4:12b-it-q4_K_M` | architecture, rédaction, audit, multimodal |
+| `devstral-devops` | `hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M` | DevOps, code, scripts, tool-calling, modifications multi-fichiers |
 
-Le nom `devstral-devops` est conservé comme **alias de compatibilité** ; le modèle réellement utilisé est Qwen 2.5 Coder 14B.
+Le nom `devstral-devops` est conservé comme **alias de compatibilité** ; le modèle réellement utilisé en V2 est Ministral 3 14B Reasoning Q4_K_M.
 
-Il n'existe aucun quatrième modèle local de secours. Le contexte nominal OpenClaw est 8192 tokens ; le 16K reste un stress de qualification.
+Un challenger local `granite-devops -> granite4.2:8b-q4_K_M` existe pour le benchmark comparatif. Il n'est pas routé, n'est pas un fallback et ne peut pas être promu automatiquement.
+
+### Contextes
+
+```text
+8192  -> benchmark/HARD-40M nominal
+16384 -> orchestration full-agent OpenClaw nominale
+```
+
+Le 16K OpenClaw n'est pas une promotion du benchmark. Aucune promotion 32K n'est automatique.
 
 ### Multimodalité
 
-Qwen et Gemma traitent PDF/images via le parcours multimodal. Le spécialiste DevOps est text-only : lorsqu'un projet DevOps contient une image ou un PDF, l'information est d'abord extraite/analysée puis transmise au spécialiste sous forme textuelle et traçable.
+Qwen 3.5 et Gemma 4 traitent les besoins image/PDF du parcours local. Le spécialiste DevOps est text-only : l'information multimodale est d'abord extraite/analysée puis transmise au spécialiste sous forme textuelle et traçable.
 
 ## 2. Dépôt Git et plateforme installée
 
@@ -116,7 +127,7 @@ Avant une utilisation sérieuse, le système doit prouver :
 - inférence locale ;
 - tool-calling ;
 - réparation après erreur d'outil ;
-- absence d'escalade cloud nominale.
+- aucune route LLM cloud.
 
 Le E2E prouve le fonctionnement. La qualification mesure ensuite les performances réelles :
 
@@ -125,7 +136,7 @@ Le E2E prouve le fonctionnement. La qualification mesure ensuite les performance
 .\menu.ps1 -Action qualification
 ```
 
-Les anciens résultats produits avec Qwen 3.8 27B, Gemma 4 26B ou Devstral 24B sont historiques et **ne qualifient pas la nouvelle flotte**.
+Les résultats d'une ancienne flotte sont historiques et **ne qualifient pas Architecture V2**.
 
 ## 5. Actions principales du menu
 
@@ -145,7 +156,7 @@ Les anciens résultats produits avec Qwen 3.8 27B, Gemma 4 26B ou Devstral 24B s
 | `qualification` | qualification matérielle complète |
 | `intel-sycl-*` | qualification du backend SYCL |
 | `intel-vulkan-*` | qualification du backend Vulkan |
-| `golden` | cinq golden projects pré-V1 |
+| `golden` | golden projects pré-V1 |
 | `logs` | derniers logs et preuves |
 
 `-DryRun` prévisualise une action sans mutation lorsqu'il est supporté.
@@ -173,6 +184,8 @@ python .\scripts\27_route_openclaw.py `
 
 Sans `--execute`, le routeur affiche la décision prévue sans lancer le modèle.
 
+L'option historique `--cloud`, si elle est appelée, est refusée explicitement par Architecture V2.
+
 ## 7. Quel agent choisir ?
 
 | Agent | Usage |
@@ -190,15 +203,7 @@ Si le rôle n'est pas évident, commencer par `chef-operations`.
 
 ## 8. Formuler une bonne mission
 
-Une mission utile contient :
-
-```text
-1. objectif
-2. contexte
-3. contraintes
-4. résultat attendu
-5. méthode de validation
-```
+Une mission utile contient : objectif, contexte, contraintes, résultat attendu et méthode de validation.
 
 Exemple :
 
@@ -243,18 +248,13 @@ Les originaux d'intake restent immuables. L'ingestion calcule SHA-256/MIME et co
 Voir l'état :
 
 ```powershell
-python .\scripts\32_orchestrate_project.py `
-  --project mon-premier-projet `
-  --action status
+python .\scripts\32_orchestrate_project.py --project mon-premier-projet --action status
 ```
 
 Lancer :
 
 ```powershell
-python .\scripts\32_orchestrate_project.py `
-  --project mon-premier-projet `
-  --action run `
-  --execute
+python .\scripts\32_orchestrate_project.py --project mon-premier-projet --action run --execute
 ```
 
 Machine d'états :
@@ -290,50 +290,22 @@ Le système ne doit pas inventer une décision bloquante à votre place.
 
 ## 13. Retrouver résultats et preuves
 
-Projet :
-
-```text
-<OPENCLAW_LOCAL_ROOT>\projects\<project-id>
-```
-
-Logs :
-
-```text
-<OPENCLAW_LOCAL_ROOT>\proofs\logs
-```
-
-Preuves E2E et backends :
-
-```text
-<OPENCLAW_LOCAL_ROOT>\proofs
-```
-
-Benchmarks :
-
-```text
-<REPO>\benchmarks\results
-```
+Projet : `<OPENCLAW_LOCAL_ROOT>\projects\<project-id>`  
+Logs : `<OPENCLAW_LOCAL_ROOT>\proofs\logs`  
+Preuves E2E/backends : `<OPENCLAW_LOCAL_ROOT>\proofs`  
+Benchmarks : `<REPO>\benchmarks\results`
 
 Les workspaces agents sont des snapshots ; ils ne sont pas la source de vérité canonique.
 
 ## 14. Backend B580 hybride
 
-Le profil candidat `b580-hybrid` utilise :
+Le profil candidat `b580-hybrid` répartit les modèles entre backends locaux selon `runtime_versions.json` et `runtime_backends.yaml`. Il ne devient pas nominal automatiquement. Toute performance doit être remesurée avec les modèles V2.
 
-```text
-qwen-max        -> Ollama/Vulkan
-gemma-deep      -> llama.cpp/Vulkan
-devstral-devops -> llama.cpp/Vulkan
-image/PDF       -> Ollama
-```
+## 15. Recherche Web et local-only
 
-Il ne devient pas nominal automatiquement. Toute performance de l'ancienne flotte doit être remesurée avec les nouveaux modèles.
+Pour une donnée actuelle, l'Expert recherche peut utiliser les outils Web, puis Qwen/Gemma/Ministral réalise la synthèse localement. L'usage du Web ne constitue pas un appel à un LLM cloud.
 
-## 15. Cloud : seulement sur décision explicite
-
-Le parcours nominal reste local. Une escalade cloud exige un motif versionné, les préconditions correspondantes, un budget disponible et éventuellement une validation humaine.
-
-La simple lenteur locale, une donnée fraîche ou une panne ne déclenchent jamais automatiquement OpenRouter.
+Architecture V2 n'autorise aucun modèle LLM en ligne, même pour masquer une panne ou une lenteur locale.
 
 ## 16. Routine de diagnostic
 
@@ -353,14 +325,15 @@ Puis consulter `docs/TROUBLESHOOTING.md`.
 ## 17. Ce qu'il ne faut pas faire
 
 - modifier manuellement un workspace agent comme source de vérité ;
-- copier une ancienne preuve de qualification vers la nouvelle flotte ;
-- augmenter le contexte nominal sans benchmark ;
-- ajouter un quatrième modèle comme fallback caché ;
-- activer le cloud pour masquer une panne locale ;
+- copier une ancienne preuve de qualification vers la flotte V2 ;
+- confondre contexte benchmark 8K et orchestration OpenClaw 16K ;
+- promouvoir 32K sans qualification dédiée ;
+- ajouter un quatrième modèle routé ou un fallback caché ;
+- utiliser un modèle externe pour masquer une panne locale ;
 - considérer un E2E comme une qualification de performance ;
 - déclarer V1 avant les preuves matérielles et l'approbation humaine.
 
-## 18. Parcours recommandé après la migration de flotte
+## 18. Parcours recommandé après fusion V2
 
 ```powershell
 git checkout main
@@ -377,4 +350,4 @@ git pull
 .\menu.ps1 -Action qualification
 ```
 
-Ne poursuivre vers les backends candidats, golden projects et décision V1 qu'après conservation et revue des nouvelles preuves.
+Ne poursuivre vers les backends candidats, challenger Granite, Golden Projects et décision V1 qu'après conservation et revue des nouvelles preuves.

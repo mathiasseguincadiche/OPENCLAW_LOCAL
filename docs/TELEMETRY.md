@@ -4,17 +4,21 @@
 
 La télémétrie de `OPENCLAW_LOCAL` sert à observer le comportement réel de la plateforme sans transformer les prompts, réponses ou documents privés en données de monitoring.
 
+Architecture V2 n'utilise aucun modèle LLM cloud ; la télémétrie d'inférence reste donc attachée aux backends locaux.
+
 ## Flotte suivie
 
 ```text
 qwen-max          -> qwen3.5:9b-q4_K_M
-gemma-deep        -> gemma3:12b-it-q4_K_M
-devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+gemma-deep        -> gemma4:12b-it-q4_K_M
+devstral-devops   -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-`devstral-devops` est l'alias de compatibilité du spécialiste Qwen 2.5 Coder 14B.
+`devstral-devops` est l'alias de compatibilité du spécialiste Ministral 3 14B Reasoning.
 
-Toute métrique portant sur l'ancienne flotte 24–27B reste historique. Elle ne doit pas être agrégée comme si elle mesurait la flotte actuelle.
+Le challenger local `granite-devops -> granite4.2:8b-q4_K_M` possède ses propres preuves de benchmark et ne doit pas être agrégé comme modèle routé.
+
+Toute métrique portant sur une flotte retirée reste historique. Elle ne doit pas être agrégée comme si elle mesurait Architecture V2.
 
 ## Données autorisées
 
@@ -24,7 +28,7 @@ Selon disponibilité réelle du runtime :
 - projet et phase ;
 - agent ;
 - alias et runtime modèle ;
-- backend/provider ;
+- backend/provider local ;
 - contexte demandé ;
 - durée murale ;
 - TTFT ;
@@ -36,7 +40,7 @@ Selon disponibilité réelle du runtime :
 - retries ;
 - transitions projet ;
 - statut PASS/FAIL ;
-- éventuelle escalade cloud avec motif et coût, sans contenu privé.
+- utilisation d'un outil Web et provenance de la preuve lorsque la politique le prévoit, sans contenu privé.
 
 Une donnée non disponible reste `null`/absente. Elle n'est jamais estimée puis présentée comme observée.
 
@@ -55,9 +59,20 @@ La télémétrie ne doit pas stocker :
 
 Le volume de thinking peut être compté lorsqu'il est exposé, mais son contenu brut n'est pas conservé.
 
-## Contexte et migration
+## Contextes
 
-Le contexte nominal de la nouvelle flotte est 8192 tokens. Les mesures 16K appartiennent au protocole de qualification/stress et doivent être identifiées comme telles.
+Deux contrats doivent rester distinguables dans les preuves :
+
+```text
+8192  -> benchmark nominal / HARD-40M
+16384 -> orchestration full-agent OpenClaw nominale
+```
+
+Les cas 16K du HARD-40M restent des cas de stress du benchmark, alors que le 16K OpenClaw est la fenêtre nominale d'orchestration. Les métriques doivent indiquer le protocole afin de ne jamais mélanger les deux usages.
+
+Aucune série 32K ne peut être assimilée au nominal sans qualification dédiée.
+
+## Migration et fingerprints
 
 Après changement de modèle, digest, quantification, backend, pilote ou runtime, les séries doivent rester distinguables. Une ancienne performance ne peut pas être réattribuée au nouveau fingerprint.
 
@@ -76,9 +91,11 @@ commit
 + backend
 + pilote
 + contexte
-+ scénario
++ protocole/scénario
 ```
 
 ## Utilisation pour la qualification
 
-Les données de télémétrie peuvent soutenir la décision V1 uniquement lorsqu'elles correspondent à la flotte, au commit et au matériel réellement qualifiés. Elles complètent les preuves HARD-40M, E2E, backend, multimodalité, golden projects et projet représentatif ; elles ne les remplacent pas.
+Les données de télémétrie peuvent soutenir la décision V1 uniquement lorsqu'elles correspondent à la flotte, au commit et au matériel réellement qualifiés. Elles complètent les preuves HARD-40M, E2E, backend, multimodalité, challenger, Golden Projects et projet représentatif ; elles ne les remplacent pas.
+
+La CI ne fabrique jamais de mesure B580. Une valeur matérielle absente reste absente jusqu'au run réel sur la workstation.

@@ -1,7 +1,7 @@
 {
   // Exemple lisible uniquement. La source de vérité exécutable est générée par
   // scripts/26_render_openclaw_config.py à partir de config/v1/* et agents/*.
-  // N'ajoutez jamais de clé OpenRouter ou de token Gateway dans ce fichier.
+  // Architecture V2 ne configure aucun fournisseur LLM cloud.
   gateway: {
     mode: "local",
     bind: "loopback",
@@ -14,9 +14,9 @@
         api: "ollama",
         timeoutSeconds: 300,
         models: [
-          { id: "qwen3.5:9b-q4_K_M", name: "qwen3.5:9b-q4_K_M", input: ["text", "image"], contextTokens: 8192, params: { num_ctx: 8192, keep_alive: "15m" } },
-          { id: "gemma3:12b-it-q4_K_M", name: "gemma3:12b-it-q4_K_M", input: ["text", "image"], contextTokens: 8192, params: { num_ctx: 8192, keep_alive: "15m" } },
-          { id: "qwen2.5-coder:14b-instruct-q4_K_M", name: "qwen2.5-coder:14b-instruct-q4_K_M", input: ["text"], contextTokens: 8192, params: { num_ctx: 8192, keep_alive: "15m" } },
+          { id: "qwen3.5:9b-q4_K_M", name: "qwen3.5:9b-q4_K_M", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
+          { id: "gemma4:12b-it-q4_K_M", name: "gemma4:12b-it-q4_K_M", input: ["text", "image"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
+          { id: "hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M", name: "Ministral 3 14B Reasoning Q4_K_M", input: ["text"], contextTokens: 16384, params: { num_ctx: 16384, keep_alive: "15m" } },
         ],
       },
     },
@@ -24,12 +24,13 @@
   agents: {
     defaults: {
       skipBootstrap: true,
-      model: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma3:12b-it-q4_K_M"] },
-      imageModel: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma3:12b-it-q4_K_M"] },
-      pdfModel: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma3:12b-it-q4_K_M"] },
+      // Le contexte OpenClaw 16384 est distinct du benchmark nominal 8192.
+      model: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma4:12b-it-q4_K_M"] },
+      imageModel: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma4:12b-it-q4_K_M"] },
+      pdfModel: { primary: "ollama/qwen3.5:9b-q4_K_M", fallbacks: ["ollama/gemma4:12b-it-q4_K_M"] },
     },
     // Le générateur remplit cette liste avec les 8 rôles et marque
-    // chef-operations comme agent par défaut.
+    // chef-operations comme agent de session/système selon le contrat vivant.
     list: [],
   },
   tools: {
@@ -38,6 +39,7 @@
     exec: { mode: "ask", applyPatch: { workspaceOnly: true } },
     elevated: { enabled: false },
     web: {
+      // Les outils Web fournissent des sources ; ils ne sont pas un backend LLM.
       search: { enabled: true, provider: "parallel-free", maxResults: 8, timeoutSeconds: 30, cacheTtlMinutes: 15 },
       fetch: { enabled: true, maxChars: 20000, maxCharsCap: 20000, timeoutSeconds: 30 },
     },

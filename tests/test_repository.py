@@ -14,11 +14,13 @@ def test_eight_roles_have_routes() -> None:
     assert set(roles) == set(routes)
 
 
-def test_cloud_defaults_to_disabled() -> None:
+def test_architecture_v2_defaults_to_local_only() -> None:
     routing = load_contract("model_routing.yaml")
-    platform = load_contract("platform.yaml")
-    assert routing["cloud_enabled_by_default"] is False
-    assert platform["cloud"]["enabled_by_default"] is False
+    catalog = load_contract("model_catalog.yaml")
+    assert routing["local_only"] is True
+    assert catalog["policy"]["local_only"] is True
+    assert catalog["policy"]["cloud_models_supported"] is False
+    assert "cloud_models" not in catalog
 
 
 def test_local_provider_is_loopback() -> None:

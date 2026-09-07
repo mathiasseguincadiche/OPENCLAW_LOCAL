@@ -18,8 +18,8 @@ Describe 'Intel SYCL model sources' {
 
         $Catalog | Should -Match 'provider:\s*ollama'
         $Catalog | Should -Match 'runtime_id:\s*qwen3\.5:9b-q4_K_M'
-        $Catalog | Should -Match 'runtime_id:\s*gemma3:12b-it-q4_K_M'
-        $Catalog | Should -Match 'runtime_id:\s*qwen2\.5-coder:14b-instruct-q4_K_M'
+        $Catalog | Should -Match 'runtime_id:\s*gemma4:12b-it-q4_K_M'
+        $Catalog | Should -Match 'runtime_id:\s*hf\.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
     }
 
     It 'conserve le téléchargement natif reprenable et fail-closed si un override futur est ajouté' {

@@ -16,7 +16,7 @@ if ($DryRun) {
     Write-Host "[DRY-RUN] Endpoint=$($RuntimeLock.endpoint) models=$(@($RuntimeLock.managed_models) -join ',')"
     Write-Host '[DRY-RUN] Arrêter le routeur SYCL suivi avant Vulkan pour éviter toute contention B580.'
     Write-Host '[DRY-RUN] Démarrer models_max=1, parallel=1, gpu_layers=auto, fit=on, contexte nominal 8K.'
-    Write-Host '[DRY-RUN] Smoke Gemma 3 + Qwen Coder puis unload explicite entre modèles.'
+    Write-Host '[DRY-RUN] Smoke Gemma 4 + Ministral 3 Reasoning puis unload explicite entre modèles.'
     Write-Host '[DRY-RUN] OpenClaw ne sera pas reconfiguré automatiquement.'
     exit 0
 }

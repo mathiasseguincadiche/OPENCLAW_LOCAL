@@ -2,17 +2,20 @@
 
 ## Frontière de responsabilité
 
-`OPENCLAW_LOCAL` est une plateforme IA **local-first, multi-agents et project-first** pour Windows 11 Pro x64. Le runtime IA nominal reste natif Windows ; WSL2 peut héberger des outils DevOps/Linux mais n'est pas le runtime LLM nominal.
+`OPENCLAW_LOCAL` est une plateforme IA **LLM local-only, multi-agents et project-first** pour Windows 11 Pro x64. Le runtime IA nominal reste natif Windows ; WSL2 peut héberger des outils DevOps/Linux mais n'est pas le runtime LLM nominal.
 
-Le système sépare explicitement :
+Architecture V2 sépare explicitement :
 
 - le **control plane déterministe** `clawlocal` ;
 - les **huit rôles OpenClaw** ;
-- la **flotte locale fermée de trois modèles** ;
-- les **backends d'inférence** ;
+- la **flotte locale fermée de trois modèles routés** ;
+- le **challenger local de benchmark**, hors routage ;
+- les **backends d'inférence locaux** ;
 - le **projet central**, source de vérité ;
-- les **workspaces agents**, snapshots jetables ;
-- l'**escalade cloud**, facultative, explicite et budgétée.
+- les **workspaces agents**, vues contrôlées ;
+- les **outils Web**, qui apportent de l'information sans devenir un backend LLM.
+
+Il n'existe **aucune route vers un modèle LLM cloud**. Toute demande de routage cloud est refusée fail-closed.
 
 ## Architecture de référence
 
@@ -37,19 +40,22 @@ Windows 11 Pro x64
 |    +-- redacteur-technique
 |    +-- auditeur-qualite
 |
-+-- Flotte locale supportée — exactement 3 modèles
++-- Flotte locale routée — exactement 3 modèles
 |    +-- qwen-max        -> qwen3.5:9b-q4_K_M
-|    +-- gemma-deep      -> gemma3:12b-it-q4_K_M
-|    +-- devstral-devops -> qwen2.5-coder:14b-instruct-q4_K_M
+|    +-- gemma-deep      -> gemma4:12b-it-q4_K_M
+|    +-- devstral-devops -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 |
-+-- Backends
++-- Challenger local hors routage
+|    +-- granite-devops  -> granite4.2:8b-q4_K_M
+|
++-- Backends locaux
      +-- ollama-vulkan
      +-- llama-cpp-sycl
      +-- llama-cpp-vulkan
      +-- profil candidat b580-hybrid
 ```
 
-Les trois runtimes sont quantifiés **Q4_K_M** et ciblent un contexte nominal de **8192 tokens**. Le 16384 reste un contexte de qualification.
+Les modèles opérationnels sont quantifiés **Q4_K_M**. Le challenger Granite est également Q4_K_M, mais n'est jamais compté comme quatrième modèle routé.
 
 ## Modèles et rôles
 
@@ -62,11 +68,11 @@ Les trois runtimes sont quantifiés **Q4_K_M** et ciblent un contexte nominal de
 - sécurité ;
 - release/forges ;
 - raisonnement transversal ;
-- multimodalité nominale PDF/image.
+- multimodalité locale PDF/image.
 
 ### `gemma-deep`
 
-`gemma3:12b-it-q4_K_M` couvre :
+`gemma4:12b-it-q4_K_M` couvre :
 
 - architecture ;
 - rédaction ;
@@ -76,7 +82,11 @@ Les trois runtimes sont quantifiés **Q4_K_M** et ciblent un contexte nominal de
 
 ### `devstral-devops`
 
-L'alias historique est conservé pour ne pas casser les contrats persistés, mais il pointe désormais vers `qwen2.5-coder:14b-instruct-q4_K_M`.
+L'alias historique est conservé afin de ne pas casser les contrats persistés. En Architecture V2 il pointe vers :
+
+```text
+hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
+```
 
 Ce spécialiste couvre :
 
@@ -84,10 +94,16 @@ Ce spécialiste couvre :
 - software engineering ;
 - scripts ;
 - CI/CD ;
+- conteneurs ;
 - Kubernetes/IaC ;
-- outils dépôt et édition multi-fichiers.
+- outils dépôt et édition multi-fichiers ;
+- tool-calling et réparation après retour d'outil.
 
-Il est text-only dans le contrat. Pour un PDF ou une image, Qwen/Gemma produisent un contexte traçable puis l'Artifact Exchange effectue le handoff au spécialiste.
+Il est text-only dans le contrat nominal. Pour un PDF ou une image, Qwen 3.5 ou Gemma 4 produit un contexte traçable puis l'Artifact Exchange effectue le handoff au spécialiste.
+
+### `granite-devops`
+
+`granite4.2:8b-q4_K_M` est un challenger local consacré au benchmark DevOps/tool-calling. Il possède `routing_active: false` et `automatic_promotion: false`. Une éventuelle promotion exige une décision humaine après preuves matérielles B580.
 
 ## Routage par rôle
 
@@ -102,11 +118,17 @@ redacteur-technique      -> gemma-deep
 auditeur-qualite         -> gemma-deep
 ```
 
-L'Auditeur peut basculer vers `qwen-max` lorsque le producteur est Gemma afin de préserver une séparation de famille lorsque cela est praticable.
+L'Auditeur peut basculer vers `qwen-max` lorsque le producteur est `gemma-deep` afin de préserver une séparation de famille lorsque cela est praticable.
+
+Les fallbacks du contrat sont **uniquement locaux** et restent dans l'ensemble `{qwen-max, gemma-deep, devstral-devops}`.
+
+## Web != LLM cloud
+
+L'Expert recherche peut utiliser des outils Web pour récupérer des sources publiques fraîches. Ces outils ne sont pas un fournisseur de modèle : le contenu récupéré est traité et raisonné par la flotte locale. Cette séparation permet de conserver l'accès à l'information Internet sans introduire d'inférence LLM cloud.
 
 ## Modèle et backend sont indépendants
 
-Le choix d'un modèle ne vaut pas sélection définitive du backend. Les candidats sont évalués séparément :
+Le choix d'un modèle ne vaut pas sélection définitive du backend. Les candidats locaux sont évalués séparément :
 
 ```text
 ollama-vulkan
@@ -115,29 +137,25 @@ llama-cpp-vulkan
 b580-hybrid
 ```
 
-Le profil candidat hybride encode actuellement :
+Le profil candidat hybride peut répartir les trois modèles entre Ollama/Vulkan et llama.cpp/Vulkan selon les contrats runtime. Cette configuration reste un **candidat de qualification**, jamais un backend promu par simple configuration.
 
-```text
-qwen-max        -> Ollama/Vulkan
-gemma-deep      -> llama.cpp/Vulkan
-devstral-devops -> llama.cpp/Vulkan
-```
-
-Cette configuration est un **candidat de qualification**, pas un backend promu. Toute promotion exige des mesures B580, E2E, tool-calling, stabilité et revue humaine.
+Toute promotion exige des mesures B580, E2E, tool-calling, stabilité et revue humaine.
 
 ## Contexte et mémoire
 
-La B580 dispose de 12 Go de VRAM. L'architecture évite donc d'utiliser la fenêtre maximale théorique des modèles comme réglage opérationnel.
+La B580 dispose de 12 Go de VRAM. Architecture V2 n'utilise donc pas les fenêtres maximales théoriques comme réglage opérationnel par défaut.
 
-Politique :
+Deux contrats sont séparés :
 
 ```text
-8192  -> nominal
-16384 -> qualification/stress
->16K  -> interdit comme nominal sans nouvelle preuve
+8192  -> benchmark nominal / HARD-40M
+16384 -> orchestration OpenClaw nominale
+>16K  -> non promu sans qualification dédiée
 ```
 
-Les preuves recherchées sont : `size_vram`, VRAM/RAM, TTFT, tokens/s, temps de chargement, stabilité et tool-calling.
+Le contexte OpenClaw 16384 sert à absorber système, outils et réserve de l'orchestrateur. Il ne constitue pas une promotion du benchmark. **Aucune promotion automatique à 32768 n'est autorisée.**
+
+Les preuves recherchées restent : `size_vram`, VRAM/RAM, TTFT, tokens/s, temps de chargement, stabilité, contexte et tool-calling.
 
 ## Projet central et workspaces
 
@@ -167,10 +185,10 @@ entrée non fiable
  -> SHA-256 + MIME
  -> extraction/indexation locale
  -> source_coverage
- -> analyse agent
+ -> analyse agent local
 ```
 
-PDF/images passent par les modèles multimodaux Qwen/Gemma. DOCX/PPTX/XLSX utilisent l'extraction locale déterministe. Les originaux restent immuables.
+PDF/images passent par les modèles multimodaux locaux Qwen/Gemma. DOCX/PPTX/XLSX utilisent l'extraction locale déterministe. Les originaux restent immuables.
 
 ## Project Orchestrator
 
@@ -201,21 +219,20 @@ La chaîne de traçabilité reste :
 REQ -> tâche -> sortie -> preuve -> verdict
 ```
 
-## Local-first et cloud
+## Politique local-only
 
-Le parcours nominal ne nécessite aucun LLM cloud. Le Web peut être interrogé via les outils locaux OpenClaw, puis raisonné par les modèles locaux.
+Architecture V2 impose :
 
-Une escalade OpenRouter exige :
+```text
+local_first: true
+local_only: true
+cloud_models_supported: false
+```
 
-- motif autorisé ;
-- activation explicite ;
-- budget FinOps disponible ;
-- préconditions de politique ;
-- journalisation ;
-- approbation humaine lorsque requise.
+Le catalogue ne contient aucun catalogue de modèles cloud. Le routeur refuse une demande `request_cloud`. Les variables de configuration nominales ne contiennent aucune clé de fournisseur LLM en ligne.
 
-Aucun fallback cloud silencieux n'est accepté.
+Cette règle ne signifie pas « machine hors ligne » : bootstrap, téléchargement de modèles et outils Web peuvent utiliser Internet lorsqu'ils sont explicitement nécessaires. Elle signifie que **l'inférence et le raisonnement LLM de la plateforme restent locaux**.
 
 ## V1
 
-La conformité logicielle de cette architecture peut être prouvée par CI. En revanche, la qualification V1 reste strictement matérielle et humaine : HARD-40M, E2E, backends, Golden Projects, multimodalité, télémétrie, projet représentatif et attestation SHA-256 doivent tous être validés avant `1.0.0`.
+La conformité logicielle de cette architecture peut être prouvée par CI. La qualification V1 reste cependant matérielle et humaine : HARD-40M, E2E, backends, Golden Projects, multimodalité, télémétrie, projet représentatif et attestation SHA-256 doivent tous être validés avant `1.0.0`.

@@ -80,7 +80,7 @@ Describe 'Régression OpenClaw context precheck local' {
     It 'refuse un configure nominal tant que les trois familles ne passent pas un vrai prompt agent' {
         $script:Configure | Should -Match '24_test_openclaw_prompt_admission\.ps1'
         $script:Configure | Should -Match "'chef-operations', 'architecte-solutions', 'ingenieur-devops'"
-        $script:Configure | Should -Match 'Admission prompt validée sur Qwen 3\.5, Gemma 3 et Qwen 2\.5 Coder'
+        $script:Configure | Should -Match 'Admission prompt validée sur Qwen 3\.5, Gemma 4 et Ministral 3 Reasoning'
         $script:Admission | Should -Match 'PROMPT_ADMISSION_EVIDENCE='
         $script:Admission | Should -Match 'systemPromptReport'
         $script:Admission | Should -Match 'PROMPT_ADMISSION_SYSTEM_CHARS='
