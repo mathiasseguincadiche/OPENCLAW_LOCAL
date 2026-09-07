@@ -16,10 +16,10 @@ param(
     [string]$Backend = 'ollama-vulkan',
     [ValidateSet(
         'qwen3.5:9b-q4_K_M',
-        'gemma3:12b-it-q4_K_M',
-        'qwen2.5-coder:14b-instruct-q4_K_M'
+        'gemma4:12b-it-q4_K_M',
+        'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
     )]
-    [string]$Model = 'qwen2.5-coder:14b-instruct-q4_K_M',
+    [string]$Model = 'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M',
     [switch]$NoLog
 )
 
@@ -137,13 +137,13 @@ function Show-LogSummary {
 function Show-Title {
     Write-Host ''
     Write-Host '============================================================================== '
-    Write-Host ' OPENCLAW_LOCAL — CENTRE DE CONTRÔLE LOCAL-FIRST WINDOWS 11 PRO'
+    Write-Host ' OPENCLAW_LOCAL — CENTRE DE CONTRÔLE LOCAL-ONLY WINDOWS 11 PRO'
     Write-Host '============================================================================== '
+    Write-Host ' V2      : trois LLM locaux Q4_K_M, aucun modèle cloud supporté'
     Write-Host ' Nominal : OpenClaw + Ollama/Vulkan natifs Windows'
-    Write-Host ' B580    : flotte Q4_K_M 9B/12B/14B, contexte nominal 8K'
-    Write-Host ' Hybride : Qwen/Ollama + Gemma/Qwen Coder llama.cpp/Vulkan'
+    Write-Host ' B580    : Qwen3.5 9B + Gemma 4 12B + Ministral 3 14B Reasoning'
+    Write-Host ' Hybride : Ollama/Vulkan + llama.cpp Vulkan/SYCL pour qualification'
     Write-Host ' Intel   : llama.cpp/SYCL/Level Zero reste disponible pour qualification'
-    Write-Host ' Cloud   : escalade explicite uniquement, jamais fallback silencieux'
 }
 
 function Invoke-Action {
@@ -156,10 +156,10 @@ function Invoke-Action {
         [string]$BackendMode = 'ollama-vulkan',
         [ValidateSet(
             'qwen3.5:9b-q4_K_M',
-            'gemma3:12b-it-q4_K_M',
-            'qwen2.5-coder:14b-instruct-q4_K_M'
+            'gemma4:12b-it-q4_K_M',
+            'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
         )]
-        [string]$ModelMode = 'qwen2.5-coder:14b-instruct-q4_K_M',
+        [string]$ModelMode = 'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M',
         [switch]$NoLogMode
     )
 
@@ -258,10 +258,10 @@ while ($true) {
 17) Vérifier Intel B580 SYCL + trois modèles
 18) Comparer Ollama/Vulkan vs Intel SYCL (utiliser -Quick pour diagnostic court)
 19) Arrêter le serveur Intel SYCL
-20) Diagnostiquer directement un modèle Intel SYCL (paramètre -Model; Qwen Coder par défaut)
+20) Diagnostiquer directement un modèle Intel SYCL (paramètre -Model; Ministral Reasoning par défaut)
 21) Isoler llama.cpp Vulkan vs SYCL/Ollama sur Intel B580
 22) Installer/démarrer llama.cpp Vulkan géré pour le profil B580 hybride
-23) Vérifier llama.cpp Vulkan géré (Gemma 3 + Qwen Coder)
+23) Vérifier llama.cpp Vulkan géré (Gemma 4 + Ministral Reasoning)
 24) Arrêter le serveur llama.cpp Vulkan géré
 25) Exécuter les 5 golden projects pré-V1 (reset + prepare + execute + evaluate)
 0) Quitter
