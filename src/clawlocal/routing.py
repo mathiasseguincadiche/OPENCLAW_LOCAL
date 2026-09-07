@@ -22,34 +22,6 @@ _TIER_FIELDS = {
 }
 
 
-def _enforce_trigger_conditions(
-    trigger: dict[str, Any],
-    *,
-    local_web_attempted: bool,
-    source_conflict_observed: bool,
-    failure_evidence: bool,
-    local_attempts: int,
-    human_approved: bool,
-) -> None:
-    precondition = trigger.get("precondition")
-    if precondition == "local_web_attempted" and not local_web_attempted:
-        raise PermissionError("escalade refusée: tentative Web locale requise")
-    if precondition == "local_web_sources_conflict" and not source_conflict_observed:
-        raise PermissionError("escalade refusée: conflit de sources Web non démontré")
-    if trigger.get("require_failure_evidence") is True and not failure_evidence:
-        raise PermissionError("escalade refusée: preuve d'échec local requise")
-
-    max_local_attempts = trigger.get("max_local_attempts")
-    if max_local_attempts is not None and local_attempts < int(max_local_attempts):
-        raise PermissionError(
-            "escalade refusée: "
-            f"{local_attempts} tentative(s) locale(s), "
-            f"{int(max_local_attempts)} requise(s)"
-        )
-    if trigger.get("require_human_approval") is True and not human_approved:
-        raise PermissionError("escalade refusée: approbation humaine requise")
-
-
 def _family(alias: str, catalog: dict[str, Any]) -> str | None:
     model = catalog.get("models", {}).get(alias)
     if not isinstance(model, dict):
@@ -158,74 +130,56 @@ def select_route(
     local_attempts: int = 0,
     human_approved: bool = False,
 ) -> RouteDecision:
+    """Select a local route.
+
+    Architecture V2 is deliberately local-only. Legacy cloud-related keyword
+    arguments remain accepted so older callers fail closed instead of crashing
+    with a signature mismatch, but no cloud model can ever be resolved.
+    """
+    del cloud_enabled, budget_ok, reason
+    del local_web_attempted, source_conflict_observed, failure_evidence
+    del local_attempts, human_approved
+
+    if request_cloud:
+        raise PermissionError(
+            "Architecture V2 local-only: aucune escalade vers un modèle cloud n'est supportée"
+        )
+
     routing = load_contract("model_routing.yaml")
     catalog = load_contract("model_catalog.yaml")
-    escalation = load_contract("escalation_policy.yaml")
     routes = routing["agents"]
 
+    if routing.get("local_only") is not True:
+        raise ValueError("model_routing.yaml doit imposer local_only=true")
+    if catalog.get("policy", {}).get("local_only") is not True:
+        raise ValueError("model_catalog.yaml doit imposer local_only=true")
     if agent not in routes:
         raise KeyError(f"Agent inconnu: {agent}")
     route = routes[agent]
 
-    if not request_cloud:
-        explicit = [
-            ("specialist", specialist_available),
-            ("deep", deep_local_available),
-            ("max", max_local_available),
-        ]
-        selected_explicit = [tier for tier, enabled in explicit if enabled]
-        if len(selected_explicit) > 1:
-            raise ValueError("un seul tier local explicite peut être demandé")
-        if preferred_tier is not None and preferred_tier not in _TIER_FIELDS:
-            raise ValueError(f"tier local inconnu: {preferred_tier}")
+    explicit = [
+        ("specialist", specialist_available),
+        ("deep", deep_local_available),
+        ("max", max_local_available),
+    ]
+    selected_explicit = [tier for tier, enabled in explicit if enabled]
+    if len(selected_explicit) > 1:
+        raise ValueError("un seul tier local explicite peut être demandé")
+    if preferred_tier is not None and preferred_tier not in _TIER_FIELDS:
+        raise ValueError(f"tier local inconnu: {preferred_tier}")
 
-        explicit_tier = bool(selected_explicit)
-        tier = selected_explicit[0] if selected_explicit else str(
-            preferred_tier or route.get("default_preferred_tier", "primary")
-        )
-        if tier not in _TIER_FIELDS:
-            raise ValueError(f"tier local inconnu: {tier}")
-        return _select_local(
-            agent,
-            route,
-            catalog,
-            preferred_tier=tier,
-            qualified_models=set(qualified_models or set()),
-            explicit_tier=explicit_tier,
-            producer_model_alias=producer_model_alias,
-        )
-
-    if not cloud_enabled:
-        raise PermissionError(
-            "Escalade cloud demandée alors que le cloud est désactivé"
-        )
-    if not budget_ok:
-        raise PermissionError("Escalade cloud refusée: budget non validé")
-    if not reason:
-        raise ValueError("Une raison explicite est obligatoire pour l'escalade cloud")
-
-    triggers = escalation.get("triggers", {})
-    if reason not in triggers:
-        raise ValueError(f"Raison d'escalade inconnue: {reason}")
-
-    trigger = triggers[reason]
-    allowed_roles = set(trigger.get("allowed_roles", []))
-    if allowed_roles and agent not in allowed_roles:
-        raise PermissionError(
-            f"Le rôle {agent} n'est pas autorisé pour le motif {reason}"
-        )
-
-    _enforce_trigger_conditions(
-        trigger,
-        local_web_attempted=local_web_attempted,
-        source_conflict_observed=source_conflict_observed,
-        failure_evidence=failure_evidence,
-        local_attempts=local_attempts,
-        human_approved=human_approved,
+    explicit_tier = bool(selected_explicit)
+    tier = selected_explicit[0] if selected_explicit else str(
+        preferred_tier or route.get("default_preferred_tier", "primary")
     )
-    return RouteDecision(
+    if tier not in _TIER_FIELDS:
+        raise ValueError(f"tier local inconnu: {tier}")
+    return _select_local(
         agent,
-        "cloud_escalation",
-        route["cloud_escalation"],
-        reason,
+        route,
+        catalog,
+        preferred_tier=tier,
+        qualified_models=set(qualified_models or set()),
+        explicit_tier=explicit_tier,
+        producer_model_alias=producer_model_alias,
     )
