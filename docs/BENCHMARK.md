@@ -6,11 +6,13 @@ Mesurer avant de conclure. Le benchmark sépare :
 
 1. **fonctionnel** : requêtes et contrôles conformes ;
 2. **performance** : premier token, débit et durée murale ;
-3. **contexte** : nominal 8K puis stress ciblé 16K ;
+3. **contexte benchmark** : nominal 8K puis stress ciblé 16K ;
 4. **projet/DevOps** : tâches proches de l'usage réel ;
 5. **agentique** : tool-calling et réparation ;
-6. **sélection de modèle** : incumbent deep vs challenger ;
-7. **backend** : Ollama/Vulkan et candidats llama.cpp.
+6. **sélection du spécialiste** : incumbent Ministral vs challenger Granite ;
+7. **backend** : Ollama/Vulkan et candidats llama.cpp locaux.
+
+Architecture V2 n'autorise aucun appel vers un modèle LLM cloud pendant la qualification.
 
 ## Flotte opérationnelle testée
 
@@ -18,37 +20,44 @@ La plateforme route exactement trois modèles Q4_K_M :
 
 ```text
 qwen-max          -> qwen3.5:9b-q4_K_M
-gemma-deep        -> gemma3:12b-it-q4_K_M
-devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+gemma-deep        -> gemma4:12b-it-q4_K_M
+devstral-devops   -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-`devstral-devops` est un alias logique de compatibilité ; son runtime réel est Qwen2.5 Coder 14B.
+`devstral-devops` est un alias logique de compatibilité ; son runtime V2 réel est Ministral 3 14B Reasoning.
 
 Cette liste est la **flotte routée**, pas la totalité des modèles pouvant être chargés ponctuellement pour une comparaison de sélection.
 
-## Challenger obligatoire de Gemma
+## Challenger local du spécialiste DevOps
 
 Le dépôt déclare un challenger hors routage :
 
 ```text
-ministral-tool-calling -> ministral-3:14b-instruct-2512-q4_K_M
+granite-devops -> granite4.2:8b-q4_K_M
 ```
 
-Il est obligatoire avant la sélection humaine définitive du modèle deep afin de mesurer notamment le tool-calling natif et la réparation après retour d'outil.
+Granite est mesuré contre l'incumbent `devstral-devops` pour le coding, le tool-calling natif, la réparation après retour d'outil et l'adéquation B580.
 
-Ministral :
+Granite :
 
 - n'est pas un quatrième modèle routé ;
 - n'est pas un fallback ;
-- n'entre pas dans les 30 cas HARD-40M ;
+- n'entre pas dans les 30 cas HARD-40M de la flotte opérationnelle ;
 - ne peut jamais être auto-promu ;
-- ne remplace Gemma qu'après preuve et décision humaine explicite dans une modification ultérieure du catalogue.
+- ne remplace Ministral qu'après preuve matérielle et décision humaine explicite dans une modification ultérieure du catalogue/routage.
 
-## Dimensionnement B580
+## Contextes : benchmark != OpenClaw
 
-Le contexte **8192** est nominal. Le contexte **16384** reste un stress HARD-40M. Les poids indicatifs du registre des trois modèles routés sont environ 6,6 / 8,1 / 9,0 Go. Le challenger Ministral est référencé à environ 9,1 Go dans le contrat.
+Le benchmark utilise :
 
-Ces tailles ne constituent pas une preuve de résidence complète en VRAM. `size_vram`, TTFT, débit et stabilité doivent être observés sur la B580 réelle.
+```text
+8192  -> contexte nominal
+16384 -> stress ciblé HARD-40M
+```
+
+OpenClaw full-agent utilise séparément 16384 tokens comme fenêtre nominale d'orchestration. Cette valeur **ne promeut pas** le benchmark 16K et n'autorise aucune montée automatique à 32768.
+
+Les tailles de fichiers/registre ne prouvent pas la résidence complète en VRAM. `size_vram`, TTFT, débit, RAM et stabilité doivent être observés sur la B580 réelle.
 
 ## Suite active `devops-v2`
 
@@ -57,7 +66,7 @@ La suite `benchmarks/suites/devops_v2.yaml` fournit les scénarios fonctionnels.
 La passe complète utilise :
 
 ```text
-scripts/benchmark_qualification_40m_v2.py
+benchmark_qualification_40m_v2.py
 ```
 
 Plan contractuel :
@@ -70,7 +79,7 @@ Plan contractuel :
 
 Les trois modèles routés restent obligatoires.
 
-## Qwen thinking
+## Qwen thinking natif
 
 La passe complète conserve trois probes Qwen avec thinking natif :
 
@@ -80,7 +89,7 @@ La passe complète conserve trois probes Qwen avec thinking natif :
 16384 long-context-discipline
 ```
 
-Le plafond est **1024 tokens** pour ces probes. Une génération qui atteint le plafond est classée tronquée et fait échouer le gate. Le benchmark Quick désactive le thinking Qwen pour fournir un diagnostic court et comparable.
+Le plafond est **1024 tokens** pour ces probes. Une génération qui atteint le plafond est classée tronquée et fait échouer le gate. Le benchmark Quick désactive le thinking Qwen afin de fournir un diagnostic plus court et comparable.
 
 ## HARD-40M
 
@@ -90,10 +99,27 @@ Le contrat temps reste :
 qualification complète : 2400 s
 réserve évaluation      :   60 s
 benchmark par défaut    : 2100 s
-cas individuel          :  210 s maximum
+cas individuel          :  210 s
 ```
 
-Le runner ne prolonge pas silencieusement un cas. Une erreur API, un timeout ou une troncature avec `max_error_rate: 0.0` déclenche un fail-fast lorsque le résultat global est déjà impossible.
+Le runner ne prolonge pas silencieusement un cas. Une erreur API, un timeout ou une troncature avec `max_error_rate: 0.0` déclenche un échec conformément au protocole.
+
+Le runner actif est `scripts/benchmark_qualification_40m_v2.py`. Les valeurs ci-dessus restent alignées avec `config/v1/qualification_policy.yaml`.
+
+## Seuils actifs
+
+Le contrat `automated_gates.thresholds` impose notamment :
+
+```text
+max_error_rate                    = 0.0
+min_check_pass_rate               = 0.875
+min_median_tokens_per_second      = 6.0
+max_p95_first_token_ms            = 12000
+8K min check pass rate            = 0.875
+16K min check pass rate           = 0.75
+```
+
+Architecture V2 n'abaisse aucun de ces seuils.
 
 ## Métriques HARD-40M
 
@@ -112,14 +138,14 @@ Pour chaque cas, conserver autant que possible :
 
 Les valeurs inconnues restent inconnues.
 
-## Comparaison Gemma 3 12B vs Ministral 3 14B
+## Comparaison Ministral 3 Reasoning vs Granite 4.2
 
 ### Installation du challenger
 
 Le benchmark ne télécharge jamais le challenger implicitement :
 
 ```powershell
-ollama pull ministral-3:14b-instruct-2512-q4_K_M
+ollama pull granite4.2:8b-q4_K_M
 ```
 
 ### Dry-run
@@ -134,68 +160,53 @@ ollama pull ministral-3:14b-instruct-2512-q4_K_M
 .\scripts\windows\23_compare_model_challenger.ps1
 ```
 
-Le wrapper utilise le Python géré OPENCLAW_LOCAL et appelle :
-
-```text
-scripts/52_compare_tool_calling_models.py
-```
+Le wrapper utilise le Python géré OPENCLAW_LOCAL et le protocole versionné par le dépôt.
 
 ### Protocole `native_tool_calling_v1`
 
-Paramètres par défaut :
+Paramètres de politique :
 
 ```text
-Gemma      : gemma3:12b-it-q4_K_M
-Ministral  : ministral-3:14b-instruct-2512-q4_K_M
-contexte   : 8192
-répétitions: 3
-timeout     : 180 s par échange
+incumbent   : devstral-devops / Ministral 3 14B Reasoning
+challenger  : granite-devops / Granite 4.2 8B
+contexte    : 8192
+répétitions : 3
 ```
 
-La comparaison teste le **protocole d'outils natif Ollama**, et non une simple génération JSON simulant une intention d'outil.
+La comparaison teste le **protocole d'outils natif**, et non une simple génération JSON simulant une intention d'outil.
 
-Pour chaque répétition :
+Pour chaque répétition, le modèle doit effectuer le parcours d'outil attendu, recevoir un retour contrôlé en erreur et produire la réparation prévue par le protocole.
 
-1. le modèle reçoit deux définitions d'outils : `read_file` et `list_files` ;
-2. il doit appeler `read_file(path="config/prod.yaml")` ;
-3. le runner renvoie un message outil `ERROR file_not_found` ;
-4. le modèle doit se réparer en appelant `list_files(directory="config")`.
-
-Le protocole mesure :
+Métriques contractuelles :
 
 - `tool_intent_pass_rate` ;
 - `tool_repair_pass_rate` ;
-- erreurs de protocole ;
-- médiane des durées ;
-- tokens/s lorsque fournis par Ollama ;
-- taille chargée, `size_vram`, ratio de résidence GPU et contexte via `/api/ps` lorsque disponibles.
+- `protocol_error_count` ;
+- `median_wall_ms` ;
+- `median_tokens_per_second` ;
+- `median_gpu_residency_ratio` lorsque mesurable.
 
 ### Confidentialité de la preuve
 
-Le contenu brut des réponses n'est pas persisté. La preuve conserve :
+Le contenu brut des réponses n'a pas besoin d'être persisté. Les preuves structurées doivent suffire pour l'audit, la comparaison et la décision humaine.
 
-- longueur du contenu ;
-- SHA-256 du contenu ;
-- appels d'outils structurés ;
-- métriques runtime utiles.
-
-Fichier :
+Fichier attendu :
 
 ```text
-benchmarks/results/tool_calling_challenger_YYYYMMDD_HHMMSS.json
+benchmarks/results/tool_calling_challenger_*.json
 ```
 
-Une comparaison complète produit :
+Le contrat impose :
 
 ```text
-VERDICT=MEASURED_FOR_MANUAL_SELECTION
-PROMOTION_ALLOWED=false
-MANUAL_DECISION_REQUIRED=true
+automatic_promotion: false
+human_decision_required: true
+evidence_required: true
 ```
 
-Une défaite fonctionnelle d'un modèle n'est pas une erreur du benchmark : c'est une **preuve négative valide**. En revanche, modèle absent, API inaccessible ou protocole incomplet rendent la comparaison `INCOMPLETE`.
+Une défaite fonctionnelle d'un modèle est une **preuve négative valide**. Modèle absent, API inaccessible ou protocole incomplet rendent en revanche la comparaison incomplète.
 
-## Critère de décision Gemma/Ministral
+## Critère de décision Ministral/Granite
 
 La décision humaine doit regarder au minimum :
 
@@ -205,15 +216,15 @@ La décision humaine doit regarder au minimum :
 4. erreurs de protocole ;
 5. latence et débit ;
 6. pression/résidence VRAM ;
-7. qualité architecture/rédaction/audit sur les autres preuves du projet.
+7. qualité DevOps/coding sur les autres preuves du projet.
 
-Le tool-calling est une raison de challenger Gemma, pas un critère unique permettant de sacrifier la qualité des tâches deep.
+Le challenger n'est jamais autorisé à contourner un échec du HARD-40M de la flotte active.
 
 ## Identité modèle
 
-La qualification HARD-40M capture un fingerprint candidat des trois modèles routés et **ne promeut ce fingerprint** vers l'identité qualifiée qu'après un gate complet PASS. Cette opération **ne modifie ni le catalogue** de modèles ni le backend sélectionné et ne vaut pas approbation V1.
+La qualification HARD-40M capture un fingerprint candidat des trois modèles routés et **ne promeut ce fingerprint** vers l'identité qualifiée qu'après un gate complet PASS.
 
-La preuve challenger est indépendante et ne modifie aucun fingerprint qualifié.
+Cette opération **ne modifie ni le catalogue** de modèles ni le backend sélectionné et ne vaut pas approbation V1. La preuve challenger est indépendante et ne modifie aucun fingerprint qualifié.
 
 **Le mode `-Quick` ne promeut jamais** l'identité modèle.
 
@@ -238,7 +249,7 @@ La preuve challenger est indépendante et ne modifie aucun fingerprint qualifié
 .\menu.ps1 -Action qualification -Quick
 ```
 
-Quick utilise 36 cas à 8192 tokens et ne remplace jamais le gate complet ni la comparaison Gemma/Ministral.
+Quick utilise le parcours diagnostique 8K prévu par le lanceur et ne remplace jamais le gate complet ni la comparaison Ministral/Granite.
 
 ## Comparaison Intel Arc des backends
 
@@ -251,6 +262,18 @@ Le dépôt prépare notamment :
 ```
 
 Pour les comparaisons de backends, ajouter temps de chargement, prompt tokens/s, VRAM/RAM, stabilité et temps de changement de modèle. Aucun backend n'est auto-promu.
+
+## Local-only
+
+Pendant la qualification :
+
+```text
+cloud_calls_allowed_during_qualification: false
+cloud_models_supported: false
+local_only: true
+```
+
+Un outil Web peut être utilisé dans un scénario qui évalue la discipline de fraîcheur/sourcing lorsque le protocole le prévoit, mais aucun modèle LLM en ligne n'est appelé pour générer la réponse.
 
 ## Interprétation
 
