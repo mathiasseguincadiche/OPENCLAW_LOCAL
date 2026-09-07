@@ -2,7 +2,7 @@
 
 ## Objectif
 
-Ce runbook couvre l'exploitation quotidienne de `OPENCLAW_LOCAL` sur Windows 11. Le principe reste : **diagnostiquer et réparer le parcours local avant toute escalade cloud**.
+Ce runbook couvre l'exploitation quotidienne de `OPENCLAW_LOCAL` sur Windows 11. Le principe V2 est : **diagnostiquer et réparer le parcours local, sans escalade vers un modèle LLM cloud**.
 
 ## Routine rapide
 
@@ -12,17 +12,19 @@ Ce runbook couvre l'exploitation quotidienne de `OPENCLAW_LOCAL` sur Windows 11.
 openclaw gateway status --require-rpc --json
 ```
 
-Résultat attendu : runtime conforme, Ollama local, exactement trois modèles présents, huit agents configurés et Gateway joignable.
+Résultat attendu : runtime conforme, Ollama local, exactement trois modèles routés requis, huit agents configurés et Gateway joignable.
 
-## Flotte active
+## Flotte active V2
 
 ```text
 qwen-max          -> qwen3.5:9b-q4_K_M
-gemma-deep        -> gemma3:12b-it-q4_K_M
-devstral-devops   -> qwen2.5-coder:14b-instruct-q4_K_M
+gemma-deep        -> gemma4:12b-it-q4_K_M
+devstral-devops   -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-`devstral-devops` reste le nom d'alias du spécialiste DevOps ; son runtime est désormais Qwen 2.5 Coder 14B. Le contexte nominal OpenClaw est 8192 tokens. Le 16K reste réservé à la qualification tant qu'il n'est pas démontré soutenable sur la B580.
+`devstral-devops` reste l'alias du spécialiste DevOps ; son runtime V2 est Ministral 3 14B Reasoning. Granite 4.2 8B est un challenger local séparé et non routé.
+
+Le benchmark nominal reste 8192 tokens. Le full-agent OpenClaw nominal utilise 16384 tokens afin d'absorber le système, les outils et la réserve. Ces deux contrats ne doivent pas être confondus et aucune promotion 32K n'est automatique.
 
 ## Racine et stockage
 
@@ -62,7 +64,7 @@ Après mise à jour de Git :
 .\menu.ps1 -Action verify
 ```
 
-`models` lit directement `config/v1/model_catalog.yaml`. Aucun quatrième modèle n'est téléchargé implicitement.
+`models` lit directement `config/v1/model_catalog.yaml`. Le challenger Granite n'est jamais téléchargé ou promu comme modèle routé implicitement.
 
 Une ancienne identité qualifiée devient invalide dès qu'un runtime/digest ne correspond plus à la flotte active. Ne recopier aucun hash d'une ancienne qualification vers la nouvelle.
 
@@ -105,10 +107,10 @@ Le E2E doit prouver :
 - Gateway réellement utilisé ;
 - tool-calling du spécialiste DevOps ;
 - réparation après erreur d'outil ;
-- trois runs stables ;
-- aucun fallback cloud silencieux.
+- stabilité des répétitions prévues ;
+- absence de route LLM cloud.
 
-Le spécialiste DevOps est text-only. Les PDF/images sont ingérés par les modèles multimodaux Qwen/Gemma puis transmis sous forme textuelle/structurée au spécialiste.
+Le spécialiste DevOps est text-only. Les PDF/images sont ingérés par les modèles multimodaux locaux Qwen/Gemma puis transmis sous forme textuelle/structurée au spécialiste.
 
 ## Qualification après migration
 
@@ -117,9 +119,21 @@ Le spécialiste DevOps est text-only. Les PDF/images sont ingérés par les mod�
 .\menu.ps1 -Action qualification
 ```
 
-La migration vers les nouveaux modèles impose une **nouvelle qualification complète**. Les preuves des anciens 24–27B restent utiles comme historique de diagnostic, mais ne qualifient ni les nouveaux modèles ni leur backend.
+La migration V2 impose une **nouvelle qualification complète**. Les preuves historiques restent utiles pour le diagnostic mais ne qualifient ni les nouveaux runtimes ni leur backend.
 
-Les seuils HARD-40M ne sont pas abaissés : les trois modèles doivent réellement passer le protocole actif.
+Les seuils HARD-40M ne sont pas abaissés : 30 cas, dont 24 à 8K et 6 à 16K, et les trois modèles routés doivent réellement passer le protocole actif.
+
+## Challenger Granite
+
+Comparaison explicite :
+
+```powershell
+ollama pull granite4.2:8b-q4_K_M
+.\scripts\windows\23_compare_model_challenger.ps1 -DryRun
+.\scripts\windows\23_compare_model_challenger.ps1
+```
+
+Cette comparaison ne modifie pas le routage. Toute éventuelle substitution de modèle exige une décision humaine et une PR dédiée.
 
 ## Backends Intel Arc
 
@@ -129,7 +143,7 @@ Chemins disponibles :
 ollama-vulkan    : nominal / rollback
 llama-cpp-sycl   : candidat
 llama-cpp-vulkan : candidat
-b580-hybrid      : Qwen/Ollama + Gemma/Qwen Coder Vulkan
+b580-hybrid      : profil local mixte candidat
 ```
 
 Cycle candidat :
@@ -146,7 +160,7 @@ Cycle candidat :
 .\menu.ps1 -Action e2e -Backend b580-hybrid
 ```
 
-Aucun résultat de l'ancienne flotte ne doit être utilisé pour promouvoir automatiquement `b580-hybrid` avec la nouvelle flotte.
+Aucun résultat historique ne doit être utilisé pour promouvoir automatiquement `b580-hybrid` avec la flotte V2.
 
 Rollback :
 
@@ -184,13 +198,13 @@ python .\scripts\27_route_openclaw.py `
   --message 'Analyse le problème.'
 ```
 
-La route nominale du rôle DevOps reste l'alias `devstral-devops`, résolu vers `qwen2.5-coder:14b-instruct-q4_K_M`.
+La route nominale du rôle DevOps reste l'alias `devstral-devops`, résolu vers Ministral 3 14B Reasoning local.
 
-## Recherche récente et cloud
+Une demande `--cloud` est une erreur de politique en Architecture V2. Le routeur ne possède aucune destination LLM en ligne.
 
-Pour une donnée actuelle : recherche/fetch Web d'abord, synthèse locale ensuite. La fraîcheur seule n'est jamais un motif d'appel LLM cloud.
+## Recherche Web
 
-Une route cloud exige activation explicite, motif autorisé, préconditions, budget disponible, secret local et éventuellement approbation humaine. Le cloud ne masque jamais une panne locale.
+Pour une donnée actuelle : recherche/fetch Web, validation des sources, puis synthèse par le modèle local. La fraîcheur Web ne transforme jamais la requête en inférence LLM cloud.
 
 ## Après changement des contrats agents/routage
 
@@ -214,7 +228,7 @@ Une route cloud exige activation explicite, motif autorisé, préconditions, bud
 9. `verify` puis `e2e` ;
 10. dernier benchmark/qualification ;
 11. preuves projet/Web ;
-12. seulement ensuite, si la politique le permet, envisager le cloud.
+12. si le local reste en échec, corriger ou stopper : ne pas masquer la panne avec un modèle externe.
 
 ## Sauvegarde
 
