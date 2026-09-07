@@ -23,8 +23,8 @@ COMPARE = load_module()
 def test_required_models_are_exactly_the_supported_fleet() -> None:
     assert set(COMPARE.required_models()) == {
         "qwen3.5:9b-q4_K_M",
-        "gemma3:12b-it-q4_K_M",
-        "qwen2.5-coder:14b-instruct-q4_K_M",
+        "gemma4:12b-it-q4_K_M",
+        "hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M",
     }
 
 
