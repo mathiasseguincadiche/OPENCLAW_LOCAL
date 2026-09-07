@@ -40,15 +40,16 @@ Describe 'Intel SYCL direct model diagnostic' {
         $Script | Should -Match 'DIAGNOSIS='
     }
 
-    It 'est accessible depuis le menu et passe en DryRun' {
+    It 'est accessible depuis le menu et passe en DryRun avec le spécialiste V2' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Menu = Get-Content -Raw -LiteralPath (Join-Path $TestRepoRoot 'menu.ps1')
         $Menu | Should -Match "'intel-sycl-diagnose'"
         $Menu | Should -Match '16_diagnose_intel_sycl_model\.ps1'
         $Menu | Should -Match 'ModelMode'
 
+        $Model = 'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
         $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $TestRepoRoot 'menu.ps1') `
-            -Action intel-sycl-diagnose -Model qwen2.5-coder:14b-instruct-q4_K_M -DryRun 2>&1
+            -Action intel-sycl-diagnose -Model $Model -DryRun 2>&1
         $LASTEXITCODE | Should -Be 0
         $Text = $Output -join "`n"
         $Text | Should -Match '(?i)DRY-RUN'
