@@ -1,7 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Describe 'Gemma vs Ministral model challenger' {
+Describe 'Ministral Reasoning vs Granite local model challenger' {
     It 'expose un parcours DryRun sans promotion automatique' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Script = Join-Path $TestRepoRoot 'scripts\windows\23_compare_model_challenger.ps1'
@@ -10,8 +10,8 @@ Describe 'Gemma vs Ministral model challenger' {
         $LASTEXITCODE | Should -Be 0
         $Text = $Output -join "`n"
         $Text | Should -Match '(?i)DRY-RUN'
-        $Text | Should -Match 'gemma3:12b-it-q4_K_M'
-        $Text | Should -Match 'ministral-3:14b-instruct-2512-q4_K_M'
+        $Text | Should -Match 'Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
+        $Text | Should -Match 'granite4\.2:8b-q4_K_M'
         $Text | Should -Match 'tool-calling natif'
         $Text | Should -Match 'Aucune promotion automatique'
     }
@@ -28,7 +28,7 @@ Describe 'Gemma vs Ministral model challenger' {
         $Script | Should -Match 'PROMOTION|promotion'
     }
 
-    It 'conserve Ministral hors de la flotte routée' {
+    It 'conserve Granite hors de la flotte routée' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Catalog = Get-Content -Raw -LiteralPath (
             Join-Path $TestRepoRoot 'config\v1\model_catalog.yaml'
@@ -38,9 +38,11 @@ Describe 'Gemma vs Ministral model challenger' {
         )
 
         $Catalog | Should -Match 'benchmark_challengers:'
-        $Catalog | Should -Match 'ministral-tool-calling:'
+        $Catalog | Should -Match 'granite-devops:'
         $Catalog | Should -Match 'routing_active:\s*false'
+        $Catalog | Should -Match 'local_only:\s*true'
         $Policy | Should -Match 'benchmark_challengers_count_as_routed_models:\s*false'
         $Policy | Should -Match 'human_decision_required:\s*true'
+        $Policy | Should -Match 'cloud_models_supported:\s*false'
     }
 }
