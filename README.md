@@ -7,41 +7,57 @@
 [![PowerShell 7](https://img.shields.io/badge/PowerShell-7%2B-blue.svg)](https://learn.microsoft.com/powershell/)
 [![Python 3.12-3.13](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue.svg)](pyproject.toml)
 
-Plateforme IA **local-first, multi-agents et multi-modèles** pour Windows 11 Pro x64, conçue pour la workstation cible **AMD Ryzen 7 7700 + Intel Arc B580 12 Go**.
+Plateforme IA **100 % locale côté LLM, multi-agents et multi-modèles** pour Windows 11 Pro x64, conçue pour la workstation cible **AMD Ryzen 7 7700 + Intel Arc B580 12 Go**.
 
-`OPENCLAW_LOCAL` combine OpenClaw, huit rôles spécialisés, Project Intake, orchestration fail-closed, preuves, télémétrie locale et publication gouvernée. OpenRouter n'est jamais un fallback silencieux : toute escalade cloud reste explicite, budgétée et traçable.
+`OPENCLAW_LOCAL` combine OpenClaw, huit rôles spécialisés, Project Intake, orchestration fail-closed, Artifact Exchange, preuves, télémétrie locale et publication gouvernée. **Architecture V2 ne supporte aucun modèle LLM cloud et aucun fournisseur d'inférence LLM en ligne.** Une demande de routage cloud échoue explicitement. Les outils Web restent autorisés comme sources d'information ; le raisonnement LLM reste local.
 
-## Flotte locale B580 right-sized
+## Architecture V2 — flotte locale B580
 
-La flotte supportée contient exactement trois modèles Q4_K_M :
+La flotte opérationnelle contient exactement trois modèles routés Q4_K_M :
 
-| Alias logique | Runtime | Taille registre indicative | Usage nominal |
+| Alias logique | Runtime local | Taille registre indicative | Usage nominal |
 |---|---|---:|---|
 | `qwen-max` | `qwen3.5:9b-q4_K_M` | ~6,6 Go | orchestration, recherche, sécurité, release, multimodal |
-| `gemma-deep` | `gemma3:12b-it-q4_K_M` | ~8,1 Go | architecture, rédaction, audit, multimodal |
-| `devstral-devops` | `qwen2.5-coder:14b-instruct-q4_K_M` | ~9,0 Go | DevOps, code, dépôts, édition multi-fichiers |
+| `gemma-deep` | `gemma4:12b-it-q4_K_M` | ~7,6 Go | architecture, rédaction, audit, multimodal |
+| `devstral-devops` | `hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M` | ~8,24 Go | DevOps, code, dépôts, tool-calling, raisonnement |
 
-`devstral-devops` est conservé comme alias logique de compatibilité ; le runtime réel est désormais Qwen2.5 Coder 14B. Ce spécialiste est text-only. Les tâches DevOps nécessitant une image ou un PDF reçoivent un handoff traçable depuis Qwen 3.5 ou Gemma 3.
+`devstral-devops` reste un alias logique de compatibilité. En V2, il pointe vers **Ministral 3 14B Reasoning Q4_K_M**, exécuté localement par Ollama depuis le GGUF officiel Mistral AI. Le spécialiste est text-only dans le contrat ; les besoins image/PDF sont pris en charge par Qwen 3.5 ou Gemma 4 puis transmis par un handoff traçable.
 
-Le **contexte nominal est 8192 tokens**. Le contexte 16384 reste un stress de qualification et n'est pas promu automatiquement.
+Un quatrième modèle est déclaré séparément pour la comparaison locale :
 
-Cette flotte remplace l'ancienne stratégie 24–27B après mesures réelles montrant un offload CPU/GPU important sur la B580 12 Go. Le changement vise un meilleur ajustement matériel ; il ne constitue pas une preuve de débit ou de résidence VRAM complète avant nouvelle qualification.
+```text
+granite-devops -> granite4.2:8b-q4_K_M
+```
+
+Granite 4.2 8B est **challenger de benchmark uniquement** : il n'est pas routé, ne compte pas dans les trois modèles opérationnels et ne peut pas être promu automatiquement.
+
+## Contextes : benchmark et orchestration séparés
+
+Deux contrats différents sont maintenus :
+
+```text
+8192  -> contexte nominal du benchmark / HARD-40M
+16384 -> contexte nominal d'orchestration OpenClaw pour les agents
+>16K  -> aucune promotion nominale sans qualification dédiée
+```
+
+Le contexte OpenClaw à 16384 **n'est pas une promotion du benchmark**. Aucune montée automatique à 32K n'est autorisée.
 
 ## Huit rôles
 
 ```text
 chef-operations             -> Qwen 3.5 9B
-expert-recherche            -> Qwen 3.5 9B + Web
-architecte-solutions        -> Gemma 3 12B
-ingenieur-devops            -> Qwen 2.5 Coder 14B
+expert-recherche            -> Qwen 3.5 9B + outils Web
+architecte-solutions        -> Gemma 4 12B
+ingenieur-devops            -> Ministral 3 14B Reasoning
 ingenieur-securite          -> Qwen 3.5 9B
 ingenieur-release-forges    -> Qwen 3.5 9B
-redacteur-technique         -> Gemma 3 12B
-auditeur-qualite            -> Gemma 3 12B
-                               -> Qwen 3.5 9B si producteur Gemma
+redacteur-technique         -> Gemma 4 12B
+auditeur-qualite            -> Gemma 4 12B
+                               -> Qwen 3.5 9B si séparation de famille requise
 ```
 
-Les rôles restent distincts et soumis à leurs scopes d'outils. Le Workspace Guard, les règles de producer/reviewer et les gates V1 ne sont pas affaiblis par le changement de modèles.
+Les rôles restent distincts et soumis à leurs scopes d'outils. Le Workspace Guard, la séparation producteur/auditeur et les gates V1 restent fail-closed.
 
 ## Architecture générale
 
@@ -68,11 +84,11 @@ Consignes / PDF / images / Office / code / ZIP
                      |
              8 agents spécialisés
                      |
-      +--------------+--------------+
-      |              |              |
-   Qwen 3.5       Gemma 3       Qwen Coder
-      |              |              |
-      +--------------+--------------+
+      +--------------+-------------------+
+      |              |                   |
+   Qwen 3.5       Gemma 4       Ministral 3 Reasoning
+      |              |                   |
+      +--------------+-------------------+
                      |
                preuves locales
 ```
@@ -83,8 +99,8 @@ Consignes / PDF / images / Office / code / ZIP
 - PowerShell 7+ ;
 - WinGet ;
 - Git ;
-- connexion Internet pour le bootstrap et le téléchargement initial ;
-- espace disque suffisant pour les trois modèles, runtimes et preuves.
+- connexion Internet uniquement pour le bootstrap, les mises à jour, le téléchargement initial des modèles et les outils Web explicitement utilisés ;
+- espace disque suffisant pour les modèles, runtimes et preuves.
 
 Python, Node.js, OpenClaw et Ollama sont contrôlés par le runtime lock du dépôt.
 
@@ -108,7 +124,7 @@ git pull
 .\scripts\windows\03_pull_models.ps1
 ```
 
-Les anciens modèles éventuellement présents dans le cache Ollama ne sont plus routés par le catalogue actif. Leur suppression n'est pas requise avant validation de la nouvelle flotte.
+Les anciens modèles éventuellement présents dans le cache Ollama ne sont plus routés par le catalogue actif. Leur présence dans le cache ne constitue pas un fallback supporté.
 
 ## Vérification opérateur
 
@@ -118,15 +134,7 @@ Les anciens modèles éventuellement présents dans le cache Ollama ne sont plus
 .\menu.ps1 -Action e2e
 ```
 
-Ces commandes doivent vérifier notamment :
-
-- runtime verrouillé ;
-- Ollama sur loopback ;
-- exactement trois modèles requis ;
-- huit agents OpenClaw ;
-- inférence locale ;
-- tool-calling et réparation après erreur ;
-- aucun cloud nominal.
+Ces commandes doivent notamment vérifier : runtime verrouillé, Ollama sur loopback, trois modèles requis, huit agents OpenClaw, inférence locale, tool-calling et absence de route LLM cloud.
 
 ## Qualification matérielle
 
@@ -135,7 +143,7 @@ Ces commandes doivent vérifier notamment :
 .\menu.ps1 -Action qualification
 ```
 
-Le HARD-40M conserve **30 cas**, un plafond global de 40 minutes et les seuils existants. Le redimensionnement de la flotte ne baisse aucun seuil.
+Le **HARD-40M reste inchangé** : 30 cas, dont 24 à 8K et 6 à 16K, avec les seuils existants. Aucun seuil n'est abaissé par Architecture V2.
 
 Le mode diagnostic reste :
 
@@ -143,7 +151,7 @@ Le mode diagnostic reste :
 .\menu.ps1 -Action qualification -Quick
 ```
 
-Les trois modèles sont obligatoires. Un échec de l'un d'eux fait échouer la flotte.
+Les trois modèles routés sont obligatoires. Un échec de l'un d'eux fait échouer la flotte. Granite possède une comparaison séparée et ne peut pas servir de contournement.
 
 Voir [Qualification](docs/QUALIFICATION.md) et [Benchmark](docs/BENCHMARK.md).
 
@@ -154,7 +162,7 @@ Le modèle et le backend sont indépendants :
 - `ollama-vulkan` — chemin nominal pré-qualification ;
 - `llama-cpp-sycl` — candidat Intel SYCL/Level Zero ;
 - `llama-cpp-vulkan` — candidat Vulkan ;
-- `b580-hybrid` — profil candidat Qwen/Ollama + Gemma/Qwen Coder llama.cpp/Vulkan.
+- `b580-hybrid` — profil candidat combinant les backends locaux.
 
 Aucun backend n'est déclaré vainqueur avant mesures réelles B580.
 
@@ -176,25 +184,18 @@ Voir [Backends](docs/RUNTIME_BACKENDS.md).
 .\menu.ps1 -Action golden
 ```
 
-Les cinq scénarios couvrent :
-
-1. brief DevOps PDF vague ;
-2. PDF + DOCX + image ;
-3. exigences contradictoires ;
-4. pipeline cassé + remediation ;
-5. document avec prompt injection.
-
-Ils ne remplacent pas le projet représentatif final ni la revue humaine.
+Les scénarios couvrent notamment documents techniques, exigences contradictoires, pipeline cassé, remédiation et prompt injection. Ils ne remplacent pas le projet représentatif final ni la revue humaine.
 
 ## Principes de sécurité et de qualité
 
-- **local-first** ;
+- **LLM local-only** ;
 - **fail-closed** ;
+- **aucun fournisseur LLM cloud** ;
+- **aucun fallback LLM en ligne** ;
 - **Intake immuable** ;
 - **ZIP/Office bornés et sûrs** ;
 - **Workspace Guard** appliqué par le code ;
 - **REQ -> tâche -> sortie -> preuve -> verdict** ;
-- **aucun fallback cloud silencieux** ;
 - **séparation producteur/auditeur** ;
 - **télémétrie locale privacy-safe** ;
 - **publication gouvernée** ;
@@ -225,7 +226,7 @@ La transition finale exige une approbation humaine.
 - [Architecture](docs/ARCHITECTURE.md)
 - [Installation Windows 11](docs/INSTALLATION_WINDOWS_11.md)
 - [Intégration OpenClaw](docs/OPENCLAW_INTEGRATION.md)
-- [Routage hybride](docs/ROUTAGE_HYBRIDE.md)
+- [Routage local](docs/ROUTAGE_HYBRIDE.md)
 - [Backends](docs/RUNTIME_BACKENDS.md)
 - [Qualification](docs/QUALIFICATION.md)
 - [Benchmark](docs/BENCHMARK.md)
