@@ -82,8 +82,8 @@ Describe 'Backend Intel Arc B580 SYCL' {
         )
         $Catalog | Should -Match 'runtime_id:\s*qwen3\.5:9b-q4_K_M'
         $Catalog | Should -Match 'sycl_runtime_id:\s*qwen3\.5:9b-q4_K_M'
-        $Catalog | Should -Match 'sycl_runtime_id:\s*gemma3:12b-it-q4_K_M'
-        $Catalog | Should -Match 'sycl_runtime_id:\s*qwen2\.5-coder:14b-instruct-q4_K_M'
+        $Catalog | Should -Match 'sycl_runtime_id:\s*gemma4:12b-it-q4_K_M'
+        $Catalog | Should -Match 'sycl_runtime_id:\s*hf\.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
 
         foreach ($ScriptName in @(
             '12_setup_intel_sycl.ps1',
