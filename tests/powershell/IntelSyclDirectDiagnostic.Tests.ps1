@@ -56,6 +56,6 @@ Describe 'Intel SYCL direct model diagnostic' {
         $Text | Should -Match 'SYCL/all\+fit on'
         $Text | Should -Match 'SYCL/auto\+fit on'
         $Text | Should -Match 'CPU/0\+fit off'
-        $Text | Should -Match 'override natif'
+        $Text | Should -Match 'Aucune configuration OpenClaw n''est modifiée'
     }
 }
