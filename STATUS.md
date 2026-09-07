@@ -2,72 +2,75 @@
 
 ## Version courante
 
-**0.2.0 — Local-First Project Workflow + Project Orchestrator + V7 Superset + Document Flow + flotte B580 right-sized**
+**0.2.0 — Architecture V2 local-only + Project Orchestrator + V7 Superset + Document Flow + flotte B580**
 
-`OPENCLAW_LOCAL` est une plateforme multi-agent locale avec huit rôles spécialisés, projets, preuves, séparation producteur/auditeur, pédagogie, publication gouvernée et garde-fous fail-closed. Le parcours LLM nominal reste local ; le cloud est une escalade explicite, budgétée et contrôlée.
+`OPENCLAW_LOCAL` est une plateforme multi-agent locale avec huit rôles spécialisés, projets, preuves, séparation producteur/auditeur, pédagogie, publication gouvernée et garde-fous fail-closed. **Aucun modèle LLM cloud n'est supporté en Architecture V2.** Les outils Web peuvent fournir des informations fraîches, mais l'analyse et le raisonnement restent exécutés par les modèles locaux.
 
 La CI valide l'architecture logicielle et les contrats. Elle **ne qualifie pas** les performances des modèles, le backend Intel Arc ni la qualité sémantique multimodale sur la workstation réelle.
 
-## Statut de la flotte B580
+## Flotte V2 candidate B580
 
-Le projet est passé de l'ancienne flotte 24–27B à une **flotte candidate officielle à benchmarker**, dimensionnée autour de trois modèles Q4_K_M :
+La flotte opérationnelle candidate contient exactement trois modèles Q4_K_M :
 
-| Alias routé | Runtime | Usage cible |
+| Alias routé | Runtime local | Usage cible |
 |---|---|---|
 | `qwen-max` | `qwen3.5:9b-q4_K_M` | orchestration, recherche, sécurité, release, raisonnement, multimodal |
-| `gemma-deep` | `gemma3:12b-it-q4_K_M` | architecture, rédaction, audit, multimodal |
-| `devstral-devops` | `qwen2.5-coder:14b-instruct-q4_K_M` | DevOps/software engineering agentique, texte/code |
+| `gemma-deep` | `gemma4:12b-it-q4_K_M` | architecture, rédaction, audit, multimodal |
+| `devstral-devops` | `hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M` | DevOps/software engineering agentique, outils, texte/code |
 
-L'alias `devstral-devops` reste volontairement conservé pour compatibilité ; son runtime est Qwen2.5 Coder 14B.
+L'alias `devstral-devops` est conservé pour compatibilité des routes et états. Son runtime V2 est **Ministral 3 14B Reasoning Q4_K_M**, local via Ollama.
 
-**Invariant : exactement trois modèles sont installables/routables par le contrat opérationnel.** Aucun petit modèle ni runtime legacy n'est un fallback supporté.
+**Invariant : exactement trois modèles sont routables par le contrat opérationnel.** Aucun petit modèle, runtime legacy ou modèle en ligne n'est un fallback supporté.
 
-## Challenger obligatoire : Ministral 3 14B
+## Challenger local : Granite 4.2 8B
 
-Gemma 3 12B reste l'incumbent `gemma-deep`, mais sa sélection définitive est désormais conditionnée à une comparaison obligatoire contre :
+Le catalogue déclare séparément :
 
 ```text
-ministral-tool-calling -> ministral-3:14b-instruct-2512-q4_K_M
+granite-devops -> granite4.2:8b-q4_K_M
 ```
 
-Ministral est un **challenger de benchmark uniquement** :
+Granite est un **challenger de benchmark local** du spécialiste DevOps :
 
 - `routing_active: false` ;
-- il n'est affecté à aucun des huit rôles ;
+- aucun des huit rôles ne l'utilise nominalement ;
 - il ne compte pas dans les trois modèles opérationnels ;
 - il n'est pas un fallback ;
-- il n'entre pas dans le HARD-40M des trois modèles routés ;
-- il ne peut pas être auto-promu ;
-- toute éventuelle substitution de Gemma exige preuves réelles et décision humaine explicite.
+- il ne remplace pas un échec HARD-40M ;
+- `automatic_promotion: false` ;
+- toute substitution exige une décision humaine explicite appuyée sur les preuves B580.
 
-Le motif principal du challenge est le **tool-calling natif** et la capacité de **réparation après retour d'outil en erreur**, tout en conservant l'évaluation de qualité deep, latence, débit et adéquation VRAM.
+Le challenge couvre notamment coding, tool-calling natif, réparation après erreur d'outil et adéquation B580.
 
 ## Routage nominal
 
 ```text
 Chef opérations       -> Qwen 3.5 9B
-Expert recherche      -> Qwen 3.5 9B + Web
-Architecte solutions  -> Gemma 3 12B
-Ingénieur DevOps      -> Qwen 2.5 Coder 14B
+Expert recherche      -> Qwen 3.5 9B + outils Web
+Architecte solutions  -> Gemma 4 12B
+Ingénieur DevOps      -> Ministral 3 14B Reasoning
 Ingénieur sécurité    -> Qwen 3.5 9B
 Release/Forges        -> Qwen 3.5 9B
-Rédacteur technique   -> Gemma 3 12B
-Auditeur qualité      -> Gemma 3 12B
-                         -> Qwen 3.5 9B si producteur Gemma
+Rédacteur technique   -> Gemma 4 12B
+Auditeur qualité      -> Gemma 4 12B
+                         -> Qwen 3.5 9B si séparation de famille requise
 ```
 
-Ministral n'apparaît pas dans cette table tant qu'une PR future n'a pas explicitement modifié le routage après qualification.
+Granite n'apparaît pas dans ce routage tant qu'une décision humaine future n'a pas explicitement modifié le contrat après qualification.
 
 ## Politique de contexte
 
-- **8192 tokens** : contexte nominal B580 ;
-- **16384 tokens** : stress HARD-40M des trois modèles routés ;
-- comparaison Gemma/Ministral : **8192 tokens** ;
-- aucune montée de contexte n'est considérée acquise sans mesures réelles.
+Architecture V2 sépare explicitement le benchmark de l'orchestration :
+
+- **8192 tokens** : contexte nominal benchmark/HARD-40M ;
+- **16384 tokens** : contexte nominal d'orchestration OpenClaw ;
+- le 16384 OpenClaw n'est pas une promotion du benchmark ;
+- **aucune promotion automatique à 32K** ;
+- toute extension future exige une qualification dédiée.
 
 ## HARD-40M
 
-Le HARD-40M reste inchangé dans son principe :
+Le HARD-40M reste inchangé :
 
 ```text
 30 cas total
@@ -78,32 +81,19 @@ Le HARD-40M reste inchangé dans son principe :
 max_error_rate = 0.0
 ```
 
-Les trois modèles routés sont tous obligatoires. L'échec de l'un d'eux fait échouer la qualification. Le challenger Ministral ne peut pas servir de contournement.
+Les trois modèles routés sont obligatoires. L'échec de l'un d'eux fait échouer la qualification. Granite constitue une preuve comparative séparée et ne peut servir de contournement.
 
-## Benchmark challenger Gemma / Ministral
+## Benchmark challenger Ministral / Granite
 
-Le challenger doit être installé explicitement :
-
-```powershell
-ollama pull ministral-3:14b-instruct-2512-q4_K_M
-```
-
-Puis :
+Le challenger est installé explicitement lorsque le test est demandé :
 
 ```powershell
+ollama pull granite4.2:8b-q4_K_M
 .\scripts\windows\23_compare_model_challenger.ps1 -DryRun
 .\scripts\windows\23_compare_model_challenger.ps1
 ```
 
-Le protocole `native_tool_calling_v1` réalise par défaut **3 répétitions à 8K** et vérifie :
-
-1. appel natif `read_file(path="config/prod.yaml")` ;
-2. retour contrôlé `file_not_found` ;
-3. réparation attendue via `list_files(directory="config")` ;
-4. taux de réussite tool-intent/réparation ;
-5. erreurs de protocole ;
-6. wall time et tokens/s ;
-7. taille/résidence VRAM via `/api/ps` lorsque disponible.
+Le protocole `native_tool_calling_v1` réalise par défaut 3 répétitions à 8K et vérifie appel d'outil natif, gestion d'un retour contrôlé en erreur, réparation attendue, erreurs de protocole, wall time, tokens/s et résidence VRAM lorsque disponible.
 
 Preuve :
 
@@ -111,7 +101,7 @@ Preuve :
 benchmarks/results/tool_calling_challenger_*.json
 ```
 
-Le résultat ne peut produire qu'une preuve destinée à la **sélection humaine** :
+Le résultat reste destiné à la **sélection humaine** :
 
 ```text
 PROMOTION_ALLOWED=false
@@ -149,14 +139,14 @@ Le système conserve notamment : Intake immuable, scan de secrets, SHA-256/MIME,
 
 ## Backends Intel Arc
 
-Candidats :
+Candidats locaux :
 
 - `ollama-vulkan` — nominal pré-qualification ;
 - `llama-cpp-sycl` — candidat ;
 - `llama-cpp-vulkan` — candidat ;
 - `b580-hybrid` — profil candidat.
 
-La sélection exige des mesures B580 réelles : TTFT, tokens/s, VRAM/RAM, stabilité, contexte, tool-calling et comportement multimodal pertinent. Aucun backend n'est déclaré vainqueur par la CI.
+La sélection exige des mesures B580 réelles : TTFT, tokens/s, VRAM/RAM, stabilité, contexte, tool-calling et multimodalité pertinente. Aucun backend n'est déclaré vainqueur par la CI.
 
 ## Gates anti-régression
 
@@ -181,13 +171,15 @@ CodeQL
 Dependency Review
 ```
 
-Le gate flotte exige maintenant à la fois :
+Le gate flotte V2 exige :
 
 - exactement trois modèles routés Q4_K_M ;
+- Qwen 3.5 9B + Gemma 4 12B + Ministral 3 14B Reasoning ;
 - aucun runtime legacy actif ;
-- Ministral déclaré séparément comme challenger obligatoire de Gemma ;
-- comparaison native tool-calling + réparation ;
-- challenger hors routage ;
+- `local_only: true` ;
+- `cloud_models_supported: false` ;
+- toute demande cloud refusée ;
+- Granite 4.2 déclaré séparément comme challenger local ;
 - promotion automatique interdite et décision humaine obligatoire.
 
 ## À exécuter sur matériel réel
@@ -196,8 +188,8 @@ GitHub Actions ne peut pas valider :
 
 1. installation réelle Windows 11 + B580 ;
 2. E2E OpenClaw avec les trois modèles routés ;
-3. HARD-40M complet Qwen 3.5 / Gemma 3 / Qwen 2.5 Coder ;
-4. comparaison Gemma 3 12B vs Ministral 3 14B ;
+3. HARD-40M complet Qwen 3.5 / Gemma 4 / Ministral 3 Reasoning ;
+4. comparaison Ministral 3 Reasoning vs Granite 4.2 ;
 5. vraie multimodalité PDF/image ;
 6. Golden Projects ;
 7. projet représentatif multi-documents ;
@@ -209,14 +201,14 @@ GitHub Actions ne peut pas valider :
 
 ## Non prétendu
 
-- aucun des quatre modèles mesurables n'est encore qualifié matériellement ;
-- Ministral n'est pas déclaré meilleur que Gemma avant benchmark ;
+- aucun modèle n'est encore qualifié matériellement par cette PR ;
+- Granite n'est pas déclaré meilleur que Ministral avant benchmark ;
 - aucun débit B580 n'est garanti ;
 - aucune résidence VRAM complète n'est supposée ;
 - aucun backend n'est auto-sélectionné ;
-- aucun fallback cloud silencieux n'est autorisé ;
+- aucun LLM cloud n'est supporté ;
 - aucun résultat matériel n'est inventé par la CI.
 
 ## Critère pour V1.0.0
 
-La version `1.0.0` reste réservée à un parcours nominal réellement qualifié sur Windows 11 + Intel Arc B580, avec HARD-40M, E2E, preuve de sélection Gemma/Ministral, backends, Golden Projects, multimodalité réelle, télémétrie, projet représentatif, limites documentées et validation humaine explicite.
+La version `1.0.0` reste réservée à un parcours réellement qualifié sur Windows 11 + Intel Arc B580, avec HARD-40M, E2E, preuve de sélection du spécialiste, backends, Golden Projects, multimodalité réelle, télémétrie, projet représentatif, limites documentées et validation humaine explicite.
