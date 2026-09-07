@@ -33,14 +33,14 @@ $RunnerArgs = @(
 )
 
 if ($DryRun) {
-    Write-Host '[DRY-RUN] Comparaison obligatoire de sélection du modèle deep.'
-    Write-Host '[DRY-RUN] Incumbent : gemma-deep -> gemma3:12b-it-q4_K_M.'
-    Write-Host '[DRY-RUN] Challenger: ministral-tool-calling -> ministral-3:14b-instruct-2512-q4_K_M.'
+    Write-Host '[DRY-RUN] Comparaison obligatoire de sélection du spécialiste DevOps.'
+    Write-Host '[DRY-RUN] Incumbent : devstral-devops -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M.'
+    Write-Host '[DRY-RUN] Challenger: granite-agentic -> granite4.2:8b-q4_K_M.'
     Write-Host '[DRY-RUN] Protocole: tool-calling natif + réparation après file_not_found.'
     Write-Host "[DRY-RUN] Répétitions=$Repetitions contexte=$ContextTokens timeout=$TimeoutSeconds s."
-    Write-Host '[DRY-RUN] Le challenger ne devient jamais un quatrième modèle routé.'
+    Write-Host '[DRY-RUN] Granite ne devient jamais un quatrième modèle routé.'
     Write-Host '[DRY-RUN] Aucune promotion automatique; décision humaine obligatoire.'
-    Write-Host '[DRY-RUN] Si absent: ollama pull ministral-3:14b-instruct-2512-q4_K_M'
+    Write-Host '[DRY-RUN] Si absent: ollama pull granite4.2:8b-q4_K_M'
     exit 0
 }
 
@@ -55,7 +55,7 @@ Write-Host 'INFO Le benchmark ne télécharge aucun modèle implicitement.'
 
 & $ManagedPython @RunnerArgs
 if ($LASTEXITCODE -ne 0) {
-    throw "Comparaison Gemma/Ministral incomplète (code $LASTEXITCODE)."
+    throw "Comparaison Ministral/Granite incomplète (code $LASTEXITCODE)."
 }
 
 Write-Host 'OK  Preuve challenger produite. Aucune promotion de modèle effectuée.'
