@@ -10,30 +10,25 @@ from clawlocal.routing import RouteDecision, select_route
 
 def model_ref(model_alias: str) -> str:
     catalog = load_contract("model_catalog.yaml")
-    if model_alias in catalog["models"]:
-        model = catalog["models"][model_alias]
-        provider = model["provider"]
-        if provider == "ollama":
-            return f"ollama/{model['runtime_id']}"
-        if provider == "llama_cpp":
-            return f"llamacpp/{model['runtime_id']}"
-        raise ValueError(
-            f"Le modèle local {model_alias} utilise {provider}; "
-            "import/qualification explicite requis"
-        )
+    models = catalog.get("models", {})
+    if model_alias not in models:
+        raise KeyError(f"Alias modèle local inconnu: {model_alias}")
 
-    if model_alias in catalog["cloud_catalog"]:
-        model = catalog["cloud_catalog"][model_alias]
-        if model["provider"] != "openrouter":
-            raise ValueError(f"Provider cloud non supporté: {model['provider']}")
-        return f"openrouter/{model['runtime_id']}"
-
-    raise KeyError(f"Alias modèle inconnu: {model_alias}")
+    model = models[model_alias]
+    provider = model["provider"]
+    if provider == "ollama":
+        return f"ollama/{model['runtime_id']}"
+    if provider == "llama_cpp":
+        return f"llamacpp/{model['runtime_id']}"
+    raise ValueError(
+        f"Le modèle local {model_alias} utilise {provider}; "
+        "import/qualification explicite requis"
+    )
 
 
 def cloud_enabled_from_environment() -> bool:
-    value = os.environ.get("OPENCLAW_LOCAL_CLOUD_ENABLED", "false").strip().lower()
-    return value in {"1", "true", "yes", "on"}
+    """Compatibility shim: Architecture V2 never enables cloud inference."""
+    return False
 
 
 def qualified_models_from_environment() -> set[str]:
@@ -60,11 +55,12 @@ def route_request(
     local_attempts: int = 0,
     human_approved: bool = False,
 ) -> tuple[RouteDecision, str]:
-    enabled = (
-        cloud_enabled_from_environment()
-        if cloud_enabled is None
-        else cloud_enabled
-    )
+    """Resolve a request through the local-only V2 routing contract.
+
+    Cloud-related keyword arguments are retained only to make older callers fail
+    closed through ``select_route``; they can never enable an online model.
+    """
+    del cloud_enabled
     qualified = (
         qualified_models_from_environment()
         if qualified_models is None
@@ -73,7 +69,7 @@ def route_request(
     decision = select_route(
         agent,
         request_cloud=request_cloud,
-        cloud_enabled=enabled,
+        cloud_enabled=False,
         budget_ok=budget_ok,
         reason=reason,
         specialist_available=specialist_available,
@@ -115,5 +111,6 @@ def route_evidence(
 ) -> dict[str, Any]:
     evidence = asdict(decision)
     evidence["resolved_model"] = resolved_model
-    evidence["cloud"] = decision.route_kind == "cloud_escalation"
+    evidence["cloud"] = False
+    evidence["local_only"] = True
     return evidence
