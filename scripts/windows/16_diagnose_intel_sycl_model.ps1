@@ -3,10 +3,10 @@ param(
     [switch]$DryRun,
     [ValidateSet(
         'qwen3.5:9b-q4_K_M',
-        'gemma3:12b-it-q4_K_M',
-        'qwen2.5-coder:14b-instruct-q4_K_M'
+        'gemma4:12b-it-q4_K_M',
+        'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
     )]
-    [string]$Model = 'qwen2.5-coder:14b-instruct-q4_K_M',
+    [string]$Model = 'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M',
     [ValidateRange(30, 600)]
     [int]$TimeoutSeconds = 180
 )
@@ -179,11 +179,11 @@ $Paths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $RuntimeL
 if ($DryRun) {
     Write-Host '[DRY-RUN] Diagnostic direct du modèle réellement utilisé par le backend SYCL.'
     Write-Host "[DRY-RUN] Model=$Model Release=$($RuntimeLock.release) Device=$($RuntimeLock.device)"
-    Write-Host '[DRY-RUN] Résoudre la source GGUF effective, avec override natif seulement si le lock l''exige.'
+    Write-Host '[DRY-RUN] Résoudre la source GGUF effective depuis le cache Ollama local.'
     Write-Host '[DRY-RUN] Contexte nominal B580=8192 tokens.'
     Write-Host '[DRY-RUN] Matrice: SYCL/all+fit on -> SYCL/all+fit off -> SYCL/auto+fit on -> CPU/0+fit off.'
     Write-Host '[DRY-RUN] Chaque essai utilise un port loopback éphémère et capture stdout/stderr séparément.'
-    Write-Host '[DRY-RUN] Aucun téléchargement n''est déclenché par diagnose; lancez intel-sycl-setup si une source native manque.'
+    Write-Host '[DRY-RUN] Aucun téléchargement n''est déclenché par diagnose; lancez models puis intel-sycl-setup si une source manque.'
     Write-Host '[DRY-RUN] Aucune configuration OpenClaw n''est modifiée.'
     exit 0
 }
