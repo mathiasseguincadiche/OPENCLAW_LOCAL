@@ -49,8 +49,8 @@ def test_ollama_benchmark_disables_thinking_and_unloads_every_model() -> None:
     module.get_json = fake_get_json
     for model in (
         "qwen3.5:9b-q4_K_M",
-        "gemma3:12b-it-q4_K_M",
-        "qwen2.5-coder:14b-instruct-q4_K_M",
+        "gemma4:12b-it-q4_K_M",
+        "hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M",
     ):
         result = module.run_ollama(
             "http://127.0.0.1:11434", model, "test", 32, 10.0
