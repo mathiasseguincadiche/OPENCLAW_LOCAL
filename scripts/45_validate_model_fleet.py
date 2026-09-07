@@ -13,11 +13,11 @@ CONFIG = ROOT / "config" / "v1"
 
 EXPECTED_MODELS = {
     "qwen-max": "qwen3.5:9b-q4_K_M",
-    "gemma-deep": "gemma3:12b-it-q4_K_M",
-    "devstral-devops": "qwen2.5-coder:14b-instruct-q4_K_M",
+    "gemma-deep": "gemma4:12b-it-q4_K_M",
+    "devstral-devops": "hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M",
 }
 EXPECTED_CHALLENGERS = {
-    "ministral-tool-calling": "ministral-3:14b-instruct-2512-q4_K_M",
+    "granite-agentic": "granite4.2:8b-q4_K_M",
 }
 EXPECTED_PRIMARY = {
     "chef-operations": "qwen-max",
@@ -30,15 +30,18 @@ EXPECTED_PRIMARY = {
     "auditeur-qualite": "gemma-deep",
 }
 
-# Matching is deliberately case-insensitive so llama.cpp-normalized IDs such as
-# :27B/:26B/:24B cannot bypass the retired-runtime gate.
+# Matching is deliberately case-insensitive so llama.cpp-normalized IDs cannot
+# bypass the retired-runtime gate. Historical CHANGELOG entries are excluded;
+# active operator/config/test surfaces must expose only the current fleet.
 FORBIDDEN_ACTIVE_RUNTIME_IDS = (
     "qwen3.8:27b",
     "gemma4:26b",
     "devstral-small-2:24b",
-    "gemma4:12b",
     "qwen3.5:27b",
     "sera-14b",
+    "gemma3:12b-it-q4_k_m",
+    "qwen2.5-coder:14b-instruct-q4_k_m",
+    "ministral-3:14b-instruct-2512-q4_k_m",
 )
 
 ACTIVE_MODEL_TEXT_FILES = (
@@ -166,15 +169,22 @@ def validate_models(catalog: dict[str, Any], failures: list[str]) -> None:
         if float(model.get("registry_size_gb", 99)) > 9.5:
             failures.append(f"{alias}: poids registre trop élevé pour la flotte B580")
 
+    deep = models.get("gemma-deep", {})
+    if isinstance(deep, dict):
+        if deep.get("family") != "gemma4":
+            failures.append("gemma-deep: runtime deep doit appartenir à Gemma 4")
+        if deep.get("input") != ["text", "image"]:
+            failures.append("gemma-deep: Gemma 4 12B doit rester multimodal")
+
     specialist = models.get("devstral-devops", {})
     if not isinstance(specialist, dict):
         return
-    if specialist.get("family") != "qwen2-coder":
-        failures.append("devstral-devops: runtime spécialiste doit être Qwen2.5 Coder")
+    if specialist.get("family") != "mistral3-reasoning":
+        failures.append("devstral-devops: runtime spécialiste doit être Ministral 3 Reasoning")
     if specialist.get("compatibility_alias") is not True:
         failures.append("devstral-devops: alias de compatibilité doit être explicite")
     if specialist.get("input") != ["text"]:
-        failures.append("devstral-devops: Qwen2.5 Coder doit rester text-only")
+        failures.append("devstral-devops: chemin nominal Ministral GGUF doit rester text-only")
     if specialist.get("multimodal_handoff") != ["qwen-max", "gemma-deep"]:
         failures.append("devstral-devops: handoff multimodal Qwen/Gemma requis")
 
@@ -185,38 +195,38 @@ def validate_challenger(catalog: dict[str, Any], failures: list[str]) -> None:
         EXPECTED_CHALLENGERS
     ):
         failures.append(
-            "model_catalog: Ministral doit être l'unique challenger de benchmark déclaré"
+            "model_catalog: Granite 4.2 doit être l'unique challenger de benchmark déclaré"
         )
         return
-    challenger = challengers.get("ministral-tool-calling")
+    challenger = challengers.get("granite-agentic")
     if not isinstance(challenger, dict):
-        failures.append("model_catalog: challenger Ministral invalide")
+        failures.append("model_catalog: challenger Granite invalide")
         return
-    expected_runtime = EXPECTED_CHALLENGERS["ministral-tool-calling"]
+    expected_runtime = EXPECTED_CHALLENGERS["granite-agentic"]
     if challenger.get("runtime_id") != expected_runtime:
-        failures.append("Ministral challenger: runtime Q4_K_M exact attendu")
+        failures.append("Granite challenger: runtime Q4_K_M exact attendu")
     if challenger.get("provider") != "ollama":
-        failures.append("Ministral challenger: provider Ollama attendu")
+        failures.append("Granite challenger: provider Ollama attendu")
     if challenger.get("quantization") != "Q4_K_M":
-        failures.append("Ministral challenger: Q4_K_M requis")
-    if challenger.get("registry_size_gb") != 9.1:
-        failures.append("Ministral challenger: poids registre 9.1 Go attendu")
+        failures.append("Granite challenger: Q4_K_M requis")
+    if challenger.get("registry_size_gb") != 5.3:
+        failures.append("Granite challenger: poids registre 5.3 Go attendu")
     if challenger.get("nominal_context_tokens") != 8192:
-        failures.append("Ministral challenger: contexte de comparaison 8192 attendu")
+        failures.append("Granite challenger: contexte de comparaison 8192 attendu")
     if challenger.get("required_for_selection") is not True:
-        failures.append("Ministral challenger: comparaison obligatoire avant sélection")
+        failures.append("Granite challenger: comparaison obligatoire avant sélection")
     if challenger.get("routing_active") is not False:
-        failures.append("Ministral challenger: doit rester hors routage nominal")
-    if challenger.get("incumbent_alias") != "gemma-deep":
-        failures.append("Ministral challenger: doit challenger gemma-deep")
+        failures.append("Granite challenger: doit rester hors routage nominal")
+    if challenger.get("incumbent_alias") != "devstral-devops":
+        failures.append("Granite challenger: doit challenger le spécialiste DevOps")
     if challenger.get("automatic_promotion") is not False:
-        failures.append("Ministral challenger: promotion automatique interdite")
+        failures.append("Granite challenger: promotion automatique interdite")
     scope = challenger.get("challenge_scope", [])
     if not isinstance(scope, list) or not {
         "native_tool_calling",
         "tool_feedback_repair",
     }.issubset(set(scope)):
-        failures.append("Ministral challenger: tool-calling et réparation obligatoires")
+        failures.append("Granite challenger: tool-calling et réparation obligatoires")
 
 
 def validate_routing(routing: dict[str, Any], failures: list[str]) -> None:
@@ -288,11 +298,11 @@ def validate_qualification(
     if not isinstance(challenge, dict):
         failures.append("qualification: gate challenger absent")
         return
-    expected_runtime = EXPECTED_CHALLENGERS["ministral-tool-calling"]
+    expected_runtime = EXPECTED_CHALLENGERS["granite-agentic"]
     expected = {
         "required_before_manual_model_selection": True,
-        "incumbent_alias": "gemma-deep",
-        "challenger_alias": "ministral-tool-calling",
+        "incumbent_alias": "devstral-devops",
+        "challenger_alias": "granite-agentic",
         "challenger_runtime_id": expected_runtime,
         "context_tokens": 8192,
         "repetitions": 3,
@@ -389,8 +399,8 @@ def validate_operator_contracts(failures: list[str]) -> None:
             failures.append(f"runner challenger: marqueur obligatoire absent: {marker}")
     if "Enable-ClawLocalManagedPython" not in challenger_windows:
         failures.append("runner challenger Windows: Python géré obligatoire")
-    if "ministral-3:14b-instruct-2512-q4_K_M" not in challenger_windows:
-        failures.append("runner challenger Windows: runtime Ministral exact absent")
+    if "granite4.2:8b-q4_K_M" not in challenger_windows:
+        failures.append("runner challenger Windows: runtime Granite exact absent")
 
     configure_local = read_required("scripts/windows/02_configure_local.ps1", failures)
     pull_models = read_required("scripts/windows/03_pull_models.ps1", failures)
@@ -426,17 +436,17 @@ def main() -> int:
     validate_operator_contracts(failures)
 
     if failures:
-        print("B580-sized Model Fleet + Challenger: NON CONFORME")
+        print("B580-sized Model Fleet V2 + Challenger: NON CONFORME")
         for failure in failures:
             print(f"- {failure}")
         return 1
 
-    print("B580-sized Model Fleet + Challenger: CONFORME")
+    print("B580-sized Model Fleet V2 + Challenger: CONFORME")
     print("- Qwen 3.5 9B Q4_K_M: orchestration/recherche/sécurité/release")
-    print("- Gemma 3 12B Q4_K_M: architecture/rédaction/audit/multimodal")
-    print("- Qwen 2.5 Coder 14B Q4_K_M: DevOps/software engineering")
+    print("- Gemma 4 12B Q4_K_M: architecture/rédaction/audit/multimodal")
+    print("- Ministral 3 14B Reasoning Q4_K_M: DevOps/software engineering")
     print("- exactement trois modèles restent routés et requis")
-    print("- Ministral 3 14B Q4_K_M est challenger obligatoire de Gemma")
+    print("- Granite 4.2 8B Q4_K_M est challenger obligatoire du spécialiste DevOps")
     print("- comparaison native tool-calling + réparation, 3 répétitions à 8K")
     print("- challenger hors routage; promotion automatique interdite")
     print("- aucun runtime legacy dans les surfaces actives ou tests Pester")
