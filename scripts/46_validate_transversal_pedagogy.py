@@ -381,9 +381,9 @@ def main() -> int:
     print("Transversal Pedagogy Gate: CONFORME")
     print("- 8 agents: contrat runtime compact injecté; contrats complets disponibles à la demande")
     print("- bootstrap géré: <= 8000 caractères par agent pour le contexte nominal 8K")
-    print("- 3 modèles locaux: Qwen 3.5 9B, Gemma 3 12B, Qwen 2.5 Coder 14B")
-    print("- Ministral 3 14B reste challenger de benchmark hors routage")
-    print("- escalade cloud explicite: même contrat pédagogique conservé au niveau agent")
+    print("- 3 modèles locaux: Qwen 3.5 9B, Gemma 4 12B, Ministral 3 14B Reasoning")
+    print("- Granite 4.2 8B reste challenger local de benchmark hors routage")
+    print("- Architecture V2 local-only: aucun backend LLM cloud ni fallback cloud")
     print("- 5 phases: apprentissage et accessibilité renforcés dans les prompts")
     print("- débutant accessible sans fausse simplification, profondeur expert préservée")
     return 0
