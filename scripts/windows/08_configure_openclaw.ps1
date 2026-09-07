@@ -216,8 +216,8 @@ function Test-SelectedBackendReady {
         Test-LlamaCppInventory -Endpoint ([string]$Lock.llama_cpp_sycl.endpoint) `
             -Expected @(
                 'qwen3.5:9b-q4_K_M',
-                'gemma3:12b-it-q4_K_M',
-                'qwen2.5-coder:14b-instruct-q4_K_M'
+                'gemma4:12b-it-q4_K_M',
+                'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
             ) `
             -Label 'Backend Intel SYCL'
         Write-Host 'OK  Backend texte sélectionné: llama-cpp-sycl (provider OpenClaw intel-sycl).'
@@ -230,8 +230,8 @@ function Test-SelectedBackendReady {
         Test-LlamaCppInventory -Endpoint ([string]$Lock.llama_cpp_vulkan.endpoint) `
             -Expected @($Lock.llama_cpp_vulkan.managed_models | ForEach-Object { [string]$_ }) `
             -Label 'Backend Intel Vulkan géré'
-        Write-Host 'OK  Profil B580 hybride prêt: Qwen 3.5->Ollama, Gemma 3/Qwen Coder->intel-vulkan.'
-        Write-Host 'INFO Image/PDF restent intégralement sur Ollama via Qwen 3.5/Gemma 3.'
+        Write-Host 'OK  Profil B580 hybride prêt: Qwen 3.5->Ollama, Gemma 4/Ministral Reasoning->intel-vulkan.'
+        Write-Host 'INFO Image/PDF restent intégralement sur Ollama via Qwen 3.5/Gemma 4.'
         return
     }
 
@@ -266,7 +266,7 @@ if ($DryRun) {
     }
     elseif ($Backend -eq 'b580-hybrid') {
         Write-Host '[DRY-RUN] Exiger Ollama + routeur Intel Vulkan géré prêt.'
-        Write-Host '[DRY-RUN] Routage texte: Qwen 3.5 -> Ollama; Gemma 3 + Qwen Coder -> intel-vulkan; image/PDF -> Ollama.'
+        Write-Host '[DRY-RUN] Routage texte: Qwen 3.5 -> Ollama; Gemma 4 + Ministral 3 Reasoning -> intel-vulkan; image/PDF -> Ollama.'
         Write-Host '[DRY-RUN] Contexte de benchmark B580: 8192 tokens; les backends candidats restent soumis à qualification.'
         Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
     }
@@ -357,7 +357,7 @@ if ($Backend -eq 'ollama-vulkan') {
             throw "Admission prompt OpenClaw en échec pour $AdmissionAgent."
         }
     }
-    Write-Host 'OK  Admission prompt validée sur Qwen 3.5, Gemma 3 et Qwen 2.5 Coder.'
+    Write-Host 'OK  Admission prompt validée sur Qwen 3.5, Gemma 4 et Ministral 3 Reasoning.'
 }
 else {
     Write-Host 'INFO Contrôle d admission complet réservé au backend nominal ollama-vulkan; le backend candidat reste soumis à son E2E de qualification.'
