@@ -1,4 +1,4 @@
-schema_version: "1.5.0"
+schema_version: "1.6.0"
 platform_version: "0.2.0"
 policy:
   local_first: true
@@ -35,18 +35,18 @@ models:
 
   gemma-deep:
     provider: ollama
-    runtime_id: gemma3:12b-it-q4_K_M
-    sycl_runtime_id: gemma3:12b-it-q4_K_M
-    vulkan_runtime_id: gemma3:12b-it-q4_K_M
-    family: gemma
+    runtime_id: gemma4:12b-it-q4_K_M
+    sycl_runtime_id: gemma4:12b-it-q4_K_M
+    vulkan_runtime_id: gemma4:12b-it-q4_K_M
+    family: gemma4
     class: local_deep
     input: [text, image]
     required: true
     status: candidate
     routing_active: true
-    purpose: [architecture, documentation, independent_review, multimodal_review]
+    purpose: [architecture, documentation, independent_review, multimodal_review, deep_reasoning]
     quantization: Q4_K_M
-    registry_size_gb: 8.1
+    registry_size_gb: 7.6
     nominal_context_tokens: 8192
     qualification_context_tokens: [8192, 16384]
     hardware_fit: unqualified_b580_12gb_candidate
@@ -54,45 +54,45 @@ models:
 
   devstral-devops:
     provider: ollama
-    runtime_id: qwen2.5-coder:14b-instruct-q4_K_M
-    sycl_runtime_id: qwen2.5-coder:14b-instruct-q4_K_M
-    vulkan_runtime_id: qwen2.5-coder:14b-instruct-q4_K_M
-    family: qwen2-coder
+    runtime_id: hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
+    sycl_runtime_id: hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
+    vulkan_runtime_id: hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
+    family: mistral3-reasoning
     class: local_specialist
     input: [text]
     required: true
     status: candidate
     routing_active: true
-    purpose: [devops, software_engineering, repository_tools, multi_file_editing]
+    purpose: [devops, software_engineering, repository_tools, multi_file_editing, deep_reasoning]
     quantization: Q4_K_M
-    registry_size_gb: 9.0
+    registry_size_gb: 8.24
     nominal_context_tokens: 8192
     qualification_context_tokens: [8192, 16384]
     hardware_fit: unqualified_b580_12gb_candidate
     compatibility_alias: true
-    compatibility_note: "Alias logique historique conservé pour ne pas casser les routes/workspaces; runtime désormais Qwen2.5 Coder 14B."
+    compatibility_note: "Alias logique historique conservé pour ne pas casser les routes/workspaces; runtime désormais le GGUF officiel Ministral 3 14B Reasoning Q4_K_M servi par Ollama depuis Hugging Face."
     multimodal_handoff: [qwen-max, gemma-deep]
     context_policy: benchmark_before_raise
 
 benchmark_challengers:
-  ministral-tool-calling:
+  granite-agentic:
     provider: ollama
-    runtime_id: ministral-3:14b-instruct-2512-q4_K_M
-    family: mistral
+    runtime_id: granite4.2:8b-q4_K_M
+    family: granite4
     class: benchmark_challenger
-    input: [text, image]
+    input: [text]
     required_for_selection: true
     status: candidate_challenger
     routing_active: false
-    incumbent_alias: gemma-deep
-    challenge_scope: [native_tool_calling, tool_feedback_repair, architecture_quality, b580_fit]
+    incumbent_alias: devstral-devops
+    challenge_scope: [native_tool_calling, tool_feedback_repair, devops_quality, b580_fit]
     quantization: Q4_K_M
-    registry_size_gb: 9.1
+    registry_size_gb: 5.3
     nominal_context_tokens: 8192
     qualification_context_tokens: [8192]
     hardware_fit: unqualified_b580_12gb_challenger
     automatic_promotion: false
-    compatibility_note: "Challenger de benchmark uniquement; ne compte pas dans la flotte locale routée et ne peut pas devenir nominal sans décision humaine explicite."
+    compatibility_note: "Granite 4.2 8B Q4_K_M est un challenger de benchmark uniquement; il ne compte pas dans les trois modèles routés et ne peut devenir nominal sans preuve B580 et décision humaine explicite."
 
 cloud_catalog:
   research:
