@@ -38,6 +38,36 @@ function Invoke-NativeChecked {
     }
 }
 
+function Update-ProcessPathFromEnvironment {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'Low')]
+    param()
+
+    if (-not $PSCmdlet.ShouldProcess(
+        'PATH du processus',
+        'Rafraîchir depuis les environnements Machine et User'
+    )) {
+        return
+    }
+
+    $Parts = @()
+    foreach ($Value in @(
+        $env:PATH,
+        [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+        [Environment]::GetEnvironmentVariable('Path', 'User')
+    )) {
+        if (-not $Value) {
+            continue
+        }
+        foreach ($Part in ($Value -split ';')) {
+            $Trimmed = $Part.Trim()
+            if ($Trimmed -and $Parts -notcontains $Trimmed) {
+                $Parts += $Trimmed
+            }
+        }
+    }
+    $env:PATH = $Parts -join ';'
+}
+
 function Test-PythonPreferred {
     $Preferred = [string]$Lock.python.preferred
     if (Get-Command py.exe -ErrorAction SilentlyContinue) {
@@ -226,6 +256,12 @@ function Install-OllamaPreferred {
         '--version', $Preferred, '--scope', 'user', '--silent',
         '--accept-package-agreements', '--accept-source-agreements'
     ) -Description "Installation Ollama $Preferred"
+
+    Update-ProcessPathFromEnvironment
+    $Installed = Get-OllamaVersion
+    if ($Installed -ne $Preferred) {
+        Write-BootstrapFailure "Ollama $Preferred reste introuvable ou non conforme après installation (détecté: $Installed)."
+    }
 }
 
 function Install-ClawLocalPackage([string]$RuntimeHome) {
@@ -283,6 +319,7 @@ function Test-BootstrapFunctionContract {
         'Write-BootstrapFailure',
         'Get-PlatformRoot',
         'Invoke-NativeChecked',
+        'Update-ProcessPathFromEnvironment',
         'Test-PythonPreferred',
         'Invoke-PreferredPython',
         'Install-PythonPreferred',
