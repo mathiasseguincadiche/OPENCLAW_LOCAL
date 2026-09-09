@@ -11,7 +11,7 @@
 
 Python, Node.js, OpenClaw, Ollama et llama.cpp sont contrôlés par les locks versionnés du dépôt.
 
-Architecture V2 est **LLM local-only** : aucun modèle LLM cloud ni fournisseur d'inférence LLM en ligne n'est utilisé par le parcours supporté. Les outils Web peuvent fournir des sources publiques, mais le raisonnement reste exécuté localement.
+Architecture V2 est **LLM local-only** et utilise **Vulkan comme unique accélération GPU LLM sur la B580**. Les outils Web peuvent fournir des sources publiques, mais le raisonnement reste exécuté localement.
 
 ## Emplacement géré
 
@@ -27,15 +27,13 @@ Les scripts configurent `OLLAMA_MODELS` vers cette racine.
 
 ## Flotte opérationnelle Architecture V2
 
-Les trois modèles requis et routés sont :
-
 ```text
 qwen3.5:9b-q4_K_M
 gemma4:12b-it-q4_K_M
 hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-Ils sont Q4_K_M. Les alias logiques restent :
+Alias logiques :
 
 ```text
 qwen-max        -> qwen3.5:9b-q4_K_M
@@ -43,25 +41,21 @@ gemma-deep      -> gemma4:12b-it-q4_K_M
 devstral-devops -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-Le benchmark direct utilise **8192 tokens** comme contexte nominal. Le full-agent OpenClaw utilise séparément **16384 tokens** comme fenêtre nominale d'orchestration. Les cas 16K du HARD-40M restent du stress benchmark ; le 16K OpenClaw ne constitue pas une promotion du benchmark. Aucune promotion automatique à 32768 n'est autorisée.
+Le HARD-40M utilise **8192 tokens** comme contexte nominal, avec six cas de stress à 16384. Le full-agent OpenClaw utilise séparément **16384 tokens** comme fenêtre nominale d'orchestration. Aucune promotion automatique à 32768 n'est autorisée.
 
 ## Challenger local séparé
-
-Le dépôt déclare également :
 
 ```text
 granite-devops -> granite4.2:8b-q4_K_M
 ```
 
-Granite 4.2 8B est un **challenger de benchmark uniquement** pour le spécialiste DevOps. Il n'est ni routé, ni fallback, ni compté parmi les trois modèles opérationnels, et il ne peut jamais être promu automatiquement.
+Granite 4.2 8B est un challenger de **modèle** pour le spécialiste DevOps. Il n'est ni routé, ni fallback, ni compté parmi les trois modèles opérationnels, et il ne modifie pas la décision Vulkan.
 
-Il n'est pas téléchargé par le parcours normal des trois modèles routés. Avant la comparaison dédiée :
+Il n'est pas téléchargé par le parcours normal. Si la comparaison de modèle est nécessaire :
 
 ```powershell
 ollama pull granite4.2:8b-q4_K_M
 ```
-
-Sa présence locale ne modifie pas le routage OpenClaw. Une éventuelle promotion exige des preuves B580 et une décision humaine explicite dans une modification ultérieure du catalogue/routage.
 
 ## Nouvelle installation
 
@@ -82,7 +76,7 @@ Le parcours complet :
 3. configure la racine locale et `OLLAMA_MODELS` ;
 4. démarre/vérifie Ollama sur loopback ;
 5. télécharge exactement les trois modèles routés ;
-6. génère la configuration OpenClaw local-only ;
+6. génère la configuration OpenClaw local-only sur `ollama-vulkan` ;
 7. déploie les huit workspaces agents ;
 8. vérifie le Gateway et le parcours local.
 
@@ -118,7 +112,7 @@ Réel :
 
 Le script lit `config/v1/model_catalog.yaml` et télécharge uniquement les entrées requises de `models:`. Les entrées `benchmark_challengers:` sont volontairement exclues.
 
-## Vérification locale
+## Vérification locale nominale
 
 ```powershell
 .\menu.ps1 -Action audit
@@ -127,36 +121,68 @@ Le script lit `config/v1/model_catalog.yaml` et télécharge uniquement les entr
 
 Le smoke minimal appelle Ollama sur loopback, utilise le Python géré pour les contrôles d'identité et affiche les métriques `/api/ps` lorsqu'elles sont disponibles. Il ne vaut pas qualification matérielle.
 
-## OpenClaw
+## OpenClaw nominal
 
 ```powershell
 .\menu.ps1 -Action configure-openclaw -DryRun
 .\menu.ps1 -Action configure-openclaw
 .\menu.ps1 -Action deploy-agents
+.\menu.ps1 -Action e2e
 ```
 
-Le backend nominal/rollback reste `ollama-vulkan` jusqu'à décision explicite fondée sur mesures.
+Le profil nominal/rollback est `ollama-vulkan`.
 
-Pour le profil hybride candidat :
+## Runtime llama.cpp/Vulkan géré
+
+Dry-run :
+
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup -DryRun
+```
+
+Installation/démarrage et vérification :
 
 ```powershell
 .\menu.ps1 -Action intel-vulkan-setup
 .\menu.ps1 -Action intel-vulkan-verify
-.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
 ```
 
-Dans le profil hybride actuel, Qwen reste sur Ollama/Vulkan et Gemma 4 + Ministral 3 Reasoning sont évalués sur llama.cpp/Vulkan. Cette répartition est un candidat de qualification, pas un résultat déjà démontré.
+Le runtime géré :
 
-## Intel SYCL
+- utilise la release llama.cpp verrouillée ;
+- vérifie son archive par SHA-256 ;
+- détecte la B580 via Vulkan ;
+- écoute uniquement sur `127.0.0.1:8081/v1` ;
+- utilise `models-max=1`, `parallel=1`, `gpu_layers=auto`, `fit=on` ;
+- reste offline ;
+- réutilise les blobs GGUF locaux exposés par Ollama ;
+- gère Gemma 4 et Ministral 3 Reasoning pour le profil hybride.
+
+## Profil B580 hybride Vulkan
 
 ```powershell
-.\menu.ps1 -Action intel-sycl-setup -DryRun
-.\menu.ps1 -Action intel-sycl-setup
-.\menu.ps1 -Action intel-sycl-verify
-.\menu.ps1 -Action intel-sycl-compare -Quick
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
 ```
 
-Le routeur utilise un modèle à la fois, `parallel=1`, `gpu_layers=auto` et contexte benchmark 8192.
+Répartition :
+
+```text
+qwen-max        -> Ollama/Vulkan
+gemma-deep      -> llama.cpp/Vulkan
+devstral-devops -> llama.cpp/Vulkan
+image/PDF       -> Ollama/Vulkan
+```
+
+Ce profil est une voie d'exploitation à valider sur la workstation réelle. Il ne remet pas Vulkan en compétition avec une autre API GPU.
+
+Rollback :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
+.\menu.ps1 -Action intel-vulkan-stop
+```
 
 ## Qualification des trois modèles routés
 
@@ -177,7 +203,7 @@ Après installation explicite de Granite :
 .\scripts\windows\23_compare_model_challenger.ps1
 ```
 
-Cette comparaison produit une preuve de sélection locale mais ne change jamais automatiquement la flotte et ne peut pas contourner un échec HARD-40M.
+Cette comparaison produit une preuve de sélection de **modèle** mais ne change jamais automatiquement la flotte et ne peut pas contourner un échec HARD-40M.
 
 ## Golden Projects
 
@@ -188,14 +214,15 @@ Cette comparaison produit une preuve de sélection locale mais ne change jamais 
 
 ## Désinstallation / nettoyage
 
-Avant de supprimer des modèles :
+Avant de supprimer des modèles ou runtimes :
 
 1. vérifier les trois modèles routés ;
 2. vérifier `audit`/`verify` ;
 3. conserver les preuves historiques utiles ;
 4. ne pas supprimer `proofs/`, les états de qualification ou les projets utilisateur ;
-5. ne supprimer Granite qu'après conservation de sa preuve comparative si elle a été utilisée pour une décision.
+5. arrêter le runtime llama.cpp/Vulkan géré avant suppression de son répertoire ;
+6. ne supprimer Granite qu'après conservation de sa preuve comparative si elle a été utilisée pour une décision.
 
 ## Qualification B580
 
-La CI prouve les contrats logiciels ; elle ne prouve ni la résidence VRAM, ni le débit, ni la stabilité matérielle de la nouvelle flotte. Ces affirmations restent interdites tant qu'un run réel sur l'Intel Arc B580 n'a pas produit ses preuves avec le commit, les digests/quantifications, le backend, le pilote et les contextes correspondants.
+La CI prouve les contrats logiciels ; elle ne prouve ni la résidence VRAM, ni le débit, ni la stabilité matérielle de la flotte. Ces affirmations restent interdites tant qu'un run réel sur l'Intel Arc B580 n'a pas produit ses preuves avec le commit, les digests/quantifications, le runtime Vulkan, le pilote et les contextes correspondants.
