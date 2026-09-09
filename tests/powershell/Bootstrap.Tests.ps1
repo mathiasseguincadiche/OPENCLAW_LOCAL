@@ -37,6 +37,7 @@ Describe 'Contrat interne du bootstrap Windows' {
         $Bootstrap | Should -Match ([regex]::Escape("lib\bootstrap_openclaw.ps1"))
         $Bootstrap | Should -Match "'Test-OpenClawPreferred'"
         $Bootstrap | Should -Match "'Install-OpenClawPreferred'"
+        $Bootstrap | Should -Match "'Update-ProcessPathFromEnvironment'"
     }
 
     It 'charge les helpers OpenClaw et valide le contrat avant toute installation' {
@@ -86,6 +87,22 @@ Describe 'Contrat interne du bootstrap Windows' {
         $MarkerCheck | Should -BeGreaterOrEqual 0
         $MarkerWrite | Should -BeGreaterThan $NpmInstall
         $FinalValidation | Should -BeGreaterThan $MarkerWrite
+    }
+
+    It 'rafraîchit le PATH et revalide Ollama après WinGet' {
+        $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+        $BootstrapPath = Join-Path $RepoRoot 'scripts\windows\00_bootstrap.ps1'
+        $Content = (Get-Content -Raw -LiteralPath $BootstrapPath) -replace "`r`n", "`n"
+
+        $Install = $Content.IndexOf(') -Description "Installation Ollama $Preferred"')
+        $Refresh = $Content.IndexOf('Update-ProcessPathFromEnvironment', $Install)
+        $Verify = $Content.IndexOf('$Installed = Get-OllamaVersion', $Refresh)
+        $Failure = $Content.IndexOf('reste introuvable ou non conforme après installation', $Verify)
+
+        $Install | Should -BeGreaterOrEqual 0
+        $Refresh | Should -BeGreaterThan $Install
+        $Verify | Should -BeGreaterThan $Refresh
+        $Failure | Should -BeGreaterThan $Verify
     }
 
     It 'transmet explicitement la racine du dépôt aux scripts runtime' {
