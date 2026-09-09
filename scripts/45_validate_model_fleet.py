@@ -327,7 +327,9 @@ def validate_active_surfaces(failures: list[str]) -> None:
             if runtime_id.casefold() in folded:
                 failures.append(f"{relative}: runtime retiré encore actif: {runtime_id}")
         if retired_backend_marker in folded:
-            failures.append(f"{relative}: backend GPU retiré encore présent dans une surface active")
+            failures.append(
+                f"{relative}: backend GPU retiré encore présent dans une surface active"
+            )
 
 
 def main() -> int:
