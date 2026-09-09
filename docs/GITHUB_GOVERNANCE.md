@@ -52,9 +52,9 @@ CodeQL / Python
 
 Les règles qui exigent un deuxième approbateur ne doivent être activées qu'après ajout d'un mainteneur distinct.
 
-### État observé le 28 août 2026
+### État observé le 9 septembre 2026
 
-Le ruleset `main-protection` est actif sur la branche par défaut et applique déjà :
+Le ruleset `main-protection` est actif sur la branche par défaut et applique :
 
 - suppression interdite ;
 - non-fast-forward interdit ;
@@ -65,16 +65,18 @@ Le ruleset `main-protection` est actif sur la branche par défaut et applique d�
 - status checks en mode strict, donc branche à jour ;
 - aucun acteur de bypass permanent.
 
-Checks actuellement imposés par GitHub :
+Les **six checks cibles sont actuellement obligatoires** dans GitHub :
 
 ```text
 quality
+python-3.12
+python-3.13
 windows-contract
 Dependency Review
 CodeQL / Python
 ```
 
-Il reste une **dérive administrative connue** : `python-3.12` et `python-3.13` passent dans la CI mais ne sont pas encore des checks obligatoires du ruleset. L'issue GitHub `#8` reste ouverte jusqu'à l'ajout de ces deux checks. La cible versionnée ci-dessus ne doit pas être abaissée pour masquer cet écart.
+L'issue administrative `#8` est clôturée : il n'existe plus de dérive entre la cible versionnée et le ruleset actif sur les status checks. Toute modification future du nom d'un check doit repasser par la procédure de contrôle décrite plus bas.
 
 ## Pull Requests
 
