@@ -47,19 +47,24 @@ ACTIVE_MODEL_TEXT_FILES = (
     "docs/ARCHITECTURE.md",
     "docs/BENCHMARK.md",
     "docs/INSTALLATION_WINDOWS_11.md",
+    "docs/INTEL_ARC_B580.md",
     "docs/MODELES_LOCAUX.md",
     "docs/OPENCLAW_INTEGRATION.md",
     "docs/OPERATIONS.md",
     "docs/PREMIERS_PAS_OPENCLAW_LOCAL.md",
     "docs/QUALIFICATION.md",
+    "docs/README.md",
     "docs/ROUTAGE_HYBRIDE.md",
     "docs/RUNTIME_BACKENDS.md",
     "docs/TELEMETRY.md",
     "docs/TROUBLESHOOTING.md",
     "config/openclaw.local.example.json5",
+    "config/v1/hardware_profiles/intel_arc_b580_12gb.yaml",
     "config/v1/model_catalog.yaml",
     "config/v1/model_routing.yaml",
     "config/v1/qualification_policy.yaml",
+    "config/v1/runtime_backends.yaml",
+    "config/v1/runtime_versions.json",
     "src/clawlocal/openclaw_config.py",
     "src/clawlocal/routing.py",
     "src/clawlocal/runtime.py",
@@ -67,8 +72,10 @@ ACTIVE_MODEL_TEXT_FILES = (
     "scripts/windows/03_pull_models.ps1",
     "scripts/windows/04_verify_local.ps1",
     "scripts/windows/08_configure_openclaw.ps1",
-    "scripts/windows/16_diagnose_intel_sycl_model.ps1",
+    "scripts/windows/10_test_openclaw_e2e.ps1",
     "scripts/windows/18_setup_intel_vulkan.ps1",
+    "scripts/windows/lib/intel_b580.ps1",
+    "scripts/windows/lib/intel_vulkan.ps1",
     "scripts/windows/23_compare_model_challenger.ps1",
 )
 
@@ -101,6 +108,8 @@ def validate_catalog(catalog: dict[str, Any], failures: list[str]) -> None:
         failures.append("model_catalog: exactement trois modèles locaux routés")
     if policy.get("target_hardware_profile") != "intel_arc_b580_12gb":
         failures.append("model_catalog: profil matériel B580 12GB requis")
+    if policy.get("gpu_llm_acceleration") != "vulkan":
+        failures.append("model_catalog: Vulkan doit être l'unique accélération GPU LLM")
     if policy.get("nominal_context_tokens") != 8192:
         failures.append("model_catalog: contexte benchmark nominal 8192 attendu")
     if policy.get("openclaw_agent_context_tokens") != 16384:
@@ -122,6 +131,10 @@ def validate_catalog(catalog: dict[str, Any], failures: list[str]) -> None:
             failures.append(
                 f"{alias}: runtime_id={model.get('runtime_id')} attendu={runtime_id}"
             )
+        if "sycl_runtime_id" in model:
+            failures.append(f"{alias}: alias runtime SYCL interdit")
+        if model.get("vulkan_runtime_id") != runtime_id:
+            failures.append(f"{alias}: vulkan_runtime_id doit suivre le runtime local")
         if model.get("provider") != "ollama":
             failures.append(f"{alias}: provider Ollama local attendu")
         if model.get("required") is not True or model.get("routing_active") is not True:
@@ -231,6 +244,27 @@ def validate_qualification(qualification: dict[str, Any], failures: list[str]) -
     if fleet.get("benchmark_challengers_count_as_routed_models") is not False:
         failures.append("qualification: challenger ne compte pas comme modèle routé")
 
+    runtime_policy = qualification.get("runtime_backend_policy", {})
+    if runtime_policy.get("gpu_llm_acceleration") != "vulkan":
+        failures.append("qualification: accélération GPU LLM Vulkan requise")
+    if runtime_policy.get("backend_choice_locked") is not True:
+        failures.append("qualification: le choix de backend Vulkan doit être verrouillé")
+    if set(runtime_policy.get("allowed_backends", [])) != {
+        "ollama-vulkan",
+        "llama-cpp-vulkan",
+        "b580-hybrid",
+    }:
+        failures.append("qualification: seuls les backends Vulkan actifs sont autorisés")
+    if set(runtime_policy.get("openclaw_selectable_profiles", [])) != {
+        "ollama-vulkan",
+        "b580-hybrid",
+    }:
+        failures.append("qualification: profils OpenClaw Vulkan inattendus")
+    if runtime_policy.get("backend_recomparison_required") is not False:
+        failures.append("qualification: la comparaison de backends retirée ne doit pas revenir")
+    if runtime_policy.get("real_b580_runtime_evidence_required") is not True:
+        failures.append("qualification: preuves runtime B580 réelles requises")
+
     safety = qualification.get("safety", {})
     if safety.get("cloud_calls_allowed_during_qualification") is not False:
         failures.append("qualification: aucun appel LLM cloud")
@@ -285,12 +319,15 @@ def validate_runtime_routes(failures: list[str]) -> None:
 
 
 def validate_active_surfaces(failures: list[str]) -> None:
+    retired_backend_marker = "sy" + "cl"
     for relative in ACTIVE_MODEL_TEXT_FILES:
         text = read_required(relative, failures)
         folded = text.casefold()
         for runtime_id in RETIRED_ACTIVE_RUNTIME_IDS:
             if runtime_id.casefold() in folded:
                 failures.append(f"{relative}: runtime retiré encore actif: {runtime_id}")
+        if retired_backend_marker in folded:
+            failures.append(f"{relative}: backend GPU retiré encore présent dans une surface active")
 
 
 def main() -> int:
@@ -314,6 +351,7 @@ def main() -> int:
 
     print("OK  Architecture V2 local-only")
     print("OK  flotte routée: Qwen3.5 9B + Gemma 4 12B + Ministral 3 14B Reasoning")
+    print("OK  accélération GPU LLM: Vulkan uniquement")
     print("OK  challenger local: Granite 4.2 8B")
     print("OK  aucun catalogue ni routage de modèle cloud")
     print("Verdict: CONFORME")
