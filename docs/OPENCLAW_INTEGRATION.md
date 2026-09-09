@@ -20,7 +20,16 @@ Les outils Web restent autorisés comme sources d'information. Ils ne changent p
 
 ## Runtime OpenClaw verrouillé
 
-Le lock V2 actuel conserve **OpenClaw 2026.9.1** avec le plugin Parallel aligné sur **2026.9.1**. Une évolution de la stable OpenClaw est traitée séparément comme un changement de runtime : elle ne doit pas être confondue avec la migration de flotte.
+Le lock V2 actuel fixe **OpenClaw 2026.9.2** avec le plugin Parallel officiel aligné sur **2026.9.2**. Le projet n'installe ni `main` ni une version flottante : une évolution OpenClaw est traitée séparément comme un changement de runtime et doit repasser les gates du dépôt.
+
+Preuves de publication verrouillées :
+
+```text
+OpenClaw      : 2026.9.2
+release SHA   : 3928bad9badfcb6c7d140530435e806fb8092190
+npm SRI       : sha512-M6C7UsnX815nv26qBJFYGe6aGzv+ftZLRzV6S9oRXUtXg2Yn67eVntpssT94kgkquKVSeUxerUg0j1ONp4WYQg==
+Parallel      : @openclaw/parallel-plugin@2026.9.2
+```
 
 Le lock conserve l'intégrité SRI du paquet npm et le SHA de release publié afin que `install-core` rejette des octets différents de l'artefact attendu.
 
