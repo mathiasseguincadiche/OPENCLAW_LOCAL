@@ -6,7 +6,7 @@
 
 `OPENCLAW_LOCAL` est une plateforme multi-agent locale avec huit rôles spécialisés, projets, preuves, séparation producteur/auditeur, pédagogie, publication gouvernée et garde-fous fail-closed. **Aucun modèle LLM cloud n'est supporté en Architecture V2.** Les outils Web peuvent fournir des informations fraîches, mais l'analyse et le raisonnement restent exécutés par les modèles locaux.
 
-La CI valide l'architecture logicielle et les contrats. Elle **ne qualifie pas** les performances des modèles, le backend Intel Arc ni la qualité sémantique multimodale sur la workstation réelle.
+La CI valide l'architecture logicielle et les contrats. Elle **ne qualifie pas** les performances ni la stabilité matérielle sur la workstation réelle.
 
 ## Flotte V2 candidate B580
 
@@ -18,7 +18,7 @@ La flotte opérationnelle candidate contient exactement trois modèles Q4_K_M :
 | `gemma-deep` | `gemma4:12b-it-q4_K_M` | architecture, rédaction, audit, multimodal |
 | `devstral-devops` | `hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M` | DevOps/software engineering agentique, outils, texte/code |
 
-L'alias `devstral-devops` est conservé pour compatibilité des routes et états. Son runtime V2 est **Ministral 3 14B Reasoning Q4_K_M**, local via Ollama.
+L'alias `devstral-devops` est conservé pour compatibilité des routes et états. Son runtime V2 est **Ministral 3 14B Reasoning Q4_K_M**.
 
 **Invariant : exactement trois modèles sont routables par le contrat opérationnel.** Aucun petit modèle, runtime legacy ou modèle en ligne n'est un fallback supporté.
 
@@ -30,17 +30,15 @@ Le catalogue déclare séparément :
 granite-devops -> granite4.2:8b-q4_K_M
 ```
 
-Granite est un **challenger de benchmark local** du spécialiste DevOps :
+Granite est un challenger local du spécialiste DevOps :
 
 - `routing_active: false` ;
 - aucun des huit rôles ne l'utilise nominalement ;
 - il ne compte pas dans les trois modèles opérationnels ;
 - il n'est pas un fallback ;
-- il ne remplace pas un échec HARD-40M ;
+- il ne remplace pas un échec d'un modèle actif ;
 - `automatic_promotion: false` ;
-- toute substitution exige une décision humaine explicite appuyée sur les preuves B580.
-
-Le challenge couvre notamment coding, tool-calling natif, réparation après erreur d'outil et adéquation B580.
+- toute substitution exige une décision humaine explicite appuyée sur des preuves réelles.
 
 ## Routage nominal
 
@@ -56,7 +54,7 @@ Auditeur qualité      -> Gemma 4 12B
                          -> Qwen 3.5 9B si séparation de famille requise
 ```
 
-Granite n'apparaît pas dans ce routage tant qu'une décision humaine future n'a pas explicitement modifié le contrat après qualification.
+Granite n'apparaît pas dans ce routage tant qu'une décision humaine future n'a pas explicitement modifié le contrat.
 
 ## Politique de contexte
 
@@ -67,46 +65,6 @@ Architecture V2 sépare explicitement le benchmark de l'orchestration :
 - le 16384 OpenClaw n'est pas une promotion du benchmark ;
 - **aucune promotion automatique à 32K** ;
 - toute extension future exige une qualification dédiée.
-
-## HARD-40M
-
-Le HARD-40M reste inchangé :
-
-```text
-30 cas total
-24 cas 8K
- 6 cas 16K
-2400 s maximum qualification complète
-210 s maximum par cas
-max_error_rate = 0.0
-```
-
-Les trois modèles routés sont obligatoires. L'échec de l'un d'eux fait échouer la qualification. Granite constitue une preuve comparative séparée et ne peut servir de contournement.
-
-## Benchmark challenger Ministral / Granite
-
-Le challenger est installé explicitement lorsque le test est demandé :
-
-```powershell
-ollama pull granite4.2:8b-q4_K_M
-.\scripts\windows\23_compare_model_challenger.ps1 -DryRun
-.\scripts\windows\23_compare_model_challenger.ps1
-```
-
-Le protocole `native_tool_calling_v1` réalise par défaut 3 répétitions à 8K et vérifie appel d'outil natif, gestion d'un retour contrôlé en erreur, réparation attendue, erreurs de protocole, wall time, tokens/s et résidence VRAM lorsque disponible.
-
-Preuve :
-
-```text
-benchmarks/results/tool_calling_challenger_*.json
-```
-
-Le résultat reste destiné à la **sélection humaine** :
-
-```text
-PROMOTION_ALLOWED=false
-MANUAL_DECISION_REQUIRED=true
-```
 
 ## Project Orchestrator et Document Flow
 
@@ -137,16 +95,17 @@ Le système conserve notamment : Intake immuable, scan de secrets, SHA-256/MIME,
 - Rédacteur : documentation versionnée ;
 - Auditeur : contrôle indépendant sans correction silencieuse.
 
-## Backends Intel Arc
+## Accélération Intel Arc B580
 
-Candidats locaux :
+Le choix d'architecture GPU LLM est **Vulkan uniquement**. Il n'est plus soumis à une compétition entre API.
 
-- `ollama-vulkan` — nominal pré-qualification ;
-- `llama-cpp-sycl` — candidat ;
-- `llama-cpp-vulkan` — candidat ;
-- `b580-hybrid` — profil candidat.
+Chemins actifs :
 
-La sélection exige des mesures B580 réelles : TTFT, tokens/s, VRAM/RAM, stabilité, contexte, tool-calling et multimodalité pertinente. Aucun backend n'est déclaré vainqueur par la CI.
+- `ollama-vulkan` — nominal et rollback ;
+- `llama-cpp-vulkan` — runtime géré local ;
+- `b580-hybrid` — Qwen sur Ollama/Vulkan et Gemma/Ministral sur llama.cpp/Vulkan.
+
+La qualification matérielle restante vérifie que ces chemins Vulkan fonctionnent réellement et restent stables sur la B580. Elle ne sert pas à choisir une autre API GPU.
 
 ## Gates anti-régression
 
@@ -171,7 +130,7 @@ CodeQL
 Dependency Review
 ```
 
-Le gate flotte V2 exige :
+Le gate flotte V2 exige notamment :
 
 - exactement trois modèles routés Q4_K_M ;
 - Qwen 3.5 9B + Gemma 4 12B + Ministral 3 14B Reasoning ;
@@ -179,36 +138,38 @@ Le gate flotte V2 exige :
 - `local_only: true` ;
 - `cloud_models_supported: false` ;
 - toute demande cloud refusée ;
-- Granite 4.2 déclaré séparément comme challenger local ;
+- Vulkan comme unique accélération GPU LLM active ;
+- aucun retour du backend GPU retiré dans les surfaces actives ;
+- Granite 4.2 séparé du routage ;
 - promotion automatique interdite et décision humaine obligatoire.
 
 ## À exécuter sur matériel réel
 
 GitHub Actions ne peut pas valider :
 
-1. installation réelle Windows 11 + B580 ;
-2. E2E OpenClaw avec les trois modèles routés ;
-3. HARD-40M complet Qwen 3.5 / Gemma 4 / Ministral 3 Reasoning ;
-4. comparaison Ministral 3 Reasoning vs Granite 4.2 ;
+1. installation réelle Windows 11 + Intel Arc B580 ;
+2. démarrage et vérification du runtime Vulkan géré ;
+3. configuration OpenClaw nominale puis `b580-hybrid` ;
+4. E2E OpenClaw avec les trois modèles routés ;
 5. vraie multimodalité PDF/image ;
 6. Golden Projects ;
 7. projet représentatif multi-documents ;
-8. comparaison Ollama/Vulkan vs llama.cpp/SYCL/Vulkan ;
-9. TTFT, tokens/s, VRAM/RAM, stabilité et résidence GPU ;
+8. stabilité du chemin Vulkan, chargement/déchargement et récupération après redémarrage ;
+9. VRAM/RAM et comportement matériel observés ;
 10. indépendance producteur/auditeur ;
 11. télémétrie réelle ;
 12. package final et revue humaine.
 
 ## Non prétendu
 
-- aucun modèle n'est encore qualifié matériellement par cette PR ;
-- Granite n'est pas déclaré meilleur que Ministral avant benchmark ;
+- aucun modèle n'est qualifié matériellement par la CI ;
+- Granite n'est pas déclaré meilleur que Ministral sans décision humaine ;
 - aucun débit B580 n'est garanti ;
 - aucune résidence VRAM complète n'est supposée ;
-- aucun backend n'est auto-sélectionné ;
+- le choix Vulkan est un contrat d'architecture, pas une revendication de performance ;
 - aucun LLM cloud n'est supporté ;
 - aucun résultat matériel n'est inventé par la CI.
 
 ## Critère pour V1.0.0
 
-La version `1.0.0` reste réservée à un parcours réellement qualifié sur Windows 11 + Intel Arc B580, avec HARD-40M, E2E, preuve de sélection du spécialiste, backends, Golden Projects, multimodalité réelle, télémétrie, projet représentatif, limites documentées et validation humaine explicite.
+La version `1.0.0` reste réservée à un parcours réellement validé sur Windows 11 + Intel Arc B580, avec E2E, stabilité Vulkan, preuves fonctionnelles requises par les contrats de release, Golden Projects, multimodalité réelle, télémétrie, projet représentatif, limites documentées et validation humaine explicite.
