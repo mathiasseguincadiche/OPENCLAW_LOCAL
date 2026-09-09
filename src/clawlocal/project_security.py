@@ -4,6 +4,8 @@ import re
 import zipfile
 from pathlib import Path
 
+from clawlocal.safe_fs import iter_regular_files_no_links, secure_path_within
+
 _TOKEN_PATTERNS = (
     re.compile(r"sk-or-(?:v1-)?[A-Za-z0-9_-]{8,}"),
     re.compile(r"(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})"),
@@ -43,18 +45,29 @@ def sanitize_exception(exc: BaseException) -> str:
 
 
 def build_support_bundle(project: Path, output: Path) -> Path:
-    candidates = [project / "project.json", project / "evidence" / "orchestration"]
+    project_root = project.resolve(strict=True)
+    candidates = [project_root / "project.json", project_root / "evidence" / "orchestration"]
     entries: list[tuple[str, str]] = []
     for candidate in candidates:
         if candidate.is_file():
-            paths = [candidate]
+            paths = [
+                secure_path_within(
+                    candidate,
+                    project_root,
+                    require_file=True,
+                    label="support bundle",
+                )
+            ]
         elif candidate.is_dir():
-            paths = list(candidate.rglob("*"))
+            paths = list(
+                iter_regular_files_no_links(
+                    candidate,
+                    label="support bundle orchestration",
+                )
+            )
         else:
             paths = []
         for path in paths:
-            if not path.is_file() or path.is_symlink():
-                continue
             try:
                 text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
@@ -62,7 +75,7 @@ def build_support_bundle(project: Path, output: Path) -> Path:
             sanitized = redact_text(text)
             if contains_suspected_secret(sanitized):
                 raise ValueError(f"secret potentiel après seconde passe: {path.name}")
-            entries.append((path.relative_to(project).as_posix(), sanitized))
+            entries.append((path.relative_to(project_root).as_posix(), sanitized))
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for relative, text in entries:
