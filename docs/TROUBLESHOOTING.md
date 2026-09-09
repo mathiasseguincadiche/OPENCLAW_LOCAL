@@ -2,9 +2,11 @@
 
 ## Principe
 
-Diagnostiquer `OPENCLAW_LOCAL` dans l'ordre : **code/configuration -> runtime -> modèles -> Gateway/OpenClaw -> backend GPU -> E2E -> qualification**.
+Diagnostiquer `OPENCLAW_LOCAL` dans l'ordre : **code/configuration -> runtime -> modèles -> Gateway/OpenClaw -> Vulkan -> E2E -> qualification**.
 
 Architecture V2 est **LLM local-only** : ne jamais utiliser un modèle externe pour masquer une panne locale. Si aucune route locale autorisée n'est viable, l'opération doit échouer avec une preuve exploitable.
+
+Le choix GPU LLM est déjà fixé : **Vulkan uniquement**. Un incident GPU se diagnostique donc sur Ollama/Vulkan ou llama.cpp/Vulkan ; il ne déclenche pas une nouvelle compétition entre API.
 
 ## Flotte active de référence
 
@@ -14,7 +16,7 @@ gemma-deep        -> gemma4:12b-it-q4_K_M
 devstral-devops   -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-Challenger benchmark hors routage :
+Challenger hors routage :
 
 ```text
 granite-devops -> granite4.2:8b-q4_K_M
@@ -108,7 +110,7 @@ openclaw --version
 
 Le patch nominal Ollama garde **16384** pour la fenêtre full-agent, tandis que le benchmark direct reste 8192.
 
-Le renderer V2 conserve également le contrat anti-injection de skills :
+Le renderer V2 conserve le contrat anti-injection de skills :
 
 ```text
 agents.defaults.skills=[]
@@ -177,7 +179,7 @@ ollama list
 .\menu.ps1 -Action models
 ```
 
-Les trois runtimes attendus sont exactement ceux du catalogue. Granite n'est requis que pour son benchmark séparé.
+Les trois runtimes attendus sont exactement ceux du catalogue. Granite n'est requis que pour sa comparaison séparée lorsqu'elle est explicitement exécutée.
 
 Si un téléchargement échoue, conserver l'erreur réseau/disque et corriger la cause ; ne pas modifier le catalogue pour contourner le téléchargement.
 
@@ -213,7 +215,7 @@ Le E2E exige le transport Gateway réel. Un transport de secours non prévu n'es
 Invoke-RestMethod http://127.0.0.1:11434/api/ps
 ```
 
-Sur une B580 12 Go, ne conclure ni à un full-offload ni à une panne uniquement à partir du nombre de paramètres. La résidence réelle, la RAM système, le débit et la stabilité doivent être mesurés.
+Sur une B580 12 Go, ne conclure ni à un full-offload ni à une panne uniquement à partir du nombre de paramètres. La résidence réelle, la RAM système et la stabilité doivent être observées.
 
 ## 11. Le spécialiste DevOps ne traite pas directement une image
 
@@ -251,23 +253,7 @@ Vérifier :
 
 Une réponse textuelle « ça a marché » n'est pas une preuve si le fichier ou l'artefact attendu n'existe pas.
 
-## 13. Backend SYCL ne charge pas un modèle
-
-```powershell
-.\menu.ps1 -Action intel-sycl-setup -DryRun
-.\menu.ps1 -Action intel-sycl-setup
-.\menu.ps1 -Action intel-sycl-verify
-```
-
-Pour isoler un modèle :
-
-```powershell
-.\menu.ps1 -Action intel-sycl-diagnose -Model qwen3.5:9b-q4_K_M
-```
-
-Le menu V2 expose également Gemma 4 et Ministral 3 Reasoning comme modèles supportés par le diagnostic prévu. Le diagnostic distingue notamment full-offload, auto-offload et CPU-only. Conserver stdout/stderr et le JSON de preuve.
-
-## 14. Backend Vulkan géré ne charge pas Gemma/Ministral
+## 13. Backend llama.cpp/Vulkan géré ne charge pas Gemma/Ministral
 
 ```powershell
 .\menu.ps1 -Action intel-vulkan-setup -DryRun
@@ -275,11 +261,22 @@ Le menu V2 expose également Gemma 4 et Ministral 3 Reasoning comme modèles sup
 .\menu.ps1 -Action intel-vulkan-verify
 ```
 
-Le profil géré attend les modèles déclarés dans `runtime_versions.json` : Gemma 4 12B et Ministral 3 14B Reasoning pour le chemin Vulkan candidat.
+Le profil géré attend les modèles déclarés dans `runtime_versions.json` : Gemma 4 12B et Ministral 3 14B Reasoning pour le chemin Vulkan.
 
-Avant Vulkan, le serveur SYCL suivi est arrêté pour éviter une contention VRAM. Identifier tout autre processus GPU consommateur avant de conclure à un défaut du modèle.
+Vérifier dans cet ordre :
 
-## 15. Profil hybride incohérent
+1. Intel Arc B580 détectée ;
+2. pilote GPU actif ;
+3. archive llama.cpp conforme au SHA-256 verrouillé ;
+4. GGUF local réellement résolu ;
+5. endpoint `127.0.0.1:8081/v1` joignable ;
+6. processus suivi par l'état géré ;
+7. absence d'un autre processus GPU consommant anormalement la VRAM ;
+8. inventaire `/models?reload=1` conforme.
+
+Le choix Vulkan est un invariant du projet. Une panne se corrige sur ce chemin au lieu de réintroduire une API GPU écartée.
+
+## 14. Profil `b580-hybrid` incohérent
 
 Vérifier la configuration générée plutôt que de supposer une répartition :
 
@@ -290,6 +287,15 @@ Vérifier la configuration générée plutôt que de supposer une répartition :
 .\menu.ps1 -Action e2e -Backend b580-hybrid
 ```
 
+Répartition attendue :
+
+```text
+qwen-max        -> Ollama/Vulkan
+gemma-deep      -> llama.cpp/Vulkan
+devstral-devops -> llama.cpp/Vulkan
+image/PDF       -> Ollama/Vulkan
+```
+
 Rollback immédiat :
 
 ```powershell
@@ -297,9 +303,9 @@ Rollback immédiat :
 .\menu.ps1 -Action intel-vulkan-stop
 ```
 
-Tous les providers du profil hybride restent locaux.
+Tous les providers du profil hybride restent locaux et Vulkan.
 
-## 16. Qualification HARD-40M échoue
+## 15. Qualification HARD-40M échoue
 
 La qualification reste fail-closed. **Ne modifiez ni les seuils ni le nombre de cas pour transformer un échec en succès.**
 
@@ -316,9 +322,11 @@ Classer l'échec : API/runtime, timeout, sortie tronquée, check sémantique, d�
 
 Le HARD-40M conserve 30 cas : 24 à 8K et 6 à 16K. Le full-agent OpenClaw 16K ne modifie pas ces exigences.
 
-## 17. Challenger Granite échoue
+Ce gate modèle est distinct du choix de l'API GPU : il ne demande aucune re-comparaison entre backends.
 
-Le challenger ne doit jamais bloquer le routage nominal des trois modèles, mais son benchmark doit produire un verdict exploitable.
+## 16. Challenger Granite échoue
+
+Le challenger ne doit jamais bloquer le routage nominal des trois modèles, mais une comparaison explicitement lancée doit produire un verdict exploitable.
 
 ```powershell
 ollama pull granite4.2:8b-q4_K_M
@@ -328,13 +336,13 @@ ollama pull granite4.2:8b-q4_K_M
 
 Un échec du challenger signifie « aucune preuve de remplacement ». Il ne déclenche aucune promotion automatique et ne change pas `devstral-devops`.
 
-## 18. Anciennes preuves après migration
+## 17. Anciennes preuves après migration
 
-Les preuves d'une flotte précédente restent historiques. Elles peuvent expliquer une décision de right-sizing, mais elles ne valent pas : qualification V2, promotion du backend hybride, preuve de contexte étendu ou attestation V1.
+Les preuves d'une flotte précédente restent historiques. Elles peuvent expliquer une décision de right-sizing, mais elles ne valent pas qualification V2, preuve de stabilité du runtime Vulkan actif, preuve de contexte étendu ou attestation V1.
 
-Toute nouvelle attestation doit référencer les nouveaux digests/quantifications.
+Toute nouvelle attestation doit référencer les nouveaux digests/quantifications et le runtime réellement utilisé.
 
-## 19. Projet bloqué
+## 18. Projet bloqué
 
 ```powershell
 python .\scripts\32_orchestrate_project.py --project <id> --action status
@@ -342,23 +350,23 @@ python .\scripts\32_orchestrate_project.py --project <id> --action status
 
 Vérifier phases, clarifications, tentatives, `source_coverage`, Artifact Exchange et preuves de validation. Une clarification humaine ne doit pas être contournée par une réponse inventée.
 
-## 20. Document illisible ou ingestion incomplète
+## 19. Document illisible ou ingestion incomplète
 
 Un document `UNREADABLE`, un index périmé ou une `source_coverage` incomplète bloque l'analyse. Corriger l'ingestion ou déclarer explicitement l'information manquante.
 
 Ne jamais présenter un PDF scanné comme « lu » si seule une extraction vide a été obtenue.
 
-## 21. Demande cloud refusée
+## 20. Demande cloud refusée
 
 C'est le comportement normal d'Architecture V2. `src/clawlocal/routing.py` et `scripts/27_route_openclaw.py` conservent des paramètres historiques uniquement pour **échouer fermement** et éviter une régression silencieuse.
 
 Aucune clé de fournisseur LLM en ligne n'est nécessaire pour l'inférence de la plateforme.
 
-## 22. Collecter un support bundle
+## 21. Collecter un support bundle
 
 Utiliser les scripts de support du dépôt et joindre uniquement les preuves nécessaires après redaction des secrets. Les prompts, réponses et documents privés ne doivent pas être inclus par défaut.
 
-## 23. Ordre de reprise recommandé
+## 22. Ordre de reprise recommandé
 
 Après correction d'un incident de runtime/modèle/backend :
 
@@ -368,8 +376,16 @@ Après correction d'un incident de runtime/modèle/backend :
 .\menu.ps1 -Action configure-openclaw
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
+.\menu.ps1 -Action intel-vulkan-verify
 .\menu.ps1 -Action e2e -DryRun
 .\menu.ps1 -Action e2e
 ```
 
-Ne relancer HARD-40M qu'après retour au vert du parcours fonctionnel local.
+Pour le profil hybride :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Ne relancer une qualification lourde que si le contrat de release ou une dérive d'identité l'exige. La résolution d'un incident Vulkan ne nécessite pas de rouvrir le choix de l'API GPU.
