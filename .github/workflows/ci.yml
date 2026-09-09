@@ -44,6 +44,8 @@ jobs:
         run: python scripts/46_validate_transversal_pedagogy.py
       - name: Pre-V1 hardening gate
         run: python scripts/47_validate_pre_v1_hardening.py
+      - name: Documentation portal gate
+        run: python scripts/48_validate_documentation_portal.py
       - name: Release contracts
         run: python scripts/24_validate_release.py
       - name: Ruff
@@ -81,6 +83,7 @@ jobs:
           python scripts/45_validate_model_fleet.py
           python scripts/46_validate_transversal_pedagogy.py
           python scripts/47_validate_pre_v1_hardening.py
+          python scripts/48_validate_documentation_portal.py
       - name: Tests
         run: pytest -q
 
