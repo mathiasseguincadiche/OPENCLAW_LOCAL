@@ -1,35 +1,34 @@
 # Portail documentaire
 
-La documentation est organisée pour que **chaque profil sache immédiatement où commencer, quoi vérifier et où aller ensuite**.
+OPENCLAW_LOCAL utilise **une seule documentation et un seul parcours de lecture**, conçu pour être suivi depuis zéro jusqu'aux contrats, preuves et mécanismes DevOps du projet.
 
-Le point d'entrée recommandé est : **[Parcours de lecture](PARCOURS_LECTURE.md)**.
+Le point d'entrée recommandé est : **[Parcours de lecture unique](PARCOURS_LECTURE.md)**.
 
-## Choisir par profil
+Il n'existe pas de zone réservée à un niveau de compétence. La profondeur augmente progressivement dans le même parcours.
 
-| Profil | Besoin principal | Point d'entrée |
-|---|---|---|
-| **Débutant** | comprendre OPENCLAW_LOCAL et ses repères sans connaissances implicites | [Premiers pas](PREMIERS_PAS_OPENCLAW_LOCAL.md), puis [Parcours de lecture](PARCOURS_LECTURE.md#parcours-a--débutant) |
-| **Opérateur** | installer, vérifier, exploiter, diagnostiquer et reprendre | [Opérations](OPERATIONS.md), puis [Parcours opérateur](PARCOURS_LECTURE.md#parcours-b--opérateur) |
-| **Mainteneur** | modifier le dépôt sans casser les contrats | [Architecture](ARCHITECTURE.md), [Sécurité](SECURITY.md), puis [Parcours mainteneur](PARCOURS_LECTURE.md#parcours-c--mainteneur) |
-| **Expert / auditeur** | retrouver contrats, preuves, qualification et readiness | [Parcours expert](PARCOURS_LECTURE.md#parcours-d--expert--auditeur), [Qualification](QUALIFICATION.md), [État du projet](../STATUS.md) |
+## Ordre recommandé
 
-Chaque parcours explicite : **prérequis → action/lecture → résultat attendu → validation/preuve → STOP/GO → à lire ensuite**.
+```text
+1. COMPRENDRE LE PROJET
+   ↓
+2. INSTALLER ET VÉRIFIER
+   ↓
+3. UTILISER POUR UN VRAI TRAVAIL
+   ↓
+4. COMPRENDRE LE FONCTIONNEMENT INTERNE
+   ↓
+5. COMPRENDRE LES CONTRATS ET LA QUALITÉ
+   ↓
+6. COMPRENDRE LA QUALIFICATION ET LES PREUVES
+   ↓
+7. DIAGNOSTIQUER, MAINTENIR ET FAIRE ÉVOLUER
+```
 
-## Niveau 1 — Découvrir
+Commencez par [Parcours de lecture unique](PARCOURS_LECTURE.md) et suivez simplement l'ordre indiqué.
 
-Si vous utilisez pour la première fois une IA locale ou OpenClaw :
+## Mode d'emploi opérationnel
 
-1. **[Premiers pas avec OPENCLAW_LOCAL et OpenClaw](PREMIERS_PAS_OPENCLAW_LOCAL.md)** ;
-2. **[Parcours de lecture](PARCOURS_LECTURE.md)** ;
-3. **[Guide utilisateur opérationnel](GUIDE_UTILISATEUR/README.md)** lorsque vous avez un objectif concret.
-
-Objectif de sortie : savoir ce que fait la plateforme, où se trouvent les commandes, comment distinguer agent direct et projet orchestré, et où aller en cas d'échec.
-
-## Niveau 2 — Utiliser au quotidien
-
-Pour savoir **comment accomplir un travail de bout en bout**, utilisez :
-
-**[Guide utilisateur opérationnel](GUIDE_UTILISATEUR/README.md)**
+Le [Guide utilisateur](GUIDE_UTILISATEUR/README.md) accompagne ce parcours pour les actions concrètes :
 
 ```text
 GUIDE_UTILISATEUR/
@@ -44,83 +43,69 @@ GUIDE_UTILISATEUR/
 └── 08_REFERENCE_RAPIDE/      commandes, statuts, artefacts, checklists
 ```
 
-Commencez par **[Méthode générale de travail](GUIDE_UTILISATEUR/01_METHODE_DE_TRAVAIL/00_METHODE_GENERALE.md)** si vous avez un objectif mais ne savez pas comment organiser le chemin jusqu'au résultat.
+Chaque action importante doit indiquer, directement ou via son document associé : **prérequis → action → résultat attendu → validation/preuve → STOP/GO → suite**.
 
-**Critère STOP opérateur :** ne poursuivez pas une étape critique si une commande retourne `FAIL`, `NON CONFORME`, si une preuve attendue manque ou si le résultat observé diffère du résultat attendu. Passez au diagnostic avant de continuer.
+## Références du parcours
 
-## Niveau 3 — Approfondir techniquement
-
-Ces documents sont les références d'architecture, de contrats, d'exploitation et de preuves :
-
-| Besoin | Document |
+| Sujet | Document |
 |---|---|
-| filiation avec `openclaw_openrouter` | [Filiation V7 / Parity Plus](V7_PARITY_PLUS.md) |
-| architecture et invariants | [Architecture](ARCHITECTURE.md) |
-| installer/reproduire le runtime Windows | [Installation Windows 11](INSTALLATION_WINDOWS_11.md) |
-| fournir consignes, sources et livrables | [Project Intake](PROJECT_INTAKE.md) |
-| vérifier l'intégrité/immutabilité des entrées | [Intégrité Intake](INTAKE_INTEGRITY.md) |
-| comprendre la machine d'états projet | [Project Orchestrator](PROJECT_ORCHESTRATOR.md) |
-| comprendre la pédagogie | [Pédagogie](PEDAGOGY.md) |
-| lire à plusieurs profondeurs | [Accessibilité](ACCESSIBILITY.md) |
-| publier un projet GitHub/GitLab avec gates | [Publication projet](PROJECT_PUBLICATION.md) |
-| mesurer les agents/backends en usage réel | [Télémétrie](TELEMETRY.md) |
-| comprendre la flotte OpenClaw et le routage | [Intégration OpenClaw](OPENCLAW_INTEGRATION.md) |
-| utiliser Internet en local-first | [Recherche Web Local-First](WEB_LOCAL_FIRST.md) |
-| comprendre Ollama/Vulkan et llama.cpp/Vulkan | [Backends locaux](RUNTIME_BACKENDS.md) |
-| exploiter et vérifier l'Intel Arc B580 via Vulkan | [Intel Arc B580](INTEL_ARC_B580.md) |
-| comprendre/qualifier les modèles | [Modèles locaux](MODELES_LOCAUX.md) |
-| comprendre le routage local multi-backends | [Routage hybride](ROUTAGE_HYBRIDE.md) |
-| contrôler les dépenses cloud historiques/compatibilité | [FinOps](FINOPS.md) |
-| produire des schémas techniques | [Diagrammes](DIAGRAMMES.md) |
-| mesurer machine et modèles | [Benchmark](BENCHMARK.md) |
-| exécuter la qualification réelle | [Qualification](QUALIFICATION.md) |
-| exploiter au quotidien | [Opérations](OPERATIONS.md) |
-| comprendre les frontières de sécurité | [Sécurité](SECURITY.md) |
-| dépanner, sauvegarder, restaurer, rollback | [Troubleshooting](TROUBLESHOOTING.md) |
-| gouvernance, protection de `main`, releases | [Gouvernance GitHub](GITHUB_GOVERNANCE.md) |
+| commencer sans connaissance préalable | [Premiers pas](PREMIERS_PAS_OPENCLAW_LOCAL.md) |
+| parcours complet de zéro à la maîtrise du projet | [Parcours de lecture unique](PARCOURS_LECTURE.md) |
+| travailler avec la plateforme | [Guide utilisateur](GUIDE_UTILISATEUR/README.md) |
+| installation Windows | [Installation Windows 11](INSTALLATION_WINDOWS_11.md) |
+| exploitation quotidienne | [Opérations](OPERATIONS.md) |
+| architecture | [Architecture](ARCHITECTURE.md) |
+| Project Intake | [Project Intake](PROJECT_INTAKE.md) |
+| intégrité des entrées | [Intégrité Intake](INTAKE_INTEGRITY.md) |
+| machine d'états | [Project Orchestrator](PROJECT_ORCHESTRATOR.md) |
+| pédagogie | [Pédagogie](PEDAGOGY.md) |
+| accessibilité progressive | [Accessibilité](ACCESSIBILITY.md) |
+| publication projet | [Publication projet](PROJECT_PUBLICATION.md) |
+| télémétrie | [Télémétrie](TELEMETRY.md) |
+| OpenClaw et routage | [Intégration OpenClaw](OPENCLAW_INTEGRATION.md) |
+| recherche Web local-first | [Recherche Web Local-First](WEB_LOCAL_FIRST.md) |
+| runtimes Vulkan | [Backends locaux](RUNTIME_BACKENDS.md) |
+| Intel Arc B580 | [Intel Arc B580](INTEL_ARC_B580.md) |
+| modèles locaux | [Modèles locaux](MODELES_LOCAUX.md) |
+| routage hybride | [Routage hybride](ROUTAGE_HYBRIDE.md) |
+| diagrammes | [Diagrammes](DIAGRAMMES.md) |
+| benchmark | [Benchmark](BENCHMARK.md) |
+| qualification réelle | [Qualification](QUALIFICATION.md) |
+| sécurité | [Sécurité](SECURITY.md) |
+| dépannage / rollback | [Troubleshooting](TROUBLESHOOTING.md) |
+| gouvernance GitHub | [Gouvernance GitHub](GITHUB_GOVERNANCE.md) |
 | décisions structurantes | [ADR](ADR/README.md) |
+| état actuel | [État du projet](../STATUS.md) |
 
-## Lecture rapide par intention
+## Principe pédagogique
 
-```text
-Je découvre        → PREMiERS_PAS → PARCOURS_LECTURE → GUIDE_UTILISATEUR
-J'exploite         → OPERATIONS → GUIDE_UTILISATEUR → TROUBLESHOOTING si STOP
-Je maintiens       → ARCHITECTURE → SECURITY → contrats/configs → CI → ADR
-J'audite           → PARCOURS_LECTURE → QUALIFICATION → STATUS → release_readiness
-```
+Le projet doit pouvoir être ouvert par quelqu'un qui ne connaît rien au contexte et lui permettre, en suivant simplement l'ordre indiqué, d'arriver progressivement jusqu'à une vraie compréhension DevOps du projet.
 
-## Parcours recommandé pour un travail complexe
+Cela implique :
 
-```text
-DÉFINIR le résultat
-→ PRÉPARER les entrées
-→ CHOISIR agent direct ou projet
-→ ANALYSER
-→ CLARIFIER si nécessaire
-→ PLANIFIER + ASSIGNER
-→ EXÉCUTER
-→ SUIVRE le status et les preuves
-→ VALIDER
-→ CORRIGER les tâches affectées
-→ REVIEW indépendante
-→ PACKAGE
-→ APPROBATION humaine
-→ PUBLICATION éventuelle dans son workflow dédié
-```
+- aucun prérequis critique implicite ;
+- jargon défini lorsque nécessaire ;
+- aucune simplification fausse ;
+- profondeur technique conservée ;
+- aucune séparation « débutant » / « expert » ;
+- les mêmes documents restent accessibles à tous ;
+- le diagnostic et les preuves sont introduits progressivement.
 
 ## Contrat de preuve
 
-La documentation distingue systématiquement **contrat**, **état observé**, **hypothèse** et **preuve**. Les résultats matériels et E2E réels restent des preuves locales tant qu'ils n'ont pas été redacted et explicitement publiés.
+La documentation distingue systématiquement **contrat**, **état observé**, **hypothèse** et **preuve**.
 
-La readiness n'est jamais déduite d'une documentation complète ou d'une CI verte seule : elle dépend des preuves requises par la qualification et de l'approbation humaine correspondante.
+La readiness n'est jamais déduite d'une documentation complète ou d'une CI verte seule : elle dépend des preuves requises par la qualification réelle et de l'approbation humaine correspondante.
 
 ## Contrat CI documentaire
 
-Le portail et ses parcours sont protégés par `scripts/48_validate_documentation_portal.py`. Le gate vérifie notamment :
+Le portail est protégé par `scripts/48_validate_documentation_portal.py`.
 
-- les quatre profils **Débutant / Opérateur / Mainteneur / Expert / auditeur** ;
-- les prérequis, résultats attendus, critères STOP et suites ;
-- les principaux liens relatifs du portail ;
+Le gate vérifie notamment :
+
+- l'existence d'un seul parcours principal ;
+- la progression depuis les bases jusqu'aux contrats et preuves ;
+- l'absence de segmentation documentaire par niveau de compétence ;
+- la présence des prérequis, résultats attendus, critères STOP/GO et suites ;
+- les principaux liens relatifs ;
 - l'exécution du gate dans CI et Release.
-
-Ainsi, une future modification de documentation ne peut pas supprimer silencieusement le parcours de lecture attendu.
