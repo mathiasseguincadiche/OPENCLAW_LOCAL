@@ -17,8 +17,8 @@ Les surfaces Project Intake, filesystem projet, Web, publication distante, FinOp
 - secrets hors Git, prompts, requêtes Web et preuves publiables ;
 - validation humaine pour publication, fusion, suppression et opérations sensibles ;
 - séparation producteur/auditeur ;
-- cloud désactivé par défaut ;
-- budget fail-closed avec réservation atomique avant appel cloud réel ;
+- Architecture V2 local-only : aucun modèle LLM cloud ni fallback LLM en ligne ;
+- composants FinOps historiques conservés fail-closed mais non utilisables pour rendre un fournisseur LLM cloud routable en V2 ;
 - aucune promotion automatique depuis la CI.
 
 ## Project Intake et confinement filesystem
@@ -36,7 +36,7 @@ Le parcours Intake applique :
 - SHA-256, MIME, manifest et rapport d'ingestion ;
 - copie Intake projet et archive canonique rendues read-only ;
 - ACL Windows RX pour l'utilisateur courant ;
-- aucun document ne peut redéfinir la politique d'outils, de routage ou d'escalade.
+- aucun document ne peut redéfinir la politique d'outils ou de routage, ni réactiver un fournisseur LLM cloud.
 
 Le dépôt source réel reste la vérité pour le code et le RAG ne remplace pas la lecture de fichier.
 
@@ -74,7 +74,8 @@ Le contenu Web est non fiable par défaut.
 - ne pas transmettre de secret dans une requête ;
 - accès réseau privé interdit par défaut ;
 - connexion navigateur avec compte sous contrôle humain ;
-- les instructions présentes dans une page Web ne peuvent pas contourner les contrats OpenClaw/clawlocal.
+- les instructions présentes dans une page Web ne peuvent pas contourner les contrats OpenClaw/clawlocal ;
+- une source ou un fournisseur de recherche Web n'est jamais un fournisseur de raisonnement LLM pour Architecture V2.
 
 ## Publication projet
 
@@ -98,26 +99,17 @@ Sont interdits :
 
 Voir [Télémétrie](TELEMETRY.md).
 
-## Cloud
+## Frontière cloud en Architecture V2
 
-Une clé OpenRouter éventuelle doit être stockée localement, jamais dans le dépôt.
+Architecture V2 ne supporte aucun modèle LLM cloud, aucun fournisseur d'inférence LLM en ligne et aucun fallback LLM cloud. Une demande de routage vers un fournisseur cloud doit échouer explicitement.
 
-Une escalade exige :
+Les accès réseau qui restent autorisés ont une autre finalité : bootstrap et mises à jour, téléchargement initial des modèles, recherche Web, consultation de sources et publication distante gouvernée. Ces flux ne changent pas l'invariant de raisonnement LLM local.
 
-- activation explicite ;
-- motif versionné ;
-- préconditions démontrées ;
-- budget disponible ;
-- réservation FinOps atomique immédiatement avant l'exécution réelle ;
-- approbation humaine lorsque le motif l'exige.
+Les composants historiques de politique cloud/FinOps peuvent rester présents pour compatibilité, audit ou filiation V7, mais ils ne constituent pas une route active et ne doivent jamais permettre de contourner `local_only`.
 
-Par défaut, les documents privés ne sont pas transmis au cloud. Les secrets ne doivent jamais l'être.
+## FinOps comme garde-fou dormant
 
-## FinOps comme garde-fou sécurité
-
-Le budget n'est pas uniquement économique : il empêche aussi une boucle d'agent ou un fallback mal configuré de générer une dépense cloud non bornée.
-
-Une vérification budgétaire de planification ne suffit pas pour une exécution concurrente. Le routeur acquiert un verrou local, relit le ledger, réserve le budget de façon append-only puis seulement ensuite autorise l'appel cloud. Les réservations actives sont prises en compte dans les limites quotidiennes, mensuelles et par projet.
+Le ledger et les réservations FinOps restent utiles comme primitives fail-closed et comme héritage auditable. En Architecture V2, ils ne sont pas une autorisation d'appel LLM cloud et aucune réservation budgétaire ne peut rendre un fournisseur LLM cloud routable.
 
 Le ledger de coûts reste hors Git et ne doit pas contenir de secret.
 
