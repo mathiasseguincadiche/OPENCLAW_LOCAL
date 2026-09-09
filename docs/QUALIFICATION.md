@@ -209,7 +209,7 @@ Après un gate complet PASS, cette identité peut être promue vers :
 state/qualification/qualified_model_identity.json
 ```
 
-Cette promotion n'est autorisée qu'après un gate complet PASS. Une dérive d'identité, digest, quantification ou verrou runtime/pilote doit invalider l'état et exiger une nouvelle qualification complète.
+Cette promotion est autorisée **uniquement après un gate complet PASS**. Une dérive d'identité, digest, quantification ou verrou runtime/pilote place l'identité qualifiée dans l'état `INVALIDATED` et exige une nouvelle qualification complète. Cette opération n'entraîne **aucune promotion automatique de backend** ni de V1.
 
 Le mode `-Quick` ne promeut jamais l'identité modèle.
 
