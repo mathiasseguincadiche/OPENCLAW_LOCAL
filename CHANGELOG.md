@@ -32,7 +32,7 @@ Keep a Changelog et le versionnage suit SemVer.
 - resynchronisation ciblée des workspaces agents après chaque tentative afin que les consommateurs voient automatiquement les sorties amont ;
 - CLI `42_project_ingest.py` et `43_project_exchange.py` pour reconstruire/valider l'ingestion et auditer les échanges ;
 - validateur anti-régression `44_validate_document_flow.py`, exécuté par CI et Release ;
-- flotte locale performance-only août 2026 contenant exactement `qwen3.8:27b`, `gemma4:26b` et `devstral-small-2:24b` ;
+- flotte opérationnelle Architecture V2 contenant exactement `qwen3.5:9b-q4_K_M`, `gemma4:12b-it-q4_K_M` et `hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M`, avec Granite 4.2 8B challenger de benchmark non routé ;
 - indépendance renforcée de l'Auditeur par séparation de famille Gemma/Qwen lorsqu'elle est praticable ;
 - validateur anti-régression `45_validate_model_fleet.py`, exécuté par CI et Release ;
 - helper `safe_fs` pour appliquer un confinement fail-closed commun aux entrées, snapshots, sorties, échanges et packaging ;
@@ -55,12 +55,14 @@ Keep a Changelog et le versionnage suit SemVer.
 - l'analyse projet vérifie l'index d'ingestion et refuse une couverture documentaire incomplète ;
 - les phases de validation, revue, packaging et completion refusent de progresser lorsque l'Artifact Exchange attendu est absent ou altéré ;
 - les prompts contractuels des huit rôles distinguent originaux, représentations dérivées et artefacts échangés en lecture seule ;
-- `qwen3.8:27b` est le modèle LOCAL_MAX généraliste, `gemma4:26b` le LOCAL_DEEP et `devstral-small-2:24b` le LOCAL_SPECIALIST DevOps ;
+- `qwen-max` pointe vers Qwen 3.5 9B, `gemma-deep` vers Gemma 4 12B et l'alias de compatibilité `devstral-devops` vers Ministral 3 14B Reasoning ;
+- Architecture V2 est local-only côté LLM : aucun catalogue, routage ou fallback LLM cloud n'est supporté ; les outils Web restent des sources d'information distinctes ;
 - les trois modèles supportés sont tous `required: true` et participent tous au gate global de qualification ;
 - les anciens switches `IncludeDeep`, `IncludeSpecialist` et `IncludeMax` ont été supprimés du parcours nominal : aucune classe locale supportée n'est optionnelle ;
 - le benchmark nominal sélectionne directement `qualification_policy.automated_gates.required_models` ;
 - le README dispose d'un parcours de démarrage en cinq étapes avec résultats attendus ;
-- le ledger FinOps prend les réservations actives en compte avant d'autoriser une nouvelle dépense.
+- le ledger FinOps prend les réservations actives en compte avant d'autoriser une nouvelle dépense ;
+- le bootstrap Windows rafraîchit le PATH après installation Ollama et revalide immédiatement la version verrouillée avant de poursuivre.
 
 ### Security
 
@@ -72,6 +74,9 @@ Keep a Changelog et le versionnage suit SemVer.
 - les archives Office malformées, path-traversal, chiffrées ou présentant des caractéristiques de décompression dangereuses sont refusées avant lecture XML ;
 - les PDF dépassant la limite locale déclarée sont refusés avant d'être marqués `READY_TOOL` ;
 - les bundles d'échange sont hashés, versionnés et refusent les fichiers liés/reparse ;
+- les snapshots d'intégrité et bundles de support réutilisent les garde-fous `safe_fs`, y compris contre les junctions/reparse points Windows ;
+- les backups, ledgers et rollbacks de migration sont confinés au projet et refusent les liens/reparse points ;
+- la primitive de packaging de base refuse elle-même les liens/reparse points et sécurise ses cibles de sortie, indépendamment du wrapper superset ;
 - le packaging refuse les liens/reparse points dans les artefacts gérés ;
 - l'ingestion documentaire n'active aucun service cloud ;
 - les réservations FinOps empêchent deux agents concurrents de consommer simultanément le même budget disponible ;
@@ -117,7 +122,6 @@ Keep a Changelog et le versionnage suit SemVer.
 ### Added
 
 - socle `OPENCLAW_LOCAL` local-first sous Windows 11 ;
-- gouvernance GitHub, CI, documentation et politique de sécurité ;
 - huit rôles multi-agents ;
 - catalogue Qwen/Gemma et candidat SERA ;
 - routage local avec escalade cloud explicite ;
