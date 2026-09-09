@@ -1,4 +1,4 @@
-schema_version: "1.1.0"
+schema_version: "1.2.0"
 profile: intel-arc-b580-12gb-reference
 gpu:
   vendor: Intel
@@ -9,13 +9,9 @@ gpu:
   memory_bandwidth_gbps: 456
   peak_int8_tops: 233
   matrix_engines: XMX
-  acceleration_apis:
-    - level_zero
-    - sycl
+  llm_acceleration_apis:
     - vulkan
-    - opencl
   preferred_llm_acceleration_order:
-    - sycl-level-zero
     - vulkan
 cpu_reference:
   model: AMD Ryzen 7 7700
@@ -27,19 +23,18 @@ policy:
   preferred_mode: local_fast
   local_fast_target: compact_quantized_models
   local_deep_allowed: true
-  offload_requires_benchmark: true
-  context_requires_benchmark: true
-  sycl_candidate_enabled: true
-  sycl_requires_level_zero: true
-  sycl_models_max: 1
-  sycl_gpu_layers: auto
-  sycl_context_tokens_initial: 8192
-  sycl_promotion_requires_openclaw_e2e: true
+  llm_acceleration: vulkan
+  backend_choice_locked: true
+  context_requires_qualification: true
+  vulkan_models_max: 1
+  vulkan_gpu_layers: auto
+  vulkan_context_tokens_initial: 8192
+  vulkan_requires_openclaw_e2e: true
   automatic_backend_promotion: false
   rollback_backend: ollama-vulkan
 notes:
   - "Le profil décrit une cible de qualification, pas une garantie de débit."
-  - "SYCL/Level Zero est le chemin Intel spécialisé à comparer à Ollama/Vulkan sur la B580 réelle."
-  - "Un seul modèle 24-27B est chargé à la fois pour respecter les 12 Go de VRAM et 48 Go de RAM système."
+  - "Vulkan est l'unique API d'accélération LLM supportée par le projet sur Intel Arc B580."
+  - "Ollama/Vulkan est le chemin nominal et llama.cpp/Vulkan le runtime géré utilisé par le profil B580 hybride."
+  - "Un seul modèle llama.cpp est chargé à la fois pour respecter les 12 Go de VRAM et 48 Go de RAM système."
   - "Les modèles dépassant la VRAM utilisent l'auto-fit llama.cpp; forcer gpu-layers=all désactive l'ajustement automatique."
-  - "XMX est une capacité matérielle; son bénéfice opérationnel doit être démontré par le backend SYCL et les mesures réelles."
