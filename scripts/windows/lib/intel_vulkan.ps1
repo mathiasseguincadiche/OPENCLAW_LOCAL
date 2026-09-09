@@ -1,8 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path $PSScriptRoot 'intel_sycl.ps1')
-. (Join-Path $PSScriptRoot 'intel_sycl_model_sources.ps1')
+. (Join-Path $PSScriptRoot 'intel_b580.ps1')
 
 function Get-IntelVulkanRuntimeLock {
     param([Parameter(Mandatory)][string]$RepoRoot)
@@ -176,17 +175,18 @@ function New-IntelVulkanModelPreset {
         [Parameter(Mandatory)][string]$PresetPath
     )
 
+    $null = $RepoRoot
+    $null = $PlatformRoot
     $Models = Get-IntelVulkanManagedModel -RuntimeLock $RuntimeLock
     $Lines = @(
         'version = 1',
         '',
-        '; Généré par OPENCLAW_LOCAL pour le profil B580 hybride.',
+        '; Généré par OPENCLAW_LOCAL pour le profil B580 hybride Vulkan.',
         '; Qwen reste volontairement sur Ollama/Vulkan.',
         ''
     )
     foreach ($Model in $Models) {
-        $Path = Resolve-IntelSyclModelPath -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot `
-            -Model $Model -AllowDownload
+        $Path = Resolve-OllamaGgufPath -Model $Model
         $Normalized = $Path -replace '\\', '/'
         $Lines += "[$Model]"
         $Lines += "model = $Normalized"
