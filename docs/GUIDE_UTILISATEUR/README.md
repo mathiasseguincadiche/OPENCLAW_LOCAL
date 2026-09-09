@@ -1,6 +1,6 @@
 # Guide utilisateur OPENCLAW_LOCAL
 
-Ce répertoire est le **mode d'emploi opérationnel** de la plateforme. Il fait partie du même parcours documentaire que le reste du projet.
+Ce répertoire est le **mode d'emploi opérationnel** de la plateforme. Il répond d'abord à la question : **« qu'est-ce que je veux obtenir et comment dois-je m'y prendre ? »**. Il fait partie du même parcours documentaire que le reste du projet.
 
 Il n'existe pas de guide séparé selon le niveau du lecteur : une personne qui débute et une personne expérimentée utilisent les mêmes documents. La profondeur augmente progressivement selon l'étape atteinte.
 
