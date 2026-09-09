@@ -1,31 +1,48 @@
 # Guide utilisateur OPENCLAW_LOCAL
 
-Ce répertoire est le **mode d'emploi opérationnel** de la plateforme. Il répond d'abord à la question : **« qu'est-ce que je veux obtenir et comment dois-je m'y prendre ? »**
+Ce répertoire est le **mode d'emploi opérationnel** de la plateforme. Il fait partie du même parcours documentaire que le reste du projet.
 
-Pour choisir d'abord un parcours selon votre rôle, utilisez le **[Parcours de lecture](../PARCOURS_LECTURE.md)**.
+Il n'existe pas de guide séparé selon le niveau du lecteur : une personne qui débute et une personne expérimentée utilisent les mêmes documents. La profondeur augmente progressivement selon l'étape atteinte.
 
-## Choisir son chemin
+Commencez par le **[Parcours de lecture unique](../PARCOURS_LECTURE.md)** si vous découvrez le projet.
 
-| Profil / besoin | Commencer par | Résultat attendu |
-|---|---|---|
-| **Débutant** — comprendre les repères | `00_DEMARRER/` | savoir ce que fait la plateforme et où aller ensuite |
-| **Opérateur** — accomplir un travail ou exploiter la plateforme | `01_METHODE_DE_TRAVAIL/00_METHODE_GENERALE.md`, puis `03_PARCOURS_PRATIQUES/` | exécuter une démarche complète avec résultat et preuve |
-| **Mainteneur** — comprendre un workflow ou gérer un projet dans le temps | `04_WORKFLOW_PROJET/` puis `05_GERER_UN_PROJET/` | modifier ou reprendre sans contourner les états et contrats |
-| **Expert / auditeur** — retrouver rapidement statuts, artefacts et diagnostic | `08_REFERENCE_RAPIDE/` et `07_DIAGNOSTIC/` | vérifier un état, retrouver une preuve et expliquer un STOP/FAIL |
-| choisir un rôle | `02_AGENTS/README.md` | sélectionner l'agent adapté au besoin |
-| copier un modèle de demande | `06_RECETTES_ET_MODELES/` | produire une entrée structurée et réutilisable |
+## Ordre du guide
+
+```text
+00_DEMARRER
+   ↓
+01_METHODE_DE_TRAVAIL
+   ↓
+02_AGENTS
+   ↓
+03_PARCOURS_PRATIQUES
+   ↓
+04_WORKFLOW_PROJET
+   ↓
+05_GERER_UN_PROJET
+   ↓
+06_RECETTES_ET_MODELES
+   ↓
+07_DIAGNOSTIC
+   ↓
+08_REFERENCE_RAPIDE
+```
+
+Vous pouvez revenir vers une section précédente à tout moment, mais aucune partie n'est réservée à un public particulier.
 
 ## Contrat d'utilisation
 
-Pour chaque démarche, appliquez ce cycle :
+Pour chaque démarche :
 
 ```text
-PRÉREQUIS
-→ ACTION
-→ RÉSULTAT ATTENDU
-→ PREUVE / VALIDATION
+COMPRENDRE L'OBJECTIF
+→ VÉRIFIER LES PRÉREQUIS
+→ EXÉCUTER L'ACTION
+→ OBSERVER LE RÉSULTAT ATTENDU
+→ TROUVER LA PREUVE / VALIDATION
 → GO si conforme
 → STOP + DIAGNOSTIC sinon
+→ CONTINUER / APPROFONDIR
 ```
 
 ### Résultat attendu
@@ -47,16 +64,23 @@ Arrêtez la progression lorsque :
 - un prérequis n'est pas satisfait ;
 - le résultat observé ne correspond pas au résultat attendu.
 
-Dans ces cas, utilisez `07_DIAGNOSTIC/` et la documentation technique associée avant de reprendre.
+Dans ces cas, utilisez `07_DIAGNOSTIC/` et la documentation associée avant de reprendre.
 
-### À lire ensuite
+## Choisir quoi faire
 
-- parcours par profil : [Parcours de lecture](../PARCOURS_LECTURE.md) ;
-- exploitation système : [Opérations](../OPERATIONS.md) ;
-- dépannage détaillé : [Troubleshooting](../TROUBLESHOOTING.md) ;
-- architecture et contrats : [Architecture](../ARCHITECTURE.md).
+| Besoin | Section |
+|---|---|
+| comprendre les repères | `00_DEMARRER/` |
+| savoir comment aborder un travail | `01_METHODE_DE_TRAVAIL/00_METHODE_GENERALE.md` |
+| choisir un rôle | `02_AGENTS/README.md` |
+| accomplir une tâche concrète | `03_PARCOURS_PRATIQUES/` |
+| comprendre une étape du workflow | `04_WORKFLOW_PROJET/` |
+| gérer un projet dans le temps | `05_GERER_UN_PROJET/` |
+| copier un modèle de demande | `06_RECETTES_ET_MODELES/` |
+| diagnostiquer un blocage | `07_DIAGNOSTIC/` |
+| retrouver vite une commande ou un statut | `08_REFERENCE_RAPIDE/` |
 
-## Arbre de décision
+## Arbre de décision opérationnel
 
 ```text
 Besoin ponctuel ?
@@ -72,7 +96,7 @@ Si une étape échoue :
 ```text
 STOP
 → ne pas improviser de contournement
-→ collecter état/log/preuve
+→ collecter état / log / preuve
 → 07_DIAGNOSTIC/
 → corriger la cause
 → reprendre à l'étape documentée
@@ -81,7 +105,7 @@ STOP
 ## Quel agent ?
 
 - je ne sais pas par où commencer → `chef-operations`
-- recherche factuelle/récente → `expert-recherche`, puis `03_PARCOURS_PRATIQUES/07_FAIRE_UNE_RECHERCHE_WEB.md` ; pour une tâche orchestrée, utiliser au besoin `06_RECETTES_ET_MODELES/08_MODELE_PREUVE_WEB.md`
+- recherche factuelle/récente → `expert-recherche`
 - conception/architecture → `architecte-solutions`
 - CI/CD, infra, scripts, code Ops → `ingenieur-devops`
 - risques/hardening → `ingenieur-securite`
@@ -89,4 +113,14 @@ STOP
 - documentation → `redacteur-technique`
 - contrôle indépendant → `auditeur-qualite`
 
-La documentation technique de niveau 3 reste la référence pour les contrats et l'implémentation. Ce guide explique **comment l'utiliser pour travailler**, avec des points d'arrêt explicites plutôt qu'une progression implicite.
+Ces rôles sont des responsabilités techniques de la plateforme, pas des catégories de lecteurs.
+
+## À lire ensuite
+
+Suivez simplement le [Parcours de lecture unique](../PARCOURS_LECTURE.md) pour passer de l'utilisation à l'architecture, puis aux contrats, preuves, qualification et mécanismes DevOps.
+
+Références utiles en cas de besoin immédiat :
+
+- [Opérations](../OPERATIONS.md)
+- [Troubleshooting](../TROUBLESHOOTING.md)
+- [Architecture](../ARCHITECTURE.md)
