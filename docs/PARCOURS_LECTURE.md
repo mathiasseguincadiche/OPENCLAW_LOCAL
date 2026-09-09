@@ -1,84 +1,75 @@
-# Parcours de lecture
+# Parcours de lecture unique
 
-Ce document répond à une question simple : **que dois-je lire ou exécuter maintenant, selon mon rôle et mon objectif ?**
+OPENCLAW_LOCAL suit une règle simple : **une seule documentation, un seul parcours, compréhensible par tout le monde**.
 
-Il ne remplace pas les documents techniques. Il sert de **carte de navigation** entre découverte, exploitation et expertise.
+Le lecteur ne choisit pas une zone selon son niveau. Il suit le même ordre, depuis les bases jusqu'aux contrats, aux preuves et au diagnostic. La profondeur technique augmente progressivement sans changer de parcours.
 
-## Choisir son profil
+## Règle de progression
 
-| Profil | Objectif | Commencer ici | Résultat attendu |
-|---|---|---|---|
-| Débutant | comprendre le projet sans connaissances préalables | [Premiers pas](PREMIERS_PAS_OPENCLAW_LOCAL.md) | savoir ce qu'est OPENCLAW_LOCAL, reconnaître ses composants et exécuter les premiers contrôles sans deviner la suite |
-| Opérateur | installer, vérifier, exploiter et dépanner | [Opérations](OPERATIONS.md) puis [Guide utilisateur](GUIDE_UTILISATEUR/README.md) | savoir quelle commande lancer, ce qui doit réussir, quand s'arrêter et où chercher une preuve |
-| Mainteneur | modifier le dépôt sans casser les contrats | [Architecture](ARCHITECTURE.md), [Sécurité](SECURITY.md), [Gouvernance GitHub](GITHUB_GOVERNANCE.md) | comprendre les invariants, les gates CI et les responsabilités avant de changer le code ou la configuration |
-| Expert / auditeur | retrouver immédiatement contrats, qualification et preuves | [Portail documentaire](README.md), [Qualification](QUALIFICATION.md), [État du projet](../STATUS.md) | identifier le contrat applicable, distinguer preuve et hypothèse, vérifier la readiness sans interprétation implicite |
-
-## Règle commune de lecture
-
-Chaque parcours suit le même contrat :
+Chaque étape suit le même contrat :
 
 ```text
+COMPRENDRE
+   ↓
 PRÉREQUIS
    ↓
-ACTION OU LECTURE
+FAIRE / LIRE
    ↓
 RÉSULTAT ATTENDU
    ↓
-VALIDATION / PREUVE
+VALIDER / TROUVER LA PREUVE
    ↓
-GO → étape suivante
-STOP → diagnostic / correction avant de continuer
+GO → continuer
+STOP → diagnostiquer puis reprendre
+   ↓
+APPROFONDIR
 ```
 
-Ne continuez pas sur une étape critique si son résultat attendu n'est pas obtenu.
+Personne n'est supposé connaître OpenClaw, Ollama, llama.cpp, Vulkan, les agents ou les contrats du dépôt avant de commencer.
 
-## Parcours A — Débutant
+## Étape 1 — Comprendre ce qu'est le projet
 
-### Prérequis
+### Lire
 
-- savoir ouvrir PowerShell 7 ;
-- savoir naviguer dans un répertoire ;
-- disposer du dépôt local ou pouvoir consulter GitHub ;
-- ne pas avoir besoin de connaître OpenClaw, Ollama ou llama.cpp au départ.
-
-### Étapes
-
-1. Lire [Premiers pas](PREMIERS_PAS_OPENCLAW_LOCAL.md).
-2. Lire le niveau 1 du [portail documentaire](README.md).
-3. Utiliser le [guide utilisateur](GUIDE_UTILISATEUR/README.md) pour choisir un besoin concret.
-4. En cas de blocage, aller directement dans `GUIDE_UTILISATEUR/07_DIAGNOSTIC/` au lieu d'improviser.
+1. [Premiers pas avec OPENCLAW_LOCAL](PREMIERS_PAS_OPENCLAW_LOCAL.md)
+2. [Portail documentaire](README.md)
+3. [Guide utilisateur](GUIDE_UTILISATEUR/README.md)
 
 ### Résultat attendu
 
-Vous devez pouvoir expliquer :
+À ce stade, le lecteur doit pouvoir expliquer avec ses mots :
 
-- ce que fait la plateforme ;
-- pourquoi les LLM restent locaux ;
-- la différence entre un agent direct et un projet orchestré ;
-- où trouver les commandes opérateur ;
-- où trouver le diagnostic si une étape échoue.
+- ce que fait OPENCLAW_LOCAL ;
+- pourquoi le raisonnement LLM reste local ;
+- ce qu'est un agent ;
+- la différence entre une tâche directe et un projet orchestré ;
+- où trouver les commandes ;
+- où aller lorsqu'une étape échoue.
 
-### Critère STOP
+### STOP
 
-Si vous ne savez pas encore quelle commande ou quel document utiliser pour votre prochain objectif, revenez au [guide utilisateur](GUIDE_UTILISATEUR/README.md) et choisissez le chemin par besoin.
+Si ces notions restent floues, ne pas sauter vers les fichiers de configuration ou les contrats internes. Reprendre les Premiers pas puis le Guide utilisateur.
 
-### À lire ensuite
+### Ensuite
 
-- pour travailler : [Guide utilisateur](GUIDE_UTILISATEUR/README.md) ;
-- pour installer : [Installation Windows 11](INSTALLATION_WINDOWS_11.md) ;
-- pour comprendre l'architecture : [Architecture](ARCHITECTURE.md).
+Continuer vers l'installation et les contrôles de base.
 
-## Parcours B — Opérateur
+## Étape 2 — Installer et vérifier la plateforme
 
 ### Prérequis
 
 - Windows 11 Pro x64 ;
 - PowerShell 7+ ;
-- dépôt synchronisé ;
-- droits et accès nécessaires à l'installation locale ;
-- connaissance de l'emplacement du runtime géré.
+- Git ;
+- dépôt local synchronisé ;
+- accès nécessaire au bootstrap initial.
 
-### Séquence nominale
+### Lire avant d'exécuter
+
+- [Installation Windows 11](INSTALLATION_WINDOWS_11.md)
+- [Opérations](OPERATIONS.md)
+
+### Exécuter
 
 ```powershell
 git checkout main
@@ -91,131 +82,168 @@ git pull
 .\menu.ps1 -Action verify
 ```
 
-Pour la B580 hybride Vulkan :
+### Résultat attendu
 
-```powershell
-.\menu.ps1 -Action intel-vulkan-setup -DryRun
-.\menu.ps1 -Action intel-vulkan-setup
-.\menu.ps1 -Action intel-vulkan-verify
+Les contrôles doivent confirmer le runtime attendu, les services locaux, les modèles requis, les agents et l'absence de route LLM cloud.
 
-.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
-.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+### STOP
 
-.\menu.ps1 -Action e2e -Backend b580-hybrid -DryRun
-.\menu.ps1 -Action e2e -Backend b580-hybrid
+Arrêter si une commande retourne `FAIL`, `NON CONFORME`, si une preuve obligatoire manque ou si l'état observé ne correspond pas au résultat attendu.
+
+### Ensuite
+
+Passer à [Troubleshooting](TROUBLESHOOTING.md) en cas d'échec ; sinon continuer vers l'utilisation quotidienne.
+
+## Étape 3 — Utiliser OPENCLAW_LOCAL pour un vrai travail
+
+### Lire
+
+1. [Méthode générale de travail](GUIDE_UTILISATEUR/01_METHODE_DE_TRAVAIL/00_METHODE_GENERALE.md)
+2. [Choisir un agent](GUIDE_UTILISATEUR/02_AGENTS/README.md)
+3. [Parcours pratiques](GUIDE_UTILISATEUR/03_PARCOURS_PRATIQUES/)
+
+### Comprendre le cycle
+
+```text
+DÉFINIR le résultat
+→ PRÉPARER les entrées
+→ CHOISIR agent direct ou projet orchestré
+→ ANALYSER
+→ CLARIFIER si nécessaire
+→ PLANIFIER + ASSIGNER
+→ EXÉCUTER
+→ VALIDER
+→ REVIEW
+→ PACKAGE
+→ APPROBATION humaine
 ```
 
 ### Résultat attendu
 
-L'opérateur doit obtenir des contrôles explicites sur :
+Le lecteur doit savoir lancer une tâche concrète, suivre son avancement, retrouver le résultat produit et identifier la preuve qui permet de le valider.
 
-- runtime et versions ;
-- services locaux ;
-- modèles requis ;
-- huit agents ;
-- routage local-only ;
-- chemin Vulkan ;
-- E2E et preuves associées.
+### STOP
 
-### Critère STOP
+Ne jamais contourner silencieusement un état bloquant. Utiliser [Diagnostic](GUIDE_UTILISATEUR/07_DIAGNOSTIC/) puis reprendre à l'étape documentée.
 
-**Arrêter la progression** dès qu'une commande retourne FAIL, NON CONFORME ou qu'une preuve attendue manque. Ne pas compenser un échec par un contournement non documenté.
+### Ensuite
 
-### Diagnostic
+Continuer vers le fonctionnement interne du projet.
 
-1. Lire [Troubleshooting](TROUBLESHOOTING.md).
-2. Utiliser `GUIDE_UTILISATEUR/07_DIAGNOSTIC/`.
-3. Consulter les logs et preuves avant de relancer.
-4. Utiliser le rollback documenté lorsque le scénario le prévoit.
+## Étape 4 — Comprendre comment le système fonctionne
 
-### À lire ensuite
-
-- exploitation quotidienne : [Opérations](OPERATIONS.md) ;
-- B580 : [Intel Arc B580](INTEL_ARC_B580.md) ;
-- backends : [Backends locaux](RUNTIME_BACKENDS.md) ;
-- qualification : [Qualification](QUALIFICATION.md).
-
-## Parcours C — Mainteneur
-
-### Prérequis
-
-- comprendre Git et les pull requests ;
-- lire les contrats avant de modifier leur implémentation ;
-- considérer les validateurs CI comme des invariants, pas comme des obstacles à contourner.
-
-### Ordre de lecture recommandé
+Lire dans cet ordre :
 
 1. [Architecture](ARCHITECTURE.md)
-2. [Sécurité](SECURITY.md)
-3. [Project Orchestrator](PROJECT_ORCHESTRATOR.md)
-4. [Backends locaux](RUNTIME_BACKENDS.md)
+2. [Project Intake](PROJECT_INTAKE.md)
+3. [Intégrité Intake](INTAKE_INTEGRITY.md)
+4. [Project Orchestrator](PROJECT_ORCHESTRATOR.md)
 5. [Intégration OpenClaw](OPENCLAW_INTEGRATION.md)
-6. [Gouvernance GitHub](GITHUB_GOVERNANCE.md)
-7. [ADR](ADR/README.md)
+6. [Modèles locaux](MODELES_LOCAUX.md)
+7. [Backends locaux](RUNTIME_BACKENDS.md)
+8. [Routage hybride](ROUTAGE_HYBRIDE.md)
+9. [Intel Arc B580](INTEL_ARC_B580.md)
+10. [Sécurité](SECURITY.md)
 
 ### Résultat attendu
 
-Avant toute modification structurante, le mainteneur doit pouvoir répondre :
+Le lecteur doit progressivement comprendre :
 
-- quel contrat est modifié ;
-- quel comportement observable doit rester inchangé ;
-- quel test ou validateur prouve la conformité ;
-- quel rollback existe ;
-- quelle documentation doit évoluer avec le code.
+- comment une entrée devient un projet ;
+- comment les huit rôles interviennent ;
+- comment les modèles sont routés ;
+- pourquoi Vulkan est le seul chemin GPU LLM actif sur la B580 ;
+- où sont les frontières de sécurité ;
+- comment les artefacts et preuves circulent.
 
-### Critère STOP
+### Ensuite
 
-Ne pas fusionner un changement si le code, les configs, les docs et les gates racontent des architectures différentes.
+Continuer vers les contrats, la qualité et les preuves.
 
-### À lire ensuite
+## Étape 5 — Comprendre les contrats et la qualité
 
-- pour une release : [Gouvernance GitHub](GITHUB_GOVERNANCE.md) ;
-- pour les limites actuelles : [État du projet](../STATUS.md) ;
-- pour la readiness : [Qualification](QUALIFICATION.md).
+Lire :
 
-## Parcours D — Expert / auditeur
+1. [Accessibilité](ACCESSIBILITY.md)
+2. [Pédagogie](PEDAGOGY.md)
+3. [Gouvernance GitHub](GITHUB_GOVERNANCE.md)
+4. [ADR](ADR/README.md)
+5. [État du projet](../STATUS.md)
 
-### Point d'entrée rapide
+Puis consulter les validateurs sous `scripts/` et les tests sous `tests/` lorsqu'un document renvoie vers un contrat précis.
 
-| Question | Référence |
-|---|---|
-| Quelle architecture est supportée ? | [Architecture](ARCHITECTURE.md) |
-| Quels runtimes sont autorisés ? | [Backends locaux](RUNTIME_BACKENDS.md) |
-| Quels modèles sont routés ? | [Modèles locaux](MODELES_LOCAUX.md) |
-| Quelles frontières de sécurité ? | [Sécurité](SECURITY.md) |
-| Comment le projet passe ses états ? | [Project Orchestrator](PROJECT_ORCHESTRATOR.md) |
-| Qu'est-ce qui prouve la qualification ? | [Qualification](QUALIFICATION.md) |
-| Le projet est-il V1-ready ? | `config/v1/release_readiness.yaml` et [État du projet](../STATUS.md) |
-| Quelles décisions sont historiques ? | [ADR](ADR/README.md) |
+### Résultat attendu
 
-### Contrat preuve / état / hypothèse
+Le lecteur doit pouvoir distinguer :
 
-Un expert doit distinguer immédiatement :
+- **contrat** : ce que le système exige ;
+- **état observé** : ce qu'une exécution a réellement produit ;
+- **preuve** : l'artefact vérifiable associé ;
+- **hypothèse** : ce qui n'est pas encore démontré.
 
-- **contrat** : comportement exigé par config, code, policy ou gate ;
-- **état observé** : résultat d'un contrôle ou d'une exécution ;
-- **preuve** : artefact vérifiable associé à cet état ;
-- **hypothèse** : élément non encore prouvé, qui ne doit pas devenir une readiness implicite.
+Il doit également comprendre qu'une CI verte ne remplace pas une qualification matérielle réelle.
 
-### Critère STOP
+### Ensuite
 
-Si une affirmation de readiness n'a pas de preuve réelle associée, elle reste non approuvée. La CI ne remplace pas la qualification matérielle de la workstation.
+Continuer vers la qualification et la readiness.
 
-### À lire ensuite
+## Étape 6 — Comprendre la qualification et la readiness
 
-- [Qualification](QUALIFICATION.md) ;
-- [Benchmark](BENCHMARK.md) ;
-- [Télémétrie](TELEMETRY.md) ;
-- [État du projet](../STATUS.md).
+Lire dans cet ordre :
+
+1. [Qualification](QUALIFICATION.md)
+2. [Benchmark](BENCHMARK.md)
+3. [Télémétrie](TELEMETRY.md)
+4. [État du projet](../STATUS.md)
+5. `config/v1/release_readiness.yaml`
+
+### Résultat attendu
+
+Le lecteur doit pouvoir répondre :
+
+- quelles preuves sont attendues ;
+- quelles preuves existent réellement ;
+- quelles limites restent ouvertes ;
+- pourquoi une release peut rester fail-closed ;
+- ce qui exige encore une validation humaine.
+
+### STOP
+
+Aucune affirmation de readiness ne doit être déduite d'une documentation complète ou d'une CI verte seule.
+
+## Étape 7 — Diagnostiquer, maintenir et faire évoluer
+
+À ce stade, le lecteur possède déjà le contexte nécessaire. Il peut approfondir selon le problème rencontré sans changer de documentation ni entrer dans une zone réservée.
+
+Références principales :
+
+- [Troubleshooting](TROUBLESHOOTING.md)
+- [Opérations](OPERATIONS.md)
+- [Gouvernance GitHub](GITHUB_GOVERNANCE.md)
+- [Sécurité](SECURITY.md)
+- [Architecture](ARCHITECTURE.md)
+- [ADR](ADR/README.md)
+
+### Règle de modification
+
+Avant une modification structurante, pouvoir répondre :
+
+1. quel contrat est affecté ;
+2. quel comportement observable doit rester cohérent ;
+3. quel test ou validateur le prouve ;
+4. quel rollback existe ;
+5. quelle documentation doit évoluer avec le code.
 
 ## Contrat de navigation documentaire
 
-Le portail documentaire est considéré conforme uniquement si :
+Le portail est conforme uniquement si :
 
-1. les profils Débutant, Opérateur, Mainteneur et Expert / auditeur possèdent chacun un point d'entrée ;
-2. chaque parcours indique des prérequis, un résultat attendu, un critère STOP et une suite ;
-3. les liens relatifs essentiels du portail pointent vers des fichiers existants ;
-4. le CI et le workflow de release exécutent le validateur documentaire ;
-5. la distinction découverte / exploitation / maintenance / audit reste explicite.
+1. il existe **un seul parcours principal** ;
+2. ce parcours commence sans connaissance implicite et augmente progressivement en profondeur ;
+3. aucun contenu n'est réservé à un niveau de compétence ;
+4. les étapes indiquent prérequis, résultat attendu, STOP/GO et suite quand cela est pertinent ;
+5. les liens essentiels pointent vers des fichiers existants ;
+6. le CI et le workflow de release exécutent le validateur documentaire ;
+7. la documentation permet à une personne qui part de zéro d'aller progressivement jusqu'aux contrats, preuves, opérations et mécanismes DevOps du projet.
 
 Le gate associé est `scripts/48_validate_documentation_portal.py`.
