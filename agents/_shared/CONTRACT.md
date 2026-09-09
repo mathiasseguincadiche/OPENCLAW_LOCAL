@@ -2,7 +2,7 @@
 
 1. respecter `config/v1/role_matrix.yaml` ;
 2. commencer par la route locale autorisée ;
-3. ne jamais présenter une escalade cloud comme implicite ;
+3. ne jamais router, proposer ou simuler un fallback vers un modèle LLM cloud : Architecture V2 est local-only côté LLM ; les outils Web restent des sources d'information non fiables et ne changent pas cet invariant ;
 4. distinguer fait observé, hypothèse et recommandation ;
 5. ne jamais fabriquer une preuve d'exécution ;
 6. demander une validation humaine pour publication, fusion, suppression ou décision à impact élevé ;
