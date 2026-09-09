@@ -3,23 +3,15 @@ param(
     [ValidateSet(
         'menu', 'install-core', 'install-full', 'audit', 'configure-local', 'models',
         'configure-openclaw', 'deploy-agents', 'verify', 'benchmark', 'inventory',
-        'e2e', 'qualification', 'golden', 'intel-sycl-setup', 'intel-sycl-stop',
-        'intel-sycl-verify', 'intel-sycl-compare', 'intel-sycl-diagnose',
-        'intel-vulkan-probe', 'intel-vulkan-setup', 'intel-vulkan-stop',
+        'e2e', 'qualification', 'golden', 'intel-vulkan-setup', 'intel-vulkan-stop',
         'intel-vulkan-verify', 'team', 'docs', 'logs'
     )]
     [string]$Action = 'menu',
     [switch]$DryRun,
     [switch]$Quick,
     [switch]$AllowRuntimeDrift,
-    [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
+    [ValidateSet('ollama-vulkan', 'b580-hybrid')]
     [string]$Backend = 'ollama-vulkan',
-    [ValidateSet(
-        'qwen3.5:9b-q4_K_M',
-        'gemma4:12b-it-q4_K_M',
-        'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
-    )]
-    [string]$Model = 'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M',
     [switch]$NoLog
 )
 
@@ -42,12 +34,6 @@ $Scripts = @{
     e2e = Join-Path $RepoRoot 'scripts\windows\10_test_openclaw_e2e.ps1'
     qualification = Join-Path $RepoRoot 'scripts\windows\07_run_qualification.ps1'
     golden = Join-Path $RepoRoot 'scripts\windows\21_run_golden_projects.ps1'
-    'intel-sycl-setup' = Join-Path $RepoRoot 'scripts\windows\12_setup_intel_sycl.ps1'
-    'intel-sycl-stop' = Join-Path $RepoRoot 'scripts\windows\13_stop_intel_sycl.ps1'
-    'intel-sycl-verify' = Join-Path $RepoRoot 'scripts\windows\14_verify_intel_sycl.ps1'
-    'intel-sycl-compare' = Join-Path $RepoRoot 'scripts\windows\15_compare_intel_backends.ps1'
-    'intel-sycl-diagnose' = Join-Path $RepoRoot 'scripts\windows\16_diagnose_intel_sycl_model.ps1'
-    'intel-vulkan-probe' = Join-Path $RepoRoot 'scripts\windows\17_probe_intel_vulkan.ps1'
     'intel-vulkan-setup' = Join-Path $RepoRoot 'scripts\windows\18_setup_intel_vulkan.ps1'
     'intel-vulkan-stop' = Join-Path $RepoRoot 'scripts\windows\19_stop_intel_vulkan.ps1'
     'intel-vulkan-verify' = Join-Path $RepoRoot 'scripts\windows\20_verify_intel_vulkan.ps1'
@@ -142,8 +128,8 @@ function Show-Title {
     Write-Host ' V2      : trois LLM locaux Q4_K_M, aucun modèle cloud supporté'
     Write-Host ' Nominal : OpenClaw + Ollama/Vulkan natifs Windows'
     Write-Host ' B580    : Qwen3.5 9B + Gemma 4 12B + Ministral 3 14B Reasoning'
-    Write-Host ' Hybride : Ollama/Vulkan + llama.cpp Vulkan/SYCL pour qualification'
-    Write-Host ' Intel   : llama.cpp/SYCL/Level Zero reste disponible pour qualification'
+    Write-Host ' Hybride : Ollama/Vulkan + llama.cpp/Vulkan, 100 % local'
+    Write-Host ' Intel   : Vulkan est l unique accélération GPU LLM supportée sur la B580'
 }
 
 function Invoke-Action {
@@ -152,14 +138,8 @@ function Invoke-Action {
         [switch]$DryRunMode,
         [switch]$QuickMode,
         [switch]$AllowRuntimeDriftMode,
-        [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
+        [ValidateSet('ollama-vulkan', 'b580-hybrid')]
         [string]$BackendMode = 'ollama-vulkan',
-        [ValidateSet(
-            'qwen3.5:9b-q4_K_M',
-            'gemma4:12b-it-q4_K_M',
-            'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
-        )]
-        [string]$ModelMode = 'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M',
         [switch]$NoLogMode
     )
 
@@ -196,7 +176,7 @@ function Invoke-Action {
         if ($Name -in @('install-core', 'install-full')) {
             & $Script -DryRun:$DryRunMode -AllowRuntimeDrift:$AllowRuntimeDriftMode
         }
-        elseif ($Name -in @('benchmark', 'qualification', 'intel-sycl-compare')) {
+        elseif ($Name -in @('benchmark', 'qualification')) {
             & $Script -DryRun:$DryRunMode -Quick:$QuickMode
         }
         elseif ($Name -eq 'configure-openclaw') {
@@ -209,9 +189,6 @@ function Invoke-Action {
             else {
                 & $Script -DryRun:$DryRunMode -Backend $BackendMode
             }
-        }
-        elseif ($Name -eq 'intel-sycl-diagnose') {
-            & $Script -DryRun:$DryRunMode -Model $ModelMode
         }
         else {
             & $Script -DryRun:$DryRunMode
@@ -232,7 +209,7 @@ if ($Action -ne 'menu') {
     Show-Title
     Invoke-Action -Name $Action -DryRunMode:$DryRun -QuickMode:$Quick `
         -AllowRuntimeDriftMode:$AllowRuntimeDrift -BackendMode $Backend `
-        -ModelMode $Model -NoLogMode:$NoLog
+        -NoLogMode:$NoLog
     exit 0
 }
 
@@ -246,24 +223,18 @@ while ($true) {
 5) Télécharger les modèles locaux de référence
 6) Générer/appliquer la configuration OpenClaw (paramètre -Backend)
 7) Déployer les 8 workspaces agents
-8) Vérifier l'inférence locale Ollama
-9) Lancer le benchmark (utiliser -Quick pour 8K uniquement)
+8) Vérifier l'inférence locale Ollama/Vulkan
+9) Lancer les tests de qualification des modèles (-Quick pour le diagnostic 8K)
 10) Collecter l'inventaire de qualification
 11) Tester OpenClaw E2E + tool-calling + réparation (paramètre -Backend)
-12) Lancer la qualification matérielle (30 cas HARD-40M; -Quick = diagnostic 36 cas 8K)
+12) Lancer la qualification matérielle HARD-40M (-Quick pour diagnostic)
 13) Afficher les contrats de l'équipe IA
 14) Afficher la documentation
 15) Afficher les derniers logs et preuves
-16) Installer/démarrer Intel B580 llama.cpp SYCL/Level Zero
-17) Vérifier Intel B580 SYCL + trois modèles
-18) Comparer Ollama/Vulkan vs Intel SYCL (utiliser -Quick pour diagnostic court)
-19) Arrêter le serveur Intel SYCL
-20) Diagnostiquer directement un modèle Intel SYCL (paramètre -Model; Ministral Reasoning par défaut)
-21) Isoler llama.cpp Vulkan vs SYCL/Ollama sur Intel B580
-22) Installer/démarrer llama.cpp Vulkan géré pour le profil B580 hybride
-23) Vérifier llama.cpp Vulkan géré (Gemma 4 + Ministral Reasoning)
-24) Arrêter le serveur llama.cpp Vulkan géré
-25) Exécuter les 5 golden projects pré-V1 (reset + prepare + execute + evaluate)
+16) Installer/démarrer llama.cpp/Vulkan géré pour le profil B580 hybride
+17) Vérifier llama.cpp/Vulkan géré (Gemma 4 + Ministral Reasoning)
+18) Arrêter le serveur llama.cpp/Vulkan géré
+19) Exécuter les 5 golden projects pré-V1 (reset + prepare + execute + evaluate)
 0) Quitter
 '@ | Write-Host
 
@@ -283,16 +254,10 @@ while ($true) {
         '13' { Invoke-Action -Name 'team' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '14' { Invoke-Action -Name 'docs' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '15' { Invoke-Action -Name 'logs' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
-        '16' { Invoke-Action -Name 'intel-sycl-setup' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
-        '17' { Invoke-Action -Name 'intel-sycl-verify' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
-        '18' { Invoke-Action -Name 'intel-sycl-compare' -DryRunMode:$DryRun -QuickMode:$Quick -BackendMode $Backend -NoLogMode:$NoLog }
-        '19' { Invoke-Action -Name 'intel-sycl-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
-        '20' { Invoke-Action -Name 'intel-sycl-diagnose' -DryRunMode:$DryRun -BackendMode $Backend -ModelMode $Model -NoLogMode:$NoLog }
-        '21' { Invoke-Action -Name 'intel-vulkan-probe' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
-        '22' { Invoke-Action -Name 'intel-vulkan-setup' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
-        '23' { Invoke-Action -Name 'intel-vulkan-verify' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
-        '24' { Invoke-Action -Name 'intel-vulkan-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
-        '25' { Invoke-Action -Name 'golden' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '16' { Invoke-Action -Name 'intel-vulkan-setup' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '17' { Invoke-Action -Name 'intel-vulkan-verify' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '18' { Invoke-Action -Name 'intel-vulkan-stop' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
+        '19' { Invoke-Action -Name 'golden' -DryRunMode:$DryRun -BackendMode $Backend -NoLogMode:$NoLog }
         '0' { exit 0 }
         default { Write-Warning 'Choix invalide.' }
     }
