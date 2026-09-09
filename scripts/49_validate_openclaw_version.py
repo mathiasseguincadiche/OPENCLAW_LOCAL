@@ -9,7 +9,8 @@ RUNTIME_LOCK = ROOT / "config" / "v1" / "runtime_versions.json"
 EXPECTED_OPENCLAW_VERSION = "2026.9.2"
 EXPECTED_OPENCLAW_RELEASE_SHA = "3928bad9badfcb6c7d140530435e806fb8092190"
 EXPECTED_OPENCLAW_INTEGRITY = (
-    "sha512-M6C7UsnX815nv26qBJFYGe6aGzv+ftZLRzV6S9oRXUtXg2Yn67eVntpssT94kgkquKVSeUxerUg0j1ONp4WYQg=="
+    "sha512-M6C7UsnX815nv26qBJFYGe6aGzv+ftZLRzV6S9oRXUtXg2Yn67eVntpssT94kgkquKVSeUx"
+    "erUg0j1ONp4WYQg=="
 )
 EXPECTED_PARALLEL_PACKAGE = "@openclaw/parallel-plugin"
 
@@ -26,7 +27,16 @@ ACTIVE_TOP_LEVEL = (
     ROOT / "menu.ps1",
     ROOT / "START_MENU.cmd",
 )
-TEXT_SUFFIXES = {".json", ".yaml", ".yml", ".py", ".ps1", ".md", ".toml", ".cmd"}
+TEXT_SUFFIXES = {
+    ".json",
+    ".yaml",
+    ".yml",
+    ".py",
+    ".ps1",
+    ".md",
+    ".toml",
+    ".cmd",
+}
 HISTORICAL_PARTS = {"adr", "adrs", "architecture_decisions"}
 
 
@@ -73,7 +83,9 @@ def main() -> int:
     if openclaw.get("release_sha") != EXPECTED_OPENCLAW_RELEASE_SHA:
         failures.append("OpenClaw: release_sha ne correspond pas à 2026.9.2")
     if openclaw.get("integrity") != EXPECTED_OPENCLAW_INTEGRITY:
-        failures.append("OpenClaw: npm SRI ne correspond pas à l'artefact 2026.9.2 verrouillé")
+        failures.append(
+            "OpenClaw: npm SRI ne correspond pas à l'artefact 2026.9.2 verrouillé"
+        )
 
     plugins = openclaw.get("plugins")
     if not isinstance(plugins, dict):
@@ -95,8 +107,9 @@ def main() -> int:
     for path in _iter_active_text_files():
         text = path.read_text(encoding="utf-8", errors="replace")
         if stale_version in text:
+            relative = path.relative_to(ROOT)
             failures.append(
-                f"version OpenClaw obsolète interdite dans surface active: {path.relative_to(ROOT)}"
+                f"version OpenClaw obsolète interdite dans surface active: {relative}"
             )
 
     operator_contracts = {
