@@ -21,22 +21,30 @@ La flotte opérationnelle contient exactement trois modèles routés Q4_K_M :
 | `gemma-deep` | `gemma4:12b-it-q4_K_M` | ~7,6 Go | architecture, rédaction, audit, multimodal |
 | `devstral-devops` | `hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M` | ~8,24 Go | DevOps, code, dépôts, tool-calling, raisonnement |
 
-`devstral-devops` reste un alias logique de compatibilité. En V2, il pointe vers **Ministral 3 14B Reasoning Q4_K_M**, exécuté localement par Ollama depuis le GGUF officiel Mistral AI. Le spécialiste est text-only dans le contrat ; les besoins image/PDF sont pris en charge par Qwen 3.5 ou Gemma 4 puis transmis par un handoff traçable.
+`devstral-devops` reste un alias logique de compatibilité. En V2, il pointe vers **Ministral 3 14B Reasoning Q4_K_M**, exécuté localement depuis le GGUF officiel Mistral AI. Le spécialiste est text-only dans le contrat ; les besoins image/PDF sont pris en charge par Qwen 3.5 ou Gemma 4 puis transmis par un handoff traçable.
 
-Un quatrième modèle est déclaré séparément pour la comparaison locale :
+Un quatrième modèle est déclaré séparément pour la comparaison locale de sélection du spécialiste :
 
 ```text
 granite-devops -> granite4.2:8b-q4_K_M
 ```
 
-Granite 4.2 8B est **challenger de benchmark uniquement** : il n'est pas routé, ne compte pas dans les trois modèles opérationnels et ne peut pas être promu automatiquement.
+Granite 4.2 8B est **challenger de modèle uniquement** : il n'est pas routé, ne compte pas dans les trois modèles opérationnels et ne peut pas être promu automatiquement.
 
-## Contextes : benchmark et orchestration séparés
+## Accélération GPU B580 : Vulkan uniquement
 
-Deux contrats différents sont maintenus :
+Le choix du backend GPU est arrêté. Le projet actif ne maintient qu'une voie d'accélération LLM : **Vulkan**.
+
+- `ollama-vulkan` — profil OpenClaw nominal et rollback ;
+- `llama-cpp-vulkan` — runtime géré interne pour Gemma 4 et Ministral dans le profil hybride ;
+- `b580-hybrid` — profil OpenClaw explicite, toujours 100 % Vulkan : Qwen sur Ollama/Vulkan, Gemma + Ministral sur llama.cpp/Vulkan.
+
+Il n'existe plus de campagne de sélection entre API GPU dans le projet actif. La qualification matérielle vérifie que la voie Vulkan choisie fonctionne correctement sur la B580 réelle ; elle ne cherche pas à choisir un autre backend.
+
+## Contextes : qualification et orchestration séparées
 
 ```text
-8192  -> contexte nominal du benchmark / HARD-40M
+8192  -> contexte nominal du HARD-40M
 16384 -> contexte nominal d'orchestration OpenClaw pour les agents
 >16K  -> aucune promotion nominale sans qualification dédiée
 ```
@@ -90,6 +98,8 @@ Consignes / PDF / images / Office / code / ZIP
       |              |                   |
       +--------------+-------------------+
                      |
+             Vulkan / Intel Arc B580
+                     |
                preuves locales
 ```
 
@@ -134,7 +144,27 @@ Les anciens modèles éventuellement présents dans le cache Ollama ne sont plus
 .\menu.ps1 -Action e2e
 ```
 
-Ces commandes doivent notamment vérifier : runtime verrouillé, Ollama sur loopback, trois modèles requis, huit agents OpenClaw, inférence locale, tool-calling et absence de route LLM cloud.
+Ces commandes doivent notamment vérifier : runtime verrouillé, Ollama sur loopback, trois modèles requis, huit agents OpenClaw, inférence locale, tool-calling, voie GPU Vulkan et absence de route LLM cloud.
+
+Pour le profil B580 hybride Vulkan :
+
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup -DryRun
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Le rollback reste :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
+.\menu.ps1 -Action intel-vulkan-stop
+```
+
+Voir [Backends](docs/RUNTIME_BACKENDS.md).
 
 ## Qualification matérielle
 
@@ -151,31 +181,11 @@ Le mode diagnostic reste :
 .\menu.ps1 -Action qualification -Quick
 ```
 
-Les trois modèles routés sont obligatoires. Un échec de l'un d'eux fait échouer la flotte. Granite possède une comparaison séparée et ne peut pas servir de contournement.
+Les trois modèles routés sont obligatoires. Un échec de l'un d'eux fait échouer la flotte. Granite possède une comparaison de modèle séparée et ne peut pas servir de contournement.
+
+La qualification ne remet pas le choix Vulkan en compétition : elle valide le fonctionnement, la stabilité et les limites du chemin retenu sur la workstation réelle.
 
 Voir [Qualification](docs/QUALIFICATION.md) et [Benchmark](docs/BENCHMARK.md).
-
-## Backends locaux
-
-Le modèle et le backend sont indépendants :
-
-- `ollama-vulkan` — chemin nominal pré-qualification ;
-- `llama-cpp-sycl` — candidat Intel SYCL/Level Zero ;
-- `llama-cpp-vulkan` — candidat Vulkan ;
-- `b580-hybrid` — profil candidat combinant les backends locaux.
-
-Aucun backend n'est déclaré vainqueur avant mesures réelles B580.
-
-Parcours Intel :
-
-```powershell
-.\menu.ps1 -Action intel-sycl-setup -DryRun
-.\menu.ps1 -Action intel-sycl-setup
-.\menu.ps1 -Action intel-sycl-verify
-.\menu.ps1 -Action intel-sycl-compare -Quick
-```
-
-Voir [Backends](docs/RUNTIME_BACKENDS.md).
 
 ## Golden Projects pré-V1
 
@@ -189,6 +199,7 @@ Les scénarios couvrent notamment documents techniques, exigences contradictoire
 ## Principes de sécurité et de qualité
 
 - **LLM local-only** ;
+- **Vulkan seul pour l'accélération GPU LLM B580** ;
 - **fail-closed** ;
 - **aucun fournisseur LLM cloud** ;
 - **aucun fallback LLM en ligne** ;
@@ -235,6 +246,6 @@ La transition finale exige une approbation humaine.
 
 ## V1.0.0
 
-La version `1.0.0` reste bloquée tant que la workstation réelle n'a pas fourni toutes les preuves requises : HARD-40M, OpenClaw E2E, comparaison backend, Golden Projects, multimodalité, télémétrie, projet représentatif, limites documentées et approbation humaine UTC.
+La version `1.0.0` reste bloquée tant que la workstation réelle n'a pas fourni toutes les preuves requises : HARD-40M, OpenClaw E2E, voie Vulkan gérée, Golden Projects, multimodalité, télémétrie, projet représentatif, limites documentées et approbation humaine UTC.
 
-Le manifeste `config/v1/release_readiness.yaml` reste fail-closed. Aucun changement de flotte ne contourne cette exigence.
+Le manifeste `config/v1/release_readiness.yaml` reste fail-closed. Aucun changement de flotte ou de runtime ne contourne cette exigence.
