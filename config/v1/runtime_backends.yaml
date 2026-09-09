@@ -1,4 +1,4 @@
-schema_version: "1.3.0"
+schema_version: "1.4.0"
 platform_version: "0.2.0"
 backends:
   ollama-vulkan:
@@ -10,49 +10,16 @@ backends:
     accelerator: vulkan
     qualification_required: true
 
-  llama-cpp-sycl:
-    provider: llama_cpp_http
-    provider_id: intel-sycl
-    mode: candidate
-    windows_native: true
-    endpoint: "http://127.0.0.1:8080/v1"
-    api: openai-completions
-    accelerator: sycl
-    device_api: level_zero
-    device: SYCL0
-    activation: managed_candidate
-    runtime_lock: llama_cpp_sycl
-    router:
-      models_max: 1
-      autoload: true
-      offline: true
-      jinja: true
-      gpu_layers: auto
-      context_tokens: 8192
-      parallel: 1
-    model_source: provider_specific_gguf
-    qualification_required: true
-    promotion_requires:
-      - intel_arc_b580_detected
-      - sycl_device_detected
-      - level_zero_device_detected
-      - all_three_models_load
-      - benchmark_vs_ollama
-      - openclaw_http_provider_smoke
-      - tool_calling_e2e
-      - three_stable_runs
-      - human_review
-
   llama-cpp-vulkan:
     provider: llama_cpp_http
     provider_id: intel-vulkan
-    mode: candidate
+    mode: managed_local
     windows_native: true
     endpoint: "http://127.0.0.1:8081/v1"
     api: openai-completions
     accelerator: vulkan
     device: Vulkan0
-    activation: managed_candidate
+    activation: managed_explicit
     runtime_lock: llama_cpp_vulkan
     router:
       models_max: 1
@@ -65,13 +32,12 @@ backends:
     managed_models:
       - gemma-deep
       - devstral-devops
-    model_source: provider_specific_gguf
+    model_source: ollama_gguf_blob
     qualification_required: true
-    promotion_requires:
+    readiness_requires:
       - intel_arc_b580_detected
       - vulkan_device_detected
-      - deep_and_specialist_models_load
-      - benchmark_vs_ollama_and_sycl
+      - managed_models_load
       - openclaw_http_provider_smoke
       - tool_calling_e2e
       - three_stable_runs
@@ -79,7 +45,7 @@ backends:
 
   b580-hybrid:
     provider: mixed_local
-    mode: candidate_profile
+    mode: supported_profile
     windows_native: true
     activation: explicit_only
     qualification_required: true
@@ -91,23 +57,19 @@ backends:
       devstral-devops: llama-cpp-vulkan
     multimodal_backend: ollama-vulkan
     rollback_backend: ollama-vulkan
-    benchmark_basis:
-      qwen-max: ollama-vulkan
-      gemma-deep: llama-cpp-vulkan
-      devstral-devops: llama-cpp-vulkan
-    promotion_requires:
-      - isolated_b580_benchmark
-      - managed_vulkan_runtime_ready
+    readiness_requires:
+      - intel_arc_b580_detected
+      - vulkan_runtime_ready
       - openclaw_mixed_provider_smoke
       - vulkan_tool_calling_e2e
       - three_stable_runs
       - human_review
 
 selection:
+  gpu_llm_acceleration: vulkan
+  backend_choice_locked: true
   default_backend: ollama-vulkan
-  recommended_candidate: b580-hybrid
-  production_backend_requires_b580_benchmark: true
-  compare_same_model_when_possible: true
+  recommended_profile: b580-hybrid
   no_automatic_promotion: true
   rollback_backend: ollama-vulkan
   nominal_context_tokens: 8192
