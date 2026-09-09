@@ -16,13 +16,13 @@ L'alias `devstral-devops` est conservé pour compatibilité logique avec les rou
 
 ## Challenger local : Granite 4.2 8B
 
-Le catalogue déclare un challenger de benchmark séparé :
+Le catalogue déclare un challenger séparé :
 
 ```text
 granite-devops -> granite4.2:8b-q4_K_M
 ```
 
-Ce challenger sert à comparer le spécialiste DevOps nominal sur coding, tool-calling natif, réparation après erreur d'outil et adéquation B580.
+Ce challenger sert à comparer le spécialiste DevOps nominal sur coding, tool-calling natif, réparation après erreur d'outil et adéquation B580 lorsque cette preuve de sélection est nécessaire.
 
 Important : Granite ne devient pas un quatrième modèle opérationnel :
 
@@ -42,15 +42,13 @@ La cible matérielle est une Intel Arc B580 12 Go. Architecture V2 privilégie d
 
 Ce dimensionnement est une **hypothèse d'architecture à qualifier**, pas une revendication de performance. Seules les mesures réelles B580 peuvent établir TTFT, tokens/s, VRAM/RAM, stabilité, résidence GPU et qualité utile.
 
-Le challenger Granite répond à une question séparée : le spécialiste 14B fournit-il suffisamment de gain agentique par rapport à un 8B local plus léger ? La réponse doit provenir du benchmark réel et d'une décision humaine.
-
 ## Support logiciel vs qualification matérielle
 
 Trois niveaux sont séparés :
 
 1. **flotte opérationnelle candidate** : Qwen 3.5 9B + Gemma 4 12B + Ministral 3 14B Reasoning ;
 2. **challenger de sélection** : Granite 4.2 8B, hors routage ;
-3. **qualification matérielle** : TTFT, tokens/s, VRAM/RAM, stabilité, contexte, tool-calling, multimodalité et qualité réelle sur la workstation.
+3. **qualification matérielle** : fonctionnement, stabilité, contexte, tool-calling, multimodalité et comportement réel sur la workstation.
 
 `required: true` signifie que les trois modèles constituent la flotte fonctionnelle candidate ; cela ne signifie pas qu'ils sont déjà qualifiés sur la B580.
 
@@ -103,7 +101,7 @@ source_license      = Apache-2.0
 
 ## Granite 4.2 8B — `granite-devops`
 
-`granite4.2:8b-q4_K_M` sert uniquement au benchmark comparatif local. Les preuves peuvent recommander une décision, mais ne modifient jamais le routage automatiquement.
+`granite4.2:8b-q4_K_M` sert uniquement à une comparaison locale séparée. Les preuves peuvent recommander une décision, mais ne modifient jamais le routage automatiquement.
 
 ## Routage nominal
 
@@ -132,52 +130,6 @@ OpenClaw agent orchestration : 16384 tokens
 
 Le 16384 d'OpenClaw n'est pas une promotion du benchmark. Une montée à 32768 ou au-delà exige une qualification séparée ; elle n'est jamais automatique.
 
-La comparaison Ministral/Granite est effectuée à **8192 tokens**, à charge comparable au nominal benchmark B580.
-
-## Benchmark challenger Ministral vs Granite
-
-Installation explicite du challenger si nécessaire :
-
-```powershell
-ollama pull granite4.2:8b-q4_K_M
-```
-
-Le dépôt ne promeut pas le challenger pendant le benchmark.
-
-Dry-run :
-
-```powershell
-.\scripts\windows\23_compare_model_challenger.ps1 -DryRun
-```
-
-Comparaison réelle :
-
-```powershell
-.\scripts\windows\23_compare_model_challenger.ps1
-```
-
-Contrat par défaut :
-
-- incumbent `devstral-devops` / Ministral 3 14B Reasoning ;
-- challenger Granite 4.2 8B ;
-- Q4_K_M ;
-- contexte 8192 ;
-- 3 répétitions ;
-- appel d'outil natif ;
-- retour contrôlé en erreur ;
-- réparation attendue ;
-- mesure du taux de tool-intent et de réparation ;
-- wall time, tokens/s et résidence VRAM lorsque disponibles ;
-- aucune promotion automatique.
-
-La preuve est écrite sous :
-
-```text
-benchmarks/results/tool_calling_challenger_*.json
-```
-
-Le contenu brut des réponses n'est pas requis comme donnée de promotion ; les preuves structurées restent destinées à l'audit et à la décision humaine.
-
 ## HARD-40M
 
 Le HARD-40M exige exactement :
@@ -192,9 +144,19 @@ Si l'un de ces trois modèles échoue, la qualification de la flotte échoue. Gr
 
 Le HARD-40M conserve 30 cas : 24 à 8K et 6 à 16K. Les seuils ne sont pas abaissés par Architecture V2.
 
-## Backends
+## Backend GPU
 
-Le modèle et le backend restent découplés. Le projet compare notamment Ollama/Vulkan, llama.cpp/SYCL, llama.cpp/Vulkan et le profil candidat `b580-hybrid`. Aucun backend ni modèle n'est auto-promu.
+Le choix de l'API GPU est déjà décidé : **Vulkan uniquement**.
+
+Les chemins actifs sont :
+
+```text
+ollama-vulkan
+llama-cpp-vulkan
+b580-hybrid
+```
+
+`b580-hybrid` combine exclusivement des moteurs Vulkan locaux. Il n'existe plus de compétition entre API GPU dans le parcours actif et aucune re-comparaison de backend retiré n'est requise. Les vérifications matérielles servent uniquement à confirmer le fonctionnement et la stabilité de l'installation Vulkan réelle.
 
 ## Local-only
 
@@ -218,9 +180,10 @@ Aucun catalogue de modèle LLM cloud n'est accepté. Une demande de routage LLM 
 - benchmark nominal 8192 ;
 - orchestration OpenClaw 16384 séparée ;
 - aucun retour des runtimes legacy ;
+- Vulkan comme unique accélération GPU LLM active ;
+- aucun retour du backend GPU retiré dans les surfaces actives ;
 - qualification obligatoire des trois modèles ;
 - indépendance Gemma/Qwen de l'Auditeur lorsque praticable ;
 - Granite 4.2 exact et séparé du routage ;
-- comparaison tool-calling/réparation ;
 - `automatic_promotion: false` ;
 - refus du routage cloud.
