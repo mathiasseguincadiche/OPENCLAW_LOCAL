@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
+    [ValidateSet('ollama-vulkan', 'b580-hybrid')]
     [string]$Backend = 'ollama-vulkan'
 )
 
@@ -212,26 +212,13 @@ function Test-SelectedBackendReady {
     }
 
     $Lock = Get-Content -Raw -LiteralPath $LockPath | ConvertFrom-Json
-    if ($BackendId -eq 'llama-cpp-sycl') {
-        Test-LlamaCppInventory -Endpoint ([string]$Lock.llama_cpp_sycl.endpoint) `
-            -Expected @(
-                'qwen3.5:9b-q4_K_M',
-                'gemma4:12b-it-q4_K_M',
-                'hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
-            ) `
-            -Label 'Backend Intel SYCL'
-        Write-Host 'OK  Backend texte sélectionné: llama-cpp-sycl (provider OpenClaw intel-sycl).'
-        Write-Host 'INFO Image/PDF restent sur Ollama tant que le multimodal SYCL n''est pas qualifié.'
-        return
-    }
-
     if ($BackendId -eq 'b580-hybrid') {
         Test-OllamaReady
         Test-LlamaCppInventory -Endpoint ([string]$Lock.llama_cpp_vulkan.endpoint) `
             -Expected @($Lock.llama_cpp_vulkan.managed_models | ForEach-Object { [string]$_ }) `
             -Label 'Backend Intel Vulkan géré'
-        Write-Host 'OK  Profil B580 hybride prêt: Qwen 3.5->Ollama, Gemma 4/Ministral Reasoning->intel-vulkan.'
-        Write-Host 'INFO Image/PDF restent intégralement sur Ollama via Qwen 3.5/Gemma 4.'
+        Write-Host 'OK  Profil B580 hybride prêt: Qwen 3.5->Ollama/Vulkan, Gemma 4/Ministral Reasoning->llama.cpp/Vulkan.'
+        Write-Host 'INFO Image/PDF restent intégralement sur Ollama/Vulkan via Qwen 3.5/Gemma 4.'
         return
     }
 
@@ -248,7 +235,7 @@ $RuntimeLock = Get-Content -Raw -LiteralPath $RuntimeLockPath | ConvertFrom-Json
 $ExpectedOpenClawVersion = [string]$RuntimeLock.openclaw.preferred
 
 if ($DryRun) {
-    Write-Host '[DRY-RUN] Configuration OpenClaw local-first'
+    Write-Host '[DRY-RUN] Configuration OpenClaw local-only / Vulkan'
     Write-Host "Backend    : $Backend"
     Write-Host "OpenClaw   : $ExpectedOpenClawVersion (version verrouillée)"
     Write-Host "State      : $StateDir"
@@ -256,18 +243,14 @@ if ($DryRun) {
     Write-Host "Patch      : $PatchPath"
     Write-Host "Schema     : $SchemaPath"
     if ($Backend -eq 'ollama-vulkan') {
-        Write-Host '[DRY-RUN] Benchmark direct B580 inchangé à 8192; orchestration OpenClaw nominale à 16384 pour absorber réserve, système et outils.'
+        Write-Host '[DRY-RUN] Contexte nominal B580=8192; orchestration OpenClaw=16384 pour absorber réserve, système et outils.'
         Write-Host '[DRY-RUN] Tool Search structuré + profils minimaux par rôle réduisent les schémas injectés.'
         Write-Host '[DRY-RUN] Après application, contrôler réellement l admission des trois familles de modèles avant PASS.'
     }
-    elseif ($Backend -eq 'llama-cpp-sycl') {
-        Write-Host '[DRY-RUN] Exiger le routeur Intel SYCL prêt avec les trois modèles; texte -> intel-sycl; image/PDF -> Ollama.'
-        Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
-    }
     elseif ($Backend -eq 'b580-hybrid') {
-        Write-Host '[DRY-RUN] Exiger Ollama + routeur Intel Vulkan géré prêt.'
-        Write-Host '[DRY-RUN] Routage texte: Qwen 3.5 -> Ollama; Gemma 4 + Ministral 3 Reasoning -> intel-vulkan; image/PDF -> Ollama.'
-        Write-Host '[DRY-RUN] Contexte de benchmark B580: 8192 tokens; les backends candidats restent soumis à qualification.'
+        Write-Host '[DRY-RUN] Exiger Ollama/Vulkan + routeur llama.cpp/Vulkan géré prêt.'
+        Write-Host '[DRY-RUN] Routage texte: Qwen 3.5 -> Ollama/Vulkan; Gemma 4 + Ministral 3 Reasoning -> llama.cpp/Vulkan; image/PDF -> Ollama/Vulkan.'
+        Write-Host '[DRY-RUN] Vulkan est le choix GPU LLM verrouillé; ce contrôle valide la readiness/E2E, pas un nouveau choix de backend.'
         Write-Host '[DRY-RUN] Rollback explicite: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
     }
     Write-Host '[DRY-RUN] Exiger la version OpenClaw verrouillée avant toute mutation de configuration.'
@@ -281,7 +264,6 @@ if ($DryRun) {
 $env:OPENCLAW_LOCAL_ROOT = $PlatformRoot
 $env:OPENCLAW_STATE_DIR = $StateDir
 $env:OLLAMA_API_KEY = 'ollama-local'
-$env:INTEL_SYCL_API_KEY = 'intel-sycl-local'
 $env:INTEL_VULKAN_API_KEY = 'intel-vulkan-local'
 $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'false'
 
@@ -360,11 +342,11 @@ if ($Backend -eq 'ollama-vulkan') {
     Write-Host 'OK  Admission prompt validée sur Qwen 3.5, Gemma 4 et Ministral 3 Reasoning.'
 }
 else {
-    Write-Host 'INFO Contrôle d admission complet réservé au backend nominal ollama-vulkan; le backend candidat reste soumis à son E2E de qualification.'
+    Write-Host 'INFO Le profil B580 hybride reste soumis à son E2E Vulkan avant validation d usage.'
 }
 
 Write-Host "OK  Configuration OpenClaw appliquée: backend texte=$Backend, 8 agents."
-if ($Backend -in @('llama-cpp-sycl', 'b580-hybrid')) {
+if ($Backend -eq 'b580-hybrid') {
     Write-Host 'INFO Rollback: .\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan'
 }
 exit 0
