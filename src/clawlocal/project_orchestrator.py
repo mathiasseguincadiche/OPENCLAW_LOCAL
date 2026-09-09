@@ -11,6 +11,7 @@ from typing import Any
 from clawlocal.config import load_contract
 from clawlocal.project_context import AGENT_IDS
 from clawlocal.project_intake import validate_project_id
+from clawlocal.safe_fs import is_link_like, iter_regular_files_no_links, secure_path_within
 
 _TASK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 _ANALYSIS_REQUIRED = {
@@ -548,16 +549,40 @@ def store_review_report(project: Path, payload: dict[str, Any]) -> Path:
 
 
 def package_project(project: Path) -> tuple[Path, Path]:
-    deliverables = project / "deliverables"
-    manifest_path = _artifact(project, "package_manifest")
-    project_id = str(load_project_manifest(project)["project_id"])
+    project_root = project.resolve(strict=True)
+    deliverables = secure_path_within(
+        project_root / "deliverables",
+        project_root,
+        require_dir=True,
+        label="packaging livrables",
+    )
+    manifest_path = _artifact(project_root, "package_manifest")
+    final_report_path = _artifact(project_root, "final_report")
+    project_id = str(load_project_manifest(project_root)["project_id"])
     archive_path = deliverables / f"{project_id}.zip"
 
-    excluded = {manifest_path.resolve(), archive_path.resolve()}
+    for output_path, label in (
+        (manifest_path, "manifest de packaging"),
+        (archive_path, "archive de packaging"),
+        (final_report_path, "rapport final de packaging"),
+    ):
+        secure_path_within(
+            output_path.parent,
+            project_root,
+            require_dir=True,
+            label=label,
+        )
+        if is_link_like(output_path):
+            raise ValueError(f"{label}: lien/reparse point interdit: {output_path}")
+
+    excluded = {manifest_path.absolute(), archive_path.absolute()}
     files = [
         path
-        for path in sorted(deliverables.rglob("*"))
-        if path.is_file() and path.resolve() not in excluded
+        for path in iter_regular_files_no_links(
+            deliverables,
+            label="packaging livrables",
+        )
+        if path.absolute() not in excluded
     ]
     if not files:
         raise ValueError("aucun livrable à packager")
@@ -599,12 +624,12 @@ def package_project(project: Path) -> tuple[Path, Path]:
         "generated_at": _now(),
         "project_id": project_id,
         "status": "READY_FOR_HUMAN_COMPLETION",
-        "validation_verdict": _validation_verdict(project, "validation"),
-        "review_verdict": _validation_verdict(project, "review"),
-        "package_manifest": manifest_path.relative_to(project).as_posix(),
-        "archive": archive_path.relative_to(project).as_posix(),
+        "validation_verdict": _validation_verdict(project_root, "validation"),
+        "review_verdict": _validation_verdict(project_root, "review"),
+        "package_manifest": manifest_path.relative_to(project_root).as_posix(),
+        "archive": archive_path.relative_to(project_root).as_posix(),
     }
-    _write_json(_artifact(project, "final_report"), final_report)
+    _write_json(final_report_path, final_report)
     return archive_path, manifest_path
 
 
