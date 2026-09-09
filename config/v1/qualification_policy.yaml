@@ -1,4 +1,4 @@
-schema_version: "2.0.0"
+schema_version: "2.1.0"
 platform_version: "0.2.0"
 suite: devops-v2
 required_contexts: [8192, 16384]
@@ -9,7 +9,6 @@ runtime_budget:
   evaluation_reserve_seconds: 60
   benchmark_default_max_wall_seconds: 2100
   max_case_wall_seconds: 210
-
 
 automated_gates:
   required_models: [qwen-max, gemma-deep, devstral-devops]
@@ -102,6 +101,7 @@ promotion:
     - stability_three_runs
     - human_review
     - local_only_nominal_path
+    - vulkan_only_llm_path
 
 supported_fleet:
   exact_aliases: [qwen-max, gemma-deep, devstral-devops]
@@ -110,10 +110,13 @@ supported_fleet:
   allow_unsupported_local_fallback: false
   benchmark_challengers_count_as_routed_models: false
 
-runtime_comparison:
-  required_for_intel_arc_promotion: true
-  candidates: [ollama-vulkan, llama-cpp-sycl, llama-cpp-vulkan]
-  automatic_winner_promotion: false
+runtime_backend_policy:
+  gpu_llm_acceleration: vulkan
+  backend_choice_locked: true
+  allowed_backends: [ollama-vulkan, llama-cpp-vulkan, b580-hybrid]
+  openclaw_selectable_profiles: [ollama-vulkan, b580-hybrid]
+  backend_recomparison_required: false
+  real_b580_runtime_evidence_required: true
 
 safety:
   cloud_calls_allowed_during_qualification: false
