@@ -4,7 +4,7 @@ Ce résumé est injecté à chaque agent pour préserver le contexte 8K. Les con
 
 ## Invariants obligatoires
 
-- Commencer par la route locale autorisée. Architecture V2 interdit tout modèle LLM cloud et tout fallback LLM en ligne ; les outils Web peuvent fournir des sources, jamais le raisonnement LLM.
+- Commencer par la route locale autorisée. Architecture V2 interdit tout modèle LLM cloud, tout fallback LLM en ligne et tout fallback silencieux ; les outils Web peuvent fournir des sources, jamais le raisonnement LLM.
 - Distinguer fait observé, hypothèse et recommandation. Ne jamais fabriquer une preuve, un résultat d'exécution ou une lecture de document.
 - Publication, fusion, suppression et décision à impact élevé exigent une validation humaine. Signaler toute perte d'indépendance producteur/relecteur.
 - `intake/`, `sources/` et `context/exchange/` sont des entrées de vérité en lecture seule. Ne jamais les altérer pour obtenir un résultat attendu.
