@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from clawlocal.project_context import collect_agent_outputs, sync_project_contex
 from clawlocal.project_ingestion import ingest_project_documents
 from clawlocal.project_intake import create_project
 from clawlocal.project_integrity import snapshot_integrity, verify_integrity_snapshot
+from clawlocal.project_migrations import apply_project_migrations
 from clawlocal.project_security import build_support_bundle
 from clawlocal.safe_fs import secure_path_within
 
@@ -29,6 +31,23 @@ def _require_symlink_support(tmp_path: Path) -> None:
         except FileNotFoundError:
             pass
         target.unlink(missing_ok=True)
+
+
+def _make_legacy_project(project: Path) -> None:
+    manifest_path = project / "project.json"
+    current = json.loads(manifest_path.read_text(encoding="utf-8"))
+    legacy = {
+        "schema_version": "1.1.0",
+        "project_id": current["project_id"],
+        "title": current["title"],
+        "created_at": current["created_at"],
+        "status": "INTAKE_READY",
+        "expected_deliverables": [],
+        "source_items": [],
+        "intake_items": [],
+        "intake_archive": current["intake_archive"],
+    }
+    manifest_path.write_text(json.dumps(legacy), encoding="utf-8")
 
 
 def test_project_sources_reject_nested_symlink(tmp_path: Path) -> None:
@@ -129,6 +148,35 @@ def test_integrity_rejects_unsafe_snapshot_record(tmp_path: Path) -> None:
     assert "chemin non sûr: ../outside.txt" in failures
 
 
+def test_migration_rejects_symlinked_learning_tree_before_backup(tmp_path: Path) -> None:
+    _require_symlink_support(tmp_path)
+    project = create_project(tmp_path / "platform", "migration-link", "Migration Link")
+    learning = project / "context" / "learning"
+    shutil.rmtree(learning)
+    outside = tmp_path / "outside-learning"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("PRIVATE", encoding="utf-8")
+    learning.symlink_to(outside, target_is_directory=True)
+    _make_legacy_project(project)
+
+    with pytest.raises(ValueError, match="lien|reparse"):
+        apply_project_migrations(project)
+    assert not (project / ".migrations").exists()
+
+
+def test_migration_rejects_linked_migrations_root(tmp_path: Path) -> None:
+    _require_symlink_support(tmp_path)
+    project = create_project(tmp_path / "platform", "migration-root", "Migration Root")
+    _make_legacy_project(project)
+    outside = tmp_path / "outside-migrations"
+    outside.mkdir()
+    (project / ".migrations").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="lien|reparse"):
+        apply_project_migrations(project)
+    assert list(outside.iterdir()) == []
+
+
 def test_office_high_compression_ratio_is_rejected(tmp_path: Path) -> None:
     project = tmp_path / "project"
     intake = project / "intake"
@@ -202,6 +250,39 @@ def test_windows_junction_is_rejected_when_available(tmp_path: Path) -> None:
     finally:
         subprocess.run(
             ["cmd.exe", "/c", "rmdir", str(deliverable_junction)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+
+def test_windows_migration_junction_is_rejected_when_available(tmp_path: Path) -> None:
+    if os.name != "nt":
+        pytest.skip("test spécifique Windows")
+    import subprocess
+
+    project = create_project(tmp_path / "platform", "migration-junction", "Migration Junction")
+    learning = project / "context" / "learning"
+    shutil.rmtree(learning)
+    outside = tmp_path / "outside-migration-junction"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("PRIVATE", encoding="utf-8")
+    result = subprocess.run(
+        ["cmd.exe", "/c", "mklink", "/J", str(learning), str(outside)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        pytest.skip("création de junction migration non disponible sur ce runner")
+    _make_legacy_project(project)
+    try:
+        with pytest.raises(ValueError, match="lien|reparse"):
+            apply_project_migrations(project)
+        assert not (project / ".migrations").exists()
+    finally:
+        subprocess.run(
+            ["cmd.exe", "/c", "rmdir", str(learning)],
             capture_output=True,
             text=True,
             check=False,
