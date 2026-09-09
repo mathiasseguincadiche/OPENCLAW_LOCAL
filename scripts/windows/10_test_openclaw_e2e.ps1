@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [ValidateSet('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid')]
+    [ValidateSet('ollama-vulkan', 'b580-hybrid')]
     [string]$Backend = 'ollama-vulkan',
     [int]$TimeoutSeconds = 180,
     [ValidateRange(180, 600)][int]$AgentSmokeTimeoutSeconds = 300,
@@ -373,10 +373,7 @@ function Test-HybridRuntimeReady {
     }
 }
 
-$ExpectedProviderLabel = if ($Backend -eq 'llama-cpp-sycl') {
-    'intel-sycl'
-}
-elseif ($Backend -eq 'b580-hybrid') {
+$ExpectedProviderLabel = if ($Backend -eq 'b580-hybrid') {
     'mixed-local'
 }
 else {
@@ -397,7 +394,7 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] échec applicatif: payload JSON sauvegardé immédiatement dans proofs.'
     Write-Host '[DRY-RUN] smokes groupés par modèle; Ministral Reasoning en dernier pour rester résident avant tool-calling.'
     if ($Backend -eq 'b580-hybrid') {
-        Write-Host '[DRY-RUN] Qwen 3.5 -> Ollama; Gemma 4/Ministral Reasoning -> intel-vulkan; tool-call Ministral/Vulkan obligatoire.'
+        Write-Host '[DRY-RUN] Qwen 3.5 -> Ollama/Vulkan; Gemma 4/Ministral Reasoning -> intel-vulkan; tool-call Ministral/Vulkan obligatoire.'
     }
     Write-Host '[DRY-RUN] tool-calling via le modèle primaire réellement routé pour ingenieur-devops.'
     Write-Host '[DRY-RUN] compatibilité CLI OpenClaw verrouillée via runtime_versions.json: agent --agent/--model/--message.'
@@ -408,6 +405,7 @@ if ($DryRun) {
     Write-Host '[DRY-RUN] erreur outil contrôlée -> réparation avec le même spécialiste.'
     Write-Host '[DRY-RUN] 3 runs de stabilité avec le même spécialiste.'
     Write-Host '[DRY-RUN] progression visible pour chaque appel long.'
+    Write-Host '[DRY-RUN] Vulkan est le seul chemin GPU LLM; aucune re-comparaison de backend.'
     Write-Host '[DRY-RUN] aucune escalade cloud ni fallback de provider/transport.'
     exit 0
 }
@@ -421,30 +419,10 @@ if ($RequiredModels.Count -eq 0) {
     throw 'Aucun modèle required local dans model_catalog.yaml.'
 }
 $PrimaryModel = $RequiredModels[0]
-$ModelRef = if ($Backend -eq 'llama-cpp-sycl') {
-    "intel-sycl/$PrimaryModel"
-}
-else {
-    "ollama/$PrimaryModel"
-}
+$ModelRef = "ollama/$PrimaryModel"
 
 $RuntimeLock = Get-Content -Raw -LiteralPath $RuntimeLockPath | ConvertFrom-Json
-if ($Backend -eq 'llama-cpp-sycl') {
-    try {
-        $SyclModels = Invoke-RestMethod -Method Get `
-            -Uri 'http://127.0.0.1:8080/v1/models?reload=1' -TimeoutSec 10
-    }
-    catch {
-        throw "Backend Intel SYCL non prêt avant E2E: $($_.Exception.Message)"
-    }
-    $SyclIds = @($SyclModels.data | ForEach-Object { [string]$_.id })
-    foreach ($RequiredModel in $RequiredModels) {
-        if (-not ($SyclIds | Where-Object { $_ -ieq $RequiredModel })) {
-            throw "Backend Intel SYCL incomplet avant E2E: modèle absent $RequiredModel"
-        }
-    }
-}
-elseif ($Backend -eq 'b580-hybrid') {
+if ($Backend -eq 'b580-hybrid') {
     Test-HybridRuntimeReady -Lock $RuntimeLock
 }
 
@@ -460,7 +438,6 @@ $Config = Get-Content -Raw -LiteralPath $ConfigPath | ConvertFrom-Json
 $OpenClaw = Get-OpenClawCommand $PlatformRoot
 $env:OPENCLAW_STATE_DIR = $StateDir
 $env:OLLAMA_API_KEY = 'ollama-local'
-$env:INTEL_SYCL_API_KEY = 'intel-sycl-local'
 $env:INTEL_VULKAN_API_KEY = 'intel-vulkan-local'
 $env:OPENCLAW_LOCAL_CLOUD_ENABLED = 'false'
 
@@ -521,7 +498,7 @@ if (-not $GatewayReadiness.ready) {
 Write-Host 'E2E  PASS  Gateway readiness'
 
 $Evidence = [ordered]@{
-    schema_version = '1.7.0'
+    schema_version = '1.8.0'
     timestamp_utc = [DateTime]::UtcNow.ToString('o')
     platform_root = $PlatformRoot
     backend = $Backend
@@ -530,6 +507,8 @@ $Evidence = [ordered]@{
     primary_model_ref = $ModelRef
     openclaw_version = $ActualOpenClawVersion
     cloud_enabled = $false
+    gpu_llm_acceleration = 'vulkan'
+    backend_choice_locked = $true
     transport = 'gateway'
     tool_agent = $ToolAgentId
     tool_model_ref = $ToolModelRef

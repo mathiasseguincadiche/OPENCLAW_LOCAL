@@ -2,11 +2,11 @@
 
 ## But
 
-La qualification transforme les choix déclarés dans Git en décisions fondées sur des **preuves réelles** produites sur Windows 11 + Intel Arc B580. GitHub Actions valide les contrats logiciels ; elle ne fabrique jamais une qualification matérielle.
+La qualification transforme les contrats Git en décisions fondées sur des **preuves réelles** produites sur Windows 11 + Intel Arc B580. GitHub Actions valide les contrats logiciels ; elle ne fabrique jamais une qualification matérielle.
 
-Architecture V2 est **LLM local-only**. Aucun modèle LLM cloud n'est autorisé pendant la qualification ni comme fallback.
+Architecture V2 est **LLM local-only** et **Vulkan-only côté accélération GPU LLM B580**. Le choix de l'API GPU est déjà arrêté et n'est pas re-benchmarké pendant la qualification.
 
-## Flotte opérationnelle candidate — exactement trois modèles
+## Flotte opérationnelle — exactement trois modèles
 
 | Alias logique | Runtime | Quantification | Rôle principal |
 |---|---|---|---|
@@ -18,42 +18,34 @@ Les trois modèles sont `required: true` et constituent l'intégralité du routa
 
 ## Challenger local du spécialiste DevOps
 
-La sélection du spécialiste doit être confrontée à :
+La sélection du **modèle spécialiste** peut être confrontée à :
 
 ```text
 granite-devops -> granite4.2:8b-q4_K_M
 ```
 
-Granite est un **challenger de benchmark**, pas un quatrième modèle routé. Il reste `routing_active: false`, ne sert jamais de fallback et ne peut pas être promu automatiquement.
-
-La comparaison est obligatoire avant une décision humaine finale sur le spécialiste DevOps. Elle cible notamment :
-
-- coding ;
-- tool-calling natif ;
-- réparation après erreur d'outil ;
-- erreurs de protocole ;
-- latence et débit ;
-- adéquation VRAM B580.
+Granite est un challenger de modèle, pas un quatrième modèle routé, pas un fallback et pas un candidat de backend. Il reste `routing_active: false` et ne peut pas être promu automatiquement.
 
 ## Invariants
 
 - aucun appel LLM cloud pendant la qualification ;
-- aucun téléchargement implicite pendant les benchmarks ;
+- Vulkan est l'unique accélération GPU LLM supportée sur la B580 ;
+- aucune re-comparaison d'API GPU ;
+- aucun téléchargement implicite pendant les tests de qualification ;
 - exactement trois modèles routés dans le HARD-40M ;
-- Granite est évalué séparément comme challenger local ;
+- Granite est évalué séparément comme challenger de modèle ;
 - quantification attendue Q4_K_M ;
-- contexte benchmark nominal : **8192 tokens** ;
+- contexte qualification nominal : **8192 tokens** ;
 - contexte HARD-40M 16384 : stress ciblé ;
-- contexte OpenClaw full-agent nominal : **16384 tokens**, contrat distinct du benchmark ;
+- contexte OpenClaw full-agent nominal : **16384 tokens**, contrat distinct ;
 - aucune promotion automatique à 32768 ;
 - aucun seuil modifié pour fabriquer un PASS ;
-- aucune promotion automatique de modèle, backend, catalogue ou V1 ;
-- toute décision Ministral/Granite est humaine et fondée sur preuve ;
+- aucune promotion automatique de modèle, profil runtime, catalogue ou V1 ;
 - preuves brutes conservées hors Git ;
-- toute dérive modèle/backend/runtime/pilote invalide la réutilisation automatique d'une preuve ;
+- toute dérive modèle/runtime/pilote invalide la réutilisation automatique d'une preuve ;
 - HARD-40M complet : **2400 s maximum**.
 
-## 1. Installation de la flotte routée
+## 1. Installation
 
 ```powershell
 .\menu.ps1 -Action install-full -DryRun
@@ -69,28 +61,16 @@ Pour une workstation déjà installée :
 
 Ce parcours installe les trois modèles routés du catalogue. Granite n'est pas téléchargé automatiquement.
 
-## 2. Installation explicite du challenger
-
-Uniquement pour la comparaison de sélection :
-
-```powershell
-ollama pull granite4.2:8b-q4_K_M
-```
-
-Sa présence locale ne modifie ni OpenClaw ni le routage.
-
-## 3. Vérification du runtime
+## 2. Vérification du runtime nominal Vulkan
 
 ```powershell
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
 ```
 
-Le smoke Ollama vérifie la disponibilité et l'identité runtime. `/api/ps` expose lorsque disponible taille chargée, `size_vram` et contexte réellement alloué. Une résidence GPU complète n'est jamais supposée sans mesure.
+Le contrôle doit confirmer la B580, les versions verrouillées, Ollama sur loopback et la présence exacte des trois modèles. Les métriques de résidence GPU, débit et contexte réellement alloué sont des observations ; elles ne changent pas la décision backend.
 
-Sous Windows, les chemins sensibles utilisent le runtime Python géré OPENCLAW_LOCAL.
-
-## 4. Gate OpenClaw E2E
+## 3. Gate OpenClaw E2E nominal
 
 ```powershell
 .\menu.ps1 -Action e2e -DryRun
@@ -104,9 +84,10 @@ Le gate doit prouver notamment :
 3. un vrai appel d'outil avec le spécialiste DevOps ;
 4. une erreur d'outil contrôlée suivie d'une réparation ;
 5. trois exécutions stables ;
-6. aucune dépendance LLM cloud nominale.
+6. aucune dépendance LLM cloud nominale ;
+7. aucun fallback silencieux de provider ou de transport.
 
-## 5. HARD-40M des trois modèles routés
+## 4. HARD-40M des trois modèles routés
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
@@ -120,9 +101,9 @@ La matrice contient **30 cas** :
 - 24 cas à 8192 tokens ;
 - 6 cas à 16384 tokens ;
 - exactement trois modèles requis ;
-- les scénarios sont définis par `devops-v2` et `qualification_policy.yaml`.
+- scénarios définis par `devops-v2` et `qualification_policy.yaml`.
 
-Granite **n'entre pas dans ces 30 cas**. Le challenger est une preuve de sélection distincte et ne peut pas remplacer un échec d'un modèle de la flotte active dans le gate principal.
+Granite **n'entre pas dans ces 30 cas**. Il ne peut pas remplacer un échec d'un modèle routé.
 
 ### Qwen reasoning
 
@@ -154,23 +135,53 @@ cas individuel          :  210 s maximum
 
 Un timeout, une erreur API ou une sortie tronquée ne sont jamais convertis en PASS.
 
+## 5. Profil B580 hybride Vulkan
+
+Le runtime géré llama.cpp/Vulkan est validé avec :
+
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup -DryRun
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+```
+
+Puis le profil hybride :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Ce contrôle ne compare pas Vulkan à une autre API. Il prouve que la répartition retenue fonctionne :
+
+```text
+qwen-max        -> Ollama/Vulkan
+gemma-deep      -> llama.cpp/Vulkan
+devstral-devops -> llama.cpp/Vulkan
+image/PDF       -> Ollama/Vulkan
+```
+
+Le gate hybride doit confirmer le provider réellement utilisé agent par agent, le tool-calling Ministral/Vulkan, la réparation après erreur et trois runs stables.
+
 ## 6. Comparaison Ministral 3 Reasoning vs Granite 4.2
 
-Le protocole de sélection est séparé du HARD-40M afin de ne pas transformer le challenger en quatrième modèle opérationnel.
+Cette étape concerne uniquement le **choix du modèle spécialiste DevOps**.
 
-Dry-run :
+Installation explicite du challenger :
+
+```powershell
+ollama pull granite4.2:8b-q4_K_M
+```
+
+Dry-run puis mesure réelle :
 
 ```powershell
 .\scripts\windows\23_compare_model_challenger.ps1 -DryRun
-```
-
-Mesure réelle :
-
-```powershell
 .\scripts\windows\23_compare_model_challenger.ps1
 ```
 
-Contrat par défaut :
+Contrat :
 
 ```text
 incumbent   : devstral-devops / Ministral 3 14B Reasoning
@@ -180,32 +191,9 @@ répétitions : 3
 protocole   : native_tool_calling_v1
 ```
 
-Chaque répétition exerce le protocole d'outils natif puis une réparation après erreur contrôlée. Les métriques contractuelles incluent :
+Les métriques contractuelles incluent tool intent, réparation, erreurs de protocole, durée, débit et résidence GPU lorsque mesurable.
 
-- `tool_intent_pass_rate` ;
-- `tool_repair_pass_rate` ;
-- `protocol_error_count` ;
-- `median_wall_ms` ;
-- `median_tokens_per_second` ;
-- `median_gpu_residency_ratio` lorsque mesurable.
-
-Le contenu brut des réponses n'a pas besoin d'être persisté. Les preuves structurées doivent suffire pour l'audit et la décision humaine.
-
-Preuve :
-
-```text
-benchmarks/results/tool_calling_challenger_*.json
-```
-
-Le contrat impose :
-
-```text
-automatic_promotion: false
-human_decision_required: true
-evidence_required: true
-```
-
-Même si Granite domine les répétitions, aucun fichier de routage n'est modifié automatiquement.
+Même si Granite domine, aucun fichier de routage n'est modifié automatiquement. La décision finale reste humaine.
 
 ## 7. Identité exacte des modèles
 
@@ -221,9 +209,9 @@ Après un gate complet PASS, cette identité peut être promue vers :
 state/qualification/qualified_model_identity.json
 ```
 
-La promotion de cette identité est autorisée **uniquement après un gate complet PASS**. Si l'identité exacte, le digest, la quantification ou un autre verrou matériel/runtime dérive ensuite, `verify` doit considérer l'état comme `INVALIDATED` et exiger une nouvelle qualification complète.
+Cette promotion est autorisée **uniquement après un gate complet PASS**. Une dérive d'identité, digest, quantification ou verrou runtime/pilote place l'identité qualifiée dans l'état `INVALIDATED` et exige une nouvelle qualification complète. Cette opération n'entraîne **aucune promotion automatique de backend** ni de V1.
 
-Cette opération n'entraîne aucune promotion automatique de backend, de challenger ou de V1. Le mode `-Quick` ne promeut jamais l'identité modèle.
+Le mode `-Quick` ne promeut jamais l'identité modèle.
 
 ## 8. Diagnostic Quick
 
@@ -232,29 +220,30 @@ Cette opération n'entraîne aucune promotion automatique de backend, de challen
 .\menu.ps1 -Action qualification -Quick
 ```
 
-Quick est un diagnostic et ne remplace ni HARD-40M ni la comparaison Ministral/Granite.
+Quick est un diagnostic. Il ne remplace ni HARD-40M, ni E2E, ni les preuves matérielles réelles.
 
-## 9. Comparaison des backends
-
-Backends locaux candidats :
-
-- `ollama-vulkan` ;
-- `llama-cpp-sycl` ;
-- `llama-cpp-vulkan` ;
-- profil `b580-hybrid`.
-
-Comparer autant que possible même modèle, même quantification, même contexte et mêmes prompts. Aucun backend n'est auto-promu.
-
-La comparaison de **modèles** Ministral/Granite et la comparaison de **backends** sont deux décisions distinctes.
-
-## 10. Golden Projects et projet représentatif
+## 9. Golden Projects et projet représentatif
 
 ```powershell
 .\menu.ps1 -Action golden -DryRun
 .\menu.ps1 -Action golden
 ```
 
-Les Golden Projects complètent les benchmarks mais ne remplacent pas un projet réel de `INTAKE_READY` à `COMPLETE` avec revue humaine, multimodalité réelle, Artifact Exchange, télémétrie et package final.
+Les Golden Projects complètent la qualification mais ne remplacent pas un projet réel de `INTAKE_READY` à `COMPLETE` avec revue humaine, multimodalité réelle, Artifact Exchange, télémétrie et package final.
+
+## 10. Redémarrage, récupération et endurance
+
+Avant un GO usage quotidien, vérifier aussi sur la workstation réelle :
+
+- redémarrage Windows ;
+- redémarrage Ollama/OpenClaw ;
+- récupération du runtime llama.cpp/Vulkan géré ;
+- absence de port orphelin ;
+- rollback vers `ollama-vulkan` ;
+- reprise d'un projet existant ;
+- plusieurs cycles d'agents et changements de modèle ;
+- stabilité mémoire et absence de fuite évidente ;
+- conservation correcte des preuves/logs.
 
 ## Verdicts
 
@@ -268,11 +257,11 @@ Le HARD-40M ne termine pas sous 2400 s : échec du protocole pour cette configur
 
 ### `READY_FOR_MANUAL_QUALIFICATION`
 
-Les gates automatiques passent. Restent la revue humaine, les backends, la multimodalité, les Golden Projects, le projet représentatif et la décision Ministral/Granite.
+Les gates automatiques passent. Restent les validations matérielles finales, Golden Projects, projet représentatif et revue humaine.
 
 ### `MEASURED_FOR_MANUAL_SELECTION`
 
-La comparaison Ministral/Granite est complète. Ce verdict signifie uniquement que les preuves nécessaires à une décision humaine sont disponibles.
+La comparaison Ministral/Granite est complète. Ce verdict signifie uniquement que les preuves nécessaires à une décision humaine sur le **modèle spécialiste** sont disponibles.
 
 ## Preuves V1 minimales
 
@@ -281,13 +270,14 @@ La comparaison Ministral/Granite est complète. Ce verdict signifie uniquement q
 - pilote GPU et inventaire matériel ;
 - identité/digest/quantification des trois modèles routés ;
 - preuve HARD-40M ;
-- preuve OpenClaw E2E ;
-- preuve Ministral/Granite de sélection ;
-- comparaison backend ;
+- preuve OpenClaw E2E nominal ;
+- preuve runtime llama.cpp/Vulkan et E2E hybride si ce profil est retenu pour l'usage ;
+- preuve Ministral/Granite si la décision de modèle reste ouverte ;
 - Golden Projects ;
 - multimodalité réelle ;
 - télémétrie réelle ;
 - package du projet représentatif ;
+- redémarrage/récupération/endurance ;
 - limites observées ;
 - approbation humaine.
 

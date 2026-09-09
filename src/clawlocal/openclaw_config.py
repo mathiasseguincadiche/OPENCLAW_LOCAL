@@ -5,8 +5,7 @@ from typing import Any
 
 from clawlocal.config import load_contract
 
-SUPPORTED_BACKENDS = ("ollama-vulkan", "llama-cpp-sycl", "b580-hybrid")
-INTEL_SYCL_PROVIDER_ID = "intel-sycl"
+SUPPORTED_BACKENDS = ("ollama-vulkan", "b580-hybrid")
 INTEL_VULKAN_PROVIDER_ID = "intel-vulkan"
 SYSTEM_AGENT_ID = "chef-operations"
 OPTIONAL_BOOTSTRAP_FILES = ["SOUL.md", "USER.md", "HEARTBEAT.md", "IDENTITY.md"]
@@ -15,11 +14,6 @@ OPTIONAL_BOOTSTRAP_FILES = ["SOUL.md", "USER.md", "HEARTBEAT.md", "IDENTITY.md"]
 def _runtime_id(model: dict[str, Any], backend_id: str) -> str:
     if backend_id == "ollama-vulkan":
         return str(model["runtime_id"])
-    if backend_id == "llama-cpp-sycl":
-        runtime_id = model.get("sycl_runtime_id")
-        if not runtime_id:
-            raise ValueError("sycl_runtime_id absent pour un modèle local requis")
-        return str(runtime_id)
     if backend_id == "llama-cpp-vulkan":
         runtime_id = model.get("vulkan_runtime_id")
         if not runtime_id:
@@ -53,8 +47,6 @@ def _backend_ref(
     resolved_backend = _resolved_model_backend(alias, backends, backend_id)
     if resolved_backend == "ollama-vulkan":
         return f"ollama/{_runtime_id(model, resolved_backend)}"
-    if resolved_backend == "llama-cpp-sycl":
-        return f"{INTEL_SYCL_PROVIDER_ID}/{_runtime_id(model, resolved_backend)}"
     if resolved_backend == "llama-cpp-vulkan":
         return f"{INTEL_VULKAN_PROVIDER_ID}/{_runtime_id(model, resolved_backend)}"
     raise ValueError(f"Backend modèle non supporté: {resolved_backend}")
@@ -121,10 +113,6 @@ def _ollama_models(catalog: dict[str, Any]) -> list[dict[str, Any]]:
                 "id": model["runtime_id"],
                 "name": model["runtime_id"],
                 "input": list(model.get("input", ["text"])),
-                # The direct B580 benchmark remains 8K. The managed OpenClaw
-                # full-agent path uses the separately declared orchestration
-                # window so framework/system/tool overhead is not confused with
-                # benchmark promotion.
                 "contextWindow": context_tokens,
                 "contextTokens": context_tokens,
                 "params": {
@@ -214,15 +202,6 @@ def _model_providers(
     configured = backends["backends"]
     if backend_id == "ollama-vulkan":
         return providers
-    if backend_id == "llama-cpp-sycl":
-        providers[INTEL_SYCL_PROVIDER_ID] = _llamacpp_provider(
-            catalog,
-            configured["llama-cpp-sycl"],
-            "llama-cpp-sycl",
-            INTEL_SYCL_PROVIDER_ID,
-            "intel-sycl-local",
-        )
-        return providers
     if backend_id == "b580-hybrid":
         profile = configured["b580-hybrid"]
         vulkan_aliases = {
@@ -246,7 +225,7 @@ def build_openclaw_patch(
     platform_root: Path,
     backend_id: str = "ollama-vulkan",
 ) -> dict[str, Any]:
-    """Build the deterministic OpenClaw patch for one explicit local backend profile."""
+    """Build the deterministic OpenClaw patch for one explicit local Vulkan profile."""
     if backend_id not in SUPPORTED_BACKENDS:
         raise ValueError(
             f"Backend OpenClaw invalide: {backend_id}; "
@@ -304,19 +283,11 @@ def build_openclaw_patch(
             "providers": _model_providers(catalog, backends, backend_id),
         },
         "agents": {
-            # OpenClaw 2026.9.x canonicalizes managed multi-agent rosters under
-            # explicit ownership. Legacy default=true markers are incompatible
-            # with that mode and must not be emitted by the managed patch.
             "ownership": "explicit",
             "defaults": {
-                # Preserve the former chef-operations default as an explicit
-                # ambient/session owner for system operations and legacy rows.
                 "systemAgent": {"agentId": SYSTEM_AGENT_ID},
                 "sessionStore": {"agentId": SYSTEM_AGENT_ID},
                 "skipBootstrap": True,
-                # These files remain present in every managed workspace but are
-                # not automatically injected. Their normative runtime content is
-                # already represented by AGENTS.md + the compact runtime contract.
                 "skipOptionalBootstrapFiles": OPTIONAL_BOOTSTRAP_FILES,
                 "bootstrapMaxChars": 6500,
                 "bootstrapTotalMaxChars": 8000,
@@ -339,8 +310,6 @@ def build_openclaw_patch(
         },
         "tools": {
             "profile": tool_policy["security_defaults"]["profile"],
-            # Structured Tool Search keeps the authorized catalog reachable while
-            # deferring non-core schemas until an agent actually needs them.
             "toolSearch": {
                 "enabled": True,
                 "mode": "tools",

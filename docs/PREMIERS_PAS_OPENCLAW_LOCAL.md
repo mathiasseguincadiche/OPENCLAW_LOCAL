@@ -23,9 +23,11 @@ Vous
  |              +--> gemma-deep
  |              +--> devstral-devops
  |
- +--> runtimes locaux
+ +--> runtimes locaux Vulkan
         +--> Ollama/Vulkan
-        +--> llama.cpp/SYCL ou Vulkan en qualification
+        +--> llama.cpp/Vulkan
+                 |
+                 +--> b580-hybrid
 ```
 
 ### Flotte locale active V2
@@ -38,7 +40,7 @@ Vous
 
 Le nom `devstral-devops` est conservé comme **alias de compatibilité** ; le modèle réellement utilisé en V2 est Ministral 3 14B Reasoning Q4_K_M.
 
-Un challenger local `granite-devops -> granite4.2:8b-q4_K_M` existe pour le benchmark comparatif. Il n'est pas routé, n'est pas un fallback et ne peut pas être promu automatiquement.
+Un challenger local `granite-devops -> granite4.2:8b-q4_K_M` existe pour une comparaison de sélection séparée. Il n'est pas routé, n'est pas un fallback et ne peut pas être promu automatiquement.
 
 ### Contextes
 
@@ -129,14 +131,14 @@ Avant une utilisation sérieuse, le système doit prouver :
 - réparation après erreur d'outil ;
 - aucune route LLM cloud.
 
-Le E2E prouve le fonctionnement. La qualification mesure ensuite les performances réelles :
+La qualification complète reste disponible lorsque le contrat de release l'exige :
 
 ```powershell
 .\menu.ps1 -Action qualification -DryRun
 .\menu.ps1 -Action qualification
 ```
 
-Les résultats d'une ancienne flotte sont historiques et **ne qualifient pas Architecture V2**.
+Les résultats d'une ancienne flotte sont historiques et ne qualifient pas automatiquement Architecture V2.
 
 ## 5. Actions principales du menu
 
@@ -150,16 +152,19 @@ Les résultats d'une ancienne flotte sont historiques et **ne qualifient pas Arc
 | `configure-openclaw` | génération/application de la configuration OpenClaw |
 | `deploy-agents` | redéploiement des huit workspaces |
 | `verify` | smoke local Ollama |
-| `benchmark` | benchmark local |
+| `benchmark` | benchmark local lorsque requis |
 | `inventory` | inventaire matériel/runtime |
 | `e2e` | agents + Gateway + outils + réparation |
-| `qualification` | qualification matérielle complète |
-| `intel-sycl-*` | qualification du backend SYCL |
-| `intel-vulkan-*` | qualification du backend Vulkan |
+| `qualification` | qualification contractuelle complète |
+| `intel-vulkan-setup` | installer/démarrer le runtime llama.cpp/Vulkan géré |
+| `intel-vulkan-verify` | vérifier le runtime Vulkan sur la B580 |
+| `intel-vulkan-stop` | arrêter le runtime Vulkan géré |
 | `golden` | golden projects pré-V1 |
 | `logs` | derniers logs et preuves |
 
 `-DryRun` prévisualise une action sans mutation lorsqu'il est supporté.
+
+Le choix GPU LLM est **Vulkan uniquement**. Il n'existe pas d'action opérateur destinée à comparer une autre API GPU au chemin Vulkan.
 
 ## 6. Premier échange avec un agent
 
@@ -297,9 +302,27 @@ Benchmarks : `<REPO>\benchmarks\results`
 
 Les workspaces agents sont des snapshots ; ils ne sont pas la source de vérité canonique.
 
-## 14. Backend B580 hybride
+## 14. Backend B580 hybride Vulkan
 
-Le profil candidat `b580-hybrid` répartit les modèles entre backends locaux selon `runtime_versions.json` et `runtime_backends.yaml`. Il ne devient pas nominal automatiquement. Toute performance doit être remesurée avec les modèles V2.
+Le profil `b580-hybrid` répartit les modèles uniquement entre moteurs Vulkan locaux :
+
+```text
+qwen-max        -> Ollama/Vulkan
+gemma-deep      -> llama.cpp/Vulkan
+devstral-devops -> llama.cpp/Vulkan
+image/PDF       -> Ollama/Vulkan
+```
+
+Pour l'utiliser :
+
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Le but de la vérification matérielle est de confirmer la stabilité de ce parcours sur la workstation réelle, pas de rouvrir le choix de l'API GPU.
 
 ## 15. Recherche Web et local-only
 
@@ -330,7 +353,8 @@ Puis consulter `docs/TROUBLESHOOTING.md`.
 - promouvoir 32K sans qualification dédiée ;
 - ajouter un quatrième modèle routé ou un fallback caché ;
 - utiliser un modèle externe pour masquer une panne locale ;
-- considérer un E2E comme une qualification de performance ;
+- réintroduire une API GPU retirée dans le runtime actif ;
+- considérer un E2E comme une preuve de performance matérielle ;
 - déclarer V1 avant les preuves matérielles et l'approbation humaine.
 
 ## 18. Parcours recommandé après fusion V2
@@ -339,15 +363,17 @@ Puis consulter `docs/TROUBLESHOOTING.md`.
 git checkout main
 git pull
 
-.\menu.ps1 -Action models -DryRun
-.\menu.ps1 -Action models
-.\menu.ps1 -Action configure-openclaw -DryRun
-.\menu.ps1 -Action configure-openclaw
+.\menu.ps1 -Action install-full -DryRun
+.\menu.ps1 -Action install-full
 .\menu.ps1 -Action audit
 .\menu.ps1 -Action verify
-.\menu.ps1 -Action e2e
-.\menu.ps1 -Action qualification -DryRun
-.\menu.ps1 -Action qualification
+.\menu.ps1 -Action intel-vulkan-setup -DryRun
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action e2e -Backend b580-hybrid
 ```
 
-Ne poursuivre vers les backends candidats, challenger Granite, Golden Projects et décision V1 qu'après conservation et revue des nouvelles preuves.
+Les gates supplémentaires de release restent distincts du choix du backend GPU. Aucun benchmark de comparaison entre API GPU n'est requis pour confirmer le parcours Vulkan décidé.

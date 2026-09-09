@@ -2,14 +2,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 Describe 'Golden projects pre-V1 operator path' {
-    It 'expose une action golden dans le menu avec le contrat 30 cas actuel' {
+    It 'expose une action golden dans le menu Vulkan-only' {
         $TestRepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
         $Menu = Get-Content -Raw -LiteralPath (Join-Path $TestRepoRoot 'menu.ps1')
 
         $Menu | Should -Match "'golden'"
         $Menu | Should -Match '21_run_golden_projects\.ps1'
-        $Menu | Should -Match '30 cas HARD-40M'
         $Menu | Should -Match 'reset \+ prepare \+ execute \+ evaluate'
+        $Menu | Should -Match 'Ollama/Vulkan \+ llama\.cpp/Vulkan, 100 % local'
+        $Menu | Should -Match "ValidateSet\('ollama-vulkan', 'b580-hybrid'\)"
         $Menu | Should -Not -Match '36 cas au lieu de 72'
     }
 

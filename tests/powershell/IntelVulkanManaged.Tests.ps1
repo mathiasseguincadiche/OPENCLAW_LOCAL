@@ -13,6 +13,9 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:VulkanHelper = Get-Content -Raw -LiteralPath (
             Join-Path $script:HybridRepoRoot 'scripts\windows\lib\intel_vulkan.ps1'
         )
+        $script:B580Helper = Get-Content -Raw -LiteralPath (
+            Join-Path $script:HybridRepoRoot 'scripts\windows\lib\intel_b580.ps1'
+        )
         $script:HybridConfigure = Get-Content -Raw -LiteralPath (
             Join-Path $script:HybridRepoRoot 'scripts\windows\08_configure_openclaw.ps1'
         )
@@ -24,7 +27,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         )
     }
 
-    It 'verrouille le runtime Vulkan mesuré sur un endpoint distinct de SYCL' {
+    It 'verrouille le runtime Vulkan géré sur son endpoint local' {
         [string]$script:HybridRuntime.llama_cpp_vulkan.release | Should -Be 'b10621'
         [string]$script:HybridRuntime.llama_cpp_vulkan.asset |
             Should -Be 'llama-b10621-bin-win-vulkan-x64.zip'
@@ -44,7 +47,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
             )
     }
 
-    It 'gère PID intégrité B580 et mono-modèle sans réutiliser un port non suivi' {
+    It 'gère intégrité B580 mono-modèle et réutilise les blobs GGUF Ollama' {
         $script:VulkanHelper | Should -Match 'Get-FileHash'
         $script:VulkanHelper | Should -Match 'runtime-manifest\.json'
         $script:VulkanHelper | Should -Match 'server\.json'
@@ -56,35 +59,40 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:VulkanHelper | Should -Match "'--device'"
         $script:VulkanHelper | Should -Match 'LLAMA_ARG_N_PARALLEL'
         $script:VulkanHelper | Should -Match 'Arc.*B580'
-        $script:VulkanHelper | Should -Match 'Resolve-IntelSyclModelPath'
-        $script:VulkanHelper | Should -Match 'AllowDownload'
+        $script:VulkanHelper | Should -Match 'Resolve-OllamaGgufPath'
         $script:VulkanHelper | Should -Match 'Invoke-IntelVulkanModelUnload'
         $script:VulkanHelper | Should -Match 'Get-IntelVulkanManagedModel'
+        $script:B580Helper | Should -Match 'Resolve-OllamaGgufPath'
+        $script:B580Helper | Should -Match 'ollama show'
     }
 
-    It 'encode le profil Qwen Ollama et Gemma 4 Ministral Vulkan sans auto-promotion' {
+    It 'encode le profil Qwen Ollama et Gemma Ministral llama.cpp en Vulkan' {
         $script:HybridBackends | Should -Match 'b580-hybrid:'
         $script:HybridBackends | Should -Match 'qwen-max:\s*ollama-vulkan'
         $script:HybridBackends | Should -Match 'gemma-deep:\s*llama-cpp-vulkan'
         $script:HybridBackends | Should -Match 'devstral-devops:\s*llama-cpp-vulkan'
-        $script:HybridBackends | Should -Match 'recommended_candidate:\s*b580-hybrid'
+        $script:HybridBackends | Should -Match 'recommended_profile:\s*b580-hybrid'
+        $script:HybridBackends | Should -Match 'gpu_llm_acceleration:\s*vulkan'
+        $script:HybridBackends | Should -Match 'backend_choice_locked:\s*true'
         $script:HybridBackends | Should -Match 'default_backend:\s*ollama-vulkan'
         $script:HybridBackends | Should -Match 'no_automatic_promotion:\s*true'
         $script:HybridBackends | Should -Match 'rollback_backend:\s*ollama-vulkan'
         $script:HybridBackends | Should -Match 'nominal_context_tokens:\s*8192'
     }
 
-    It 'rend configuration et E2E conscients du provider hybride sans cloud silencieux' {
-        $script:HybridConfigure | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid'\)"
-        $script:HybridConfigure | Should -Match 'Qwen 3\.5->Ollama, Gemma 4/Ministral Reasoning->intel-vulkan'
+    It 'limite les profils OpenClaw au nominal et à l hybride Vulkan' {
+        $script:HybridConfigure | Should -Match "ValidateSet\('ollama-vulkan', 'b580-hybrid'\)"
         $script:HybridConfigure | Should -Match 'INTEL_VULKAN_API_KEY'
-        $script:HybridE2E | Should -Match "ValidateSet\('ollama-vulkan', 'llama-cpp-sycl', 'b580-hybrid'\)"
+        $script:HybridConfigure | Should -Match 'llama_cpp_vulkan'
+        $script:HybridE2E | Should -Match "ValidateSet\('ollama-vulkan', 'b580-hybrid'\)"
         $script:HybridE2E | Should -Match 'Get-AgentPrimaryModelRef'
         $script:HybridE2E | Should -Match 'provider_by_agent'
         $script:HybridE2E | Should -Match 'intel-vulkan/hf\.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M'
         $script:HybridE2E | Should -Match 'vulkan-tool-ok\.txt'
         $script:HybridE2E | Should -Match 'Test-ExpectedProvider'
         $script:HybridE2E | Should -Match 'Test-GatewayTransport'
+        $script:HybridE2E | Should -Match "gpu_llm_acceleration = 'vulkan'"
+        $script:HybridE2E | Should -Match 'backend_choice_locked = \$true'
     }
 
     It 'valide le succès applicatif, affiche un heartbeat et évite exec unattended' {
@@ -145,7 +153,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $script:HybridE2E | Should -Match 'progression visible pour chaque appel long'
     }
 
-    It 'expose setup verify stop et le profil hybride dans le menu' {
+    It 'expose uniquement setup verify stop et le profil hybride Vulkan dans le menu' {
         foreach ($Action in @('intel-vulkan-setup', 'intel-vulkan-verify', 'intel-vulkan-stop')) {
             $script:HybridMenu | Should -Match ([regex]::Escape("'$Action'"))
             $Output = & pwsh -NoLogo -NoProfile -File (Join-Path $script:HybridRepoRoot 'menu.ps1') `
@@ -157,7 +165,7 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         $Configure = & pwsh -NoLogo -NoProfile -File (Join-Path $script:HybridRepoRoot 'menu.ps1') `
             -Action configure-openclaw -Backend b580-hybrid -DryRun 2>&1
         $LASTEXITCODE | Should -Be 0
-        ($Configure -join "`n") | Should -Match 'Qwen 3\.5 -> Ollama; Gemma 4 \+ Ministral 3 Reasoning -> intel-vulkan'
+        ($Configure -join "`n") | Should -Match 'Qwen 3\.5.*Ollama/Vulkan.*Gemma 4.*Ministral.*llama\.cpp/Vulkan'
 
         $E2E = & pwsh -NoLogo -NoProfile -File (Join-Path $script:HybridRepoRoot 'menu.ps1') `
             -Action e2e -Backend b580-hybrid -DryRun 2>&1
@@ -165,5 +173,6 @@ Describe 'Intel Vulkan managed B580 hybrid runtime' {
         ($E2E -join "`n") | Should -Match 'mixed-local'
         ($E2E -join "`n") | Should -Match 'probes ciblés 300s'
         ($E2E -join "`n") | Should -Match 'réparation multi-outils 600s'
+        ($E2E -join "`n") | Should -Match 'Vulkan est le seul chemin GPU LLM'
     }
 }

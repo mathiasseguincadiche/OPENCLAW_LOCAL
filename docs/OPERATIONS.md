@@ -2,7 +2,7 @@
 
 ## Objectif
 
-Ce runbook couvre l'exploitation quotidienne de `OPENCLAW_LOCAL` sur Windows 11. Le principe V2 est : **diagnostiquer et réparer le parcours local, sans escalade vers un modèle LLM cloud**.
+Ce runbook couvre l'exploitation quotidienne de `OPENCLAW_LOCAL` sur Windows 11. Le principe V2 est : **diagnostiquer et réparer le parcours local Vulkan, sans escalade vers un modèle LLM cloud**.
 
 ## Routine rapide
 
@@ -22,9 +22,21 @@ gemma-deep        -> gemma4:12b-it-q4_K_M
 devstral-devops   -> hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-`devstral-devops` reste l'alias du spécialiste DevOps ; son runtime V2 est Ministral 3 14B Reasoning. Granite 4.2 8B est un challenger local séparé et non routé.
+`devstral-devops` reste l'alias du spécialiste DevOps ; son runtime V2 est Ministral 3 14B Reasoning. Granite 4.2 8B est un challenger de modèle local séparé et non routé.
 
-Le benchmark nominal reste 8192 tokens. Le full-agent OpenClaw nominal utilise 16384 tokens afin d'absorber le système, les outils et la réserve. Ces deux contrats ne doivent pas être confondus et aucune promotion 32K n'est automatique.
+Le HARD-40M nominal reste 8192 tokens. Le full-agent OpenClaw nominal utilise 16384 tokens afin d'absorber le système, les outils et la réserve. Ces deux contrats ne doivent pas être confondus et aucune promotion 32K n'est automatique.
+
+## Accélération B580
+
+Le choix GPU est verrouillé : **Vulkan uniquement**.
+
+```text
+ollama-vulkan    : profil nominal / rollback
+llama-cpp-vulkan : runtime géré interne
+b580-hybrid      : profil OpenClaw 100 % Vulkan
+```
+
+Aucune routine d'exploitation ne doit relancer une comparaison d'API GPU. Les métriques matérielles servent à vérifier le fonctionnement et les limites du chemin Vulkan retenu.
 
 ## Racine et stockage
 
@@ -93,7 +105,7 @@ Get-Content -LiteralPath $latest.FullName -Tail 100
 
 Les transcripts complètent les preuves structurées ; ils ne les remplacent pas. Avant partage, retirer tout secret, token, `.env` ou document privé.
 
-## E2E après changement de modèle ou backend
+## E2E nominal
 
 ```powershell
 .\menu.ps1 -Action e2e -DryRun
@@ -112,6 +124,26 @@ Le E2E doit prouver :
 
 Le spécialiste DevOps est text-only. Les PDF/images sont ingérés par les modèles multimodaux locaux Qwen/Gemma puis transmis sous forme textuelle/structurée au spécialiste.
 
+## Runtime llama.cpp/Vulkan et profil hybride
+
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup -DryRun
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Le profil hybride reste 100 % local et 100 % Vulkan : Qwen sur Ollama/Vulkan, Gemma 4 + Ministral sur llama.cpp/Vulkan, image/PDF sur Ollama/Vulkan.
+
+Rollback :
+
+```powershell
+.\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
+.\menu.ps1 -Action intel-vulkan-stop
+```
+
 ## Qualification après migration
 
 ```powershell
@@ -119,13 +151,15 @@ Le spécialiste DevOps est text-only. Les PDF/images sont ingérés par les mod�
 .\menu.ps1 -Action qualification
 ```
 
-La migration V2 impose une **nouvelle qualification complète**. Les preuves historiques restent utiles pour le diagnostic mais ne qualifient ni les nouveaux runtimes ni leur backend.
+La migration V2 impose une **nouvelle qualification complète**. Les preuves historiques restent utiles pour le diagnostic mais ne qualifient pas automatiquement les nouveaux runtimes/modèles.
 
 Les seuils HARD-40M ne sont pas abaissés : 30 cas, dont 24 à 8K et 6 à 16K, et les trois modèles routés doivent réellement passer le protocole actif.
 
+Le choix Vulkan n'est pas requalifié comme compétition ; le run prouve que la configuration choisie est utilisable sur la workstation réelle.
+
 ## Challenger Granite
 
-Comparaison explicite :
+Comparaison explicite de modèles :
 
 ```powershell
 ollama pull granite4.2:8b-q4_K_M
@@ -134,41 +168,6 @@ ollama pull granite4.2:8b-q4_K_M
 ```
 
 Cette comparaison ne modifie pas le routage. Toute éventuelle substitution de modèle exige une décision humaine et une PR dédiée.
-
-## Backends Intel Arc
-
-Chemins disponibles :
-
-```text
-ollama-vulkan    : nominal / rollback
-llama-cpp-sycl   : candidat
-llama-cpp-vulkan : candidat
-b580-hybrid      : profil local mixte candidat
-```
-
-Cycle candidat :
-
-```powershell
-.\menu.ps1 -Action intel-sycl-setup
-.\menu.ps1 -Action intel-sycl-verify
-.\menu.ps1 -Action intel-sycl-compare -Quick
-
-.\menu.ps1 -Action intel-vulkan-setup
-.\menu.ps1 -Action intel-vulkan-verify
-
-.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
-.\menu.ps1 -Action e2e -Backend b580-hybrid
-```
-
-Aucun résultat historique ne doit être utilisé pour promouvoir automatiquement `b580-hybrid` avec la flotte V2.
-
-Rollback :
-
-```powershell
-.\menu.ps1 -Action configure-openclaw -Backend ollama-vulkan
-.\menu.ps1 -Action intel-vulkan-stop
-.\menu.ps1 -Action intel-sycl-stop
-```
 
 ## Prendre en charge un projet
 
@@ -222,13 +221,14 @@ Pour une donnée actuelle : recherche/fetch Web, validation des sources, puis sy
 3. `OPENCLAW_LOCAL_ROOT`, `OLLAMA_MODELS`, `OPENCLAW_STATE_DIR` ;
 4. `model_catalog.yaml` et `ollama list` ;
 5. endpoint Ollama loopback ;
-6. `openclaw config validate --json` ;
-7. `openclaw agents list --json` ;
-8. Gateway ;
-9. `verify` puis `e2e` ;
-10. dernier benchmark/qualification ;
-11. preuves projet/Web ;
-12. si le local reste en échec, corriger ou stopper : ne pas masquer la panne avec un modèle externe.
+6. device B580/Vulkan si le profil géré est utilisé ;
+7. `openclaw config validate --json` ;
+8. `openclaw agents list --json` ;
+9. Gateway ;
+10. `verify` puis `e2e` ;
+11. dernier run de qualification ;
+12. preuves projet/Web ;
+13. si le local reste en échec, corriger ou stopper : ne pas masquer la panne avec un modèle externe.
 
 ## Sauvegarde
 
@@ -252,7 +252,7 @@ foreach ($name in @('projects', 'state', 'proofs')) {
 
 ## Restauration
 
-1. arrêter Gateway et runtimes candidats si nécessaire ;
+1. arrêter Gateway et le runtime llama.cpp/Vulkan géré si nécessaire ;
 2. restaurer `projects/`, `state/` et les `proofs/` utiles depuis un backup cohérent ;
 3. ne jamais restaurer un runtime ancien sous un lock incompatible ;
 4. réinstaller/réparer le runtime depuis Git ;

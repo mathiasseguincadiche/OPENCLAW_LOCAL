@@ -51,11 +51,11 @@ Ces documents sont les références d'architecture, de contrats et d'exploitatio
 | mesurer les agents/backends en usage réel | [Télémétrie](TELEMETRY.md) |
 | comprendre la flotte OpenClaw et le routage | [Intégration OpenClaw](OPENCLAW_INTEGRATION.md) |
 | utiliser Internet en local-first | [Recherche Web Local-First](WEB_LOCAL_FIRST.md) |
-| comprendre Ollama/Vulkan et llama.cpp | [Backends locaux](RUNTIME_BACKENDS.md) |
-| exploiter et qualifier l'Intel Arc B580 via SYCL/Level Zero | [Intel Arc B580](INTEL_ARC_B580.md) |
+| comprendre Ollama/Vulkan et llama.cpp/Vulkan | [Backends locaux](RUNTIME_BACKENDS.md) |
+| exploiter et vérifier l'Intel Arc B580 via Vulkan | [Intel Arc B580](INTEL_ARC_B580.md) |
 | comprendre/qualifier les modèles | [Modèles locaux](MODELES_LOCAUX.md) |
-| comprendre l'escalade | [Routage hybride](ROUTAGE_HYBRIDE.md) |
-| contrôler les dépenses cloud | [FinOps](FINOPS.md) |
+| comprendre le routage local multi-backends | [Routage hybride](ROUTAGE_HYBRIDE.md) |
+| contrôler les dépenses cloud historiques/compatibilité | [FinOps](FINOPS.md) |
 | produire des schémas techniques | [Diagrammes](DIAGRAMMES.md) |
 | mesurer machine et modèles | [Benchmark](BENCHMARK.md) |
 | exécuter la qualification réelle | [Qualification](QUALIFICATION.md) |

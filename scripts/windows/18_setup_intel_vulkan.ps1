@@ -14,7 +14,6 @@ $Paths = Get-IntelVulkanPathSet -PlatformRoot $PlatformRoot -RuntimeLock $Runtim
 if ($DryRun) {
     Write-Host '[DRY-RUN] Installer/vérifier llama.cpp Vulkan b10621 géré.'
     Write-Host "[DRY-RUN] Endpoint=$($RuntimeLock.endpoint) models=$(@($RuntimeLock.managed_models) -join ',')"
-    Write-Host '[DRY-RUN] Arrêter le routeur SYCL suivi avant Vulkan pour éviter toute contention B580.'
     Write-Host '[DRY-RUN] Démarrer models_max=1, parallel=1, gpu_layers=auto, fit=on, contexte nominal 8K.'
     Write-Host '[DRY-RUN] Smoke Gemma 4 + Ministral 3 Reasoning puis unload explicite entre modèles.'
     Write-Host '[DRY-RUN] OpenClaw ne sera pas reconfiguré automatiquement.'
@@ -25,15 +24,12 @@ $ManagedPython = Enable-ClawLocalManagedPython -PlatformRoot $PlatformRoot
 Write-Host "OK  Runtime Python géré: $ManagedPython"
 $Binary = Install-IntelVulkanRuntime -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot
 
-$SyclLock = Get-IntelSyclRuntimeLock -RepoRoot $RepoRoot
-$SyclPaths = Get-IntelSyclPathSet -PlatformRoot $PlatformRoot -RuntimeLock $SyclLock
-$null = Stop-IntelSyclServer -StatePath $SyclPaths.ProcessState -Confirm:$false
-
 $Server = $null
 $Proof = [ordered]@{
-    schema_version = '1.1.0'
+    schema_version = '1.2.0'
     started_at = [DateTimeOffset]::UtcNow.ToString('o')
     backend = 'llama-cpp-vulkan'
+    accelerator = 'vulkan'
     endpoint = [string]$RuntimeLock.endpoint
     binary = $Binary
     release = [string]$RuntimeLock.release
@@ -43,7 +39,6 @@ $Proof = [ordered]@{
     context_tokens = [int]$RuntimeLock.context_tokens
     smoke = @()
     openclaw_modified = $false
-    promotion_allowed = $false
 }
 try {
     $Server = Start-IntelVulkanServer -RepoRoot $RepoRoot -PlatformRoot $PlatformRoot -Confirm:$false

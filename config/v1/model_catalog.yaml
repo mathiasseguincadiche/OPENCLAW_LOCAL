@@ -1,4 +1,4 @@
-schema_version: "2.0.0"
+schema_version: "2.1.0"
 platform_version: "0.2.0"
 policy:
   local_first: true
@@ -10,6 +10,7 @@ policy:
   no_hidden_small_model_fallback: true
   hardware_qualification_required_before_performance_claims: true
   target_hardware_profile: intel_arc_b580_12gb
+  gpu_llm_acceleration: vulkan
   nominal_context_tokens: 8192
   openclaw_agent_context_tokens: 16384
   openclaw_agent_context_is_benchmark_promotion: false
@@ -19,7 +20,6 @@ models:
   qwen-max:
     provider: ollama
     runtime_id: qwen3.5:9b-q4_K_M
-    sycl_runtime_id: qwen3.5:9b-q4_K_M
     vulkan_runtime_id: qwen3.5:9b-q4_K_M
     family: qwen
     class: local_max
@@ -33,12 +33,11 @@ models:
     nominal_context_tokens: 8192
     qualification_context_tokens: [8192, 16384]
     hardware_fit: unqualified_b580_12gb_candidate
-    context_policy: benchmark_before_raise
+    context_policy: qualify_before_raise
 
   gemma-deep:
     provider: ollama
     runtime_id: gemma4:12b-it-q4_K_M
-    sycl_runtime_id: gemma4:12b-it-q4_K_M
     vulkan_runtime_id: gemma4:12b-it-q4_K_M
     family: gemma4
     class: local_deep
@@ -52,12 +51,11 @@ models:
     nominal_context_tokens: 8192
     qualification_context_tokens: [8192, 16384]
     hardware_fit: unqualified_b580_12gb_candidate
-    context_policy: benchmark_before_raise
+    context_policy: qualify_before_raise
 
   devstral-devops:
     provider: ollama
     runtime_id: hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
-    sycl_runtime_id: hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
     vulkan_runtime_id: hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
     family: mistral3-reasoning
     class: local_specialist
@@ -78,7 +76,7 @@ models:
     source_quantization: Q4_K_M
     source_license: Apache-2.0
     multimodal_handoff: [qwen-max, gemma-deep]
-    context_policy: benchmark_before_raise
+    context_policy: qualify_before_raise
 
 benchmark_challengers:
   granite-devops:

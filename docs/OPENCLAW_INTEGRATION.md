@@ -6,12 +6,14 @@
 
 Les outils Web restent autorisés comme sources d'information. Ils ne changent pas le backend de raisonnement : les agents continuent d'utiliser la flotte locale.
 
+Sur l'Intel Arc B580, **Vulkan est l'unique accélération GPU LLM supportée**.
+
 ## Sources de vérité
 
 - `config/v1/runtime_versions.json` : versions des runtimes locaux ;
 - `config/v1/model_catalog.yaml` : exactement trois modèles locaux routés + challenger local séparé ;
 - `config/v1/model_routing.yaml` : routes nominales et fallbacks dans la flotte fermée ;
-- `config/v1/runtime_backends.yaml` : profils Ollama, SYCL, Vulkan et hybride ;
+- `config/v1/runtime_backends.yaml` : profils Vulkan actifs ;
 - `config/v1/tool_policy.yaml` : permissions par rôle ;
 - `config/v1/web_policy.yaml` : outils Web local-first ;
 - `config/v1/document_ingestion_policy.yaml` : PDF/images/Office/texte ;
@@ -20,9 +22,7 @@ Les outils Web restent autorisés comme sources d'information. Ils ne changent p
 
 ## Runtime OpenClaw verrouillé
 
-Le lock V2 actuel fixe **OpenClaw 2026.9.2** avec le plugin Parallel officiel aligné sur **2026.9.2**. Le projet n'installe ni `main` ni une version flottante : une évolution OpenClaw est traitée séparément comme un changement de runtime et doit repasser les gates du dépôt.
-
-Preuves de publication verrouillées :
+Le lock V2 actuel fixe **OpenClaw 2026.9.2** avec le plugin Parallel officiel aligné sur **2026.9.2**. Le projet n'installe ni `main` ni une version flottante.
 
 ```text
 OpenClaw      : 2026.9.2
@@ -31,8 +31,6 @@ npm SRI       : sha512-M6C7UsnX815nv26qBJFYGe6aGzv+ftZLRzV6S9oRXUtXg2Yn67eVntpss
 Parallel      : @openclaw/parallel-plugin@2026.9.2
 ```
 
-Le lock conserve l'intégrité SRI du paquet npm et le SHA de release publié afin que `install-core` rejette des octets différents de l'artefact attendu.
-
 Après une modification du lock runtime :
 
 ```powershell
@@ -40,11 +38,9 @@ Après une modification du lock runtime :
 openclaw --version
 ```
 
-`configure-openclaw` vérifie la version verrouillée avant toute mutation. Il ne doit jamais compenser une dérive de runtime en abaissant les seuils de qualification.
+`configure-openclaw` vérifie la version verrouillée avant toute mutation.
 
 ## Flotte locale active V2
-
-Les alias logiques restent stables afin de préserver les contrats, workspaces et états existants :
 
 ```text
 qwen-max          -> ollama/qwen3.5:9b-q4_K_M
@@ -52,9 +48,9 @@ gemma-deep        -> ollama/gemma4:12b-it-q4_K_M
 devstral-devops   -> ollama/hf.co/mistralai/Ministral-3-14B-Reasoning-2512-GGUF:Q4_K_M
 ```
 
-`devstral-devops` est un **alias de compatibilité** : son runtime V2 est Ministral 3 14B Reasoning Q4_K_M. La flotte routée reste exactement à trois modèles.
+`devstral-devops` est un alias de compatibilité : son runtime V2 est Ministral 3 14B Reasoning Q4_K_M. La flotte routée reste exactement à trois modèles.
 
-Le challenger local séparé est :
+Challenger de modèle séparé :
 
 ```text
 granite-devops -> granite4.2:8b-q4_K_M
@@ -62,27 +58,45 @@ granite-devops -> granite4.2:8b-q4_K_M
 
 Il n'est pas injecté dans le routage OpenClaw nominal et ne peut pas être auto-promu.
 
-## Contrat de contexte : benchmark 8K, agent OpenClaw 16K
+## Profils runtime OpenClaw
 
-Le projet distingue deux notions qui ne doivent pas être confondues :
+Les profils sélectionnables sont seulement :
 
-- **8192 tokens** : contexte nominal du benchmark direct B580 et du contrat HARD-40M ;
+```text
+ollama-vulkan
+b580-hybrid
+```
+
+Le runtime interne `llama-cpp-vulkan` est utilisé par `b580-hybrid` pour Gemma et Ministral, mais n'est pas exposé comme profil OpenClaw autonome.
+
+Répartition hybride :
+
+```text
+qwen-max        -> Ollama/Vulkan
+gemma-deep      -> llama.cpp/Vulkan
+devstral-devops -> llama.cpp/Vulkan
+image/PDF       -> Ollama/Vulkan
+```
+
+Aucun profil ne permet de sélectionner une autre API GPU.
+
+## Contrat de contexte : qualification 8K, agent OpenClaw 16K
+
+- **8192 tokens** : contexte nominal du HARD-40M ;
 - **16384 tokens** : fenêtre d'exécution nominale du full-agent OpenClaw sur Ollama afin d'absorber prompt système, contrat du rôle, réserve et surface d'outils autorisée.
 
-Cette fenêtre OpenClaw 16K **n'est pas une promotion du benchmark** et ne constitue aucune preuve de performance ou de full-offload sur la B580. Les seuils HARD-40M, les cas 8K/16K et les critères de qualification restent inchangés.
+Cette fenêtre OpenClaw 16K **n'est pas une promotion du benchmark** et ne constitue aucune preuve de performance ou de full-offload sur la B580. Les seuils HARD-40M restent inchangés.
 
-Le provider Ollama amont peut accepter une capacité supérieure, mais `OPENCLAW_LOCAL` conserve **16K comme valeur nominale gérée** tant que la B580 n'a pas fourni de preuve justifiant une extension. Un éventuel test 32K est un candidat d'orchestration distinct, jamais une promotion automatique ni une modification du HARD-40M.
+Le provider Ollama amont peut accepter une capacité supérieure, mais `OPENCLAW_LOCAL` conserve 16K comme valeur nominale gérée tant que la B580 n'a pas fourni de preuve justifiant une extension.
 
-Les trois modèles Ollama sont donc déclarés à `contextWindow=16384`, `contextTokens=16384` et `num_ctx=16384` dans le chemin full-agent nominal, tandis que les runners de benchmark exécutent explicitement leurs cas 8192/16384 selon le protocole de qualification.
-
-Les backends candidats `llama-cpp-sycl`, `llama-cpp-vulkan` et `b580-hybrid` conservent leur propre contrat de contexte tant qu'ils n'ont pas produit leur qualification B580.
+Le runtime llama.cpp/Vulkan géré conserve son propre contexte 8192 selon le contrat actuel du profil hybride.
 
 ## Budget du prompt runtime
 
-Le contexte 16K n'est pas utilisé comme unique solution. La surface runtime reste bornée :
+La surface runtime reste bornée :
 
 - le contrat compact `RUNTIME_CONTRACT.md` + le rôle sont injectés via `AGENTS.md` ;
-- `CONTRACT.md` et `PEDAGOGY.md` complets restent disponibles à la demande mais ne sont pas auto-injectés ;
+- `CONTRACT.md` et `PEDAGOGY.md` complets restent disponibles à la demande ;
 - `SOUL.md`, `USER.md`, `HEARTBEAT.md` et `IDENTITY.md` restent matérialisés mais exclus de l'injection automatique ;
 - `AGENTS.md` reste plafonné à 6500 caractères et le bootstrap runtime géré à 8000 caractères ;
 - chaque agent géré reçoit explicitement `skills: []` ;
@@ -110,41 +124,48 @@ Le générateur produit le roster sous la surface d'entrée compatible :
 agents.list[]
 ```
 
-OpenClaw 2026.9.x peut persister ce roster sous sa représentation canonique :
+OpenClaw 2026.9.x peut persister ce roster sous :
 
 ```text
 agents.entries.<agent-id>
 ```
 
-Le roster est explicitement déclaré `agents.ownership=explicit`, sans marqueur legacy `default=true`. `chef-operations` est déclaré comme propriétaire ambiant et de session via `agents.defaults.systemAgent.agentId` et `agents.defaults.sessionStore.agentId`.
+Le roster est explicitement déclaré `agents.ownership=explicit`. `chef-operations` est déclaré comme propriétaire ambiant et de session via `agents.defaults.systemAgent.agentId` et `agents.defaults.sessionStore.agentId`.
 
-Le E2E accepte `agents.entries` et la surface de compatibilité `agents.list` pour lire l'état, sans modifier le nombre ni l'identité des huit agents.
-
-Une montée de version OpenClaw est un changement de contrat : mettre à jour le lock et son intégrité, examiner le schéma vivant, adapter le générateur puis repasser CI, admission runtime et E2E.
+Le E2E accepte `agents.entries` et la surface de compatibilité `agents.list` pour lire l'état.
 
 ## Générer et appliquer la configuration
+
+Nominal :
 
 ```powershell
 .\menu.ps1 -Action configure-openclaw -DryRun
 .\menu.ps1 -Action configure-openclaw
 ```
 
+Hybride Vulkan :
+
+```powershell
+.\menu.ps1 -Action intel-vulkan-setup
+.\menu.ps1 -Action intel-vulkan-verify
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action configure-openclaw -Backend b580-hybrid
+```
+
 Le parcours :
 
-1. vérifie le backend local sélectionné ;
+1. vérifie le profil local sélectionné ;
 2. exige la version OpenClaw verrouillée ;
-3. converge le plugin Web requis vers sa version verrouillée ;
+3. converge le plugin Web requis ;
 4. crée la baseline OpenClaw si nécessaire ;
-5. capture le schéma vivant avec `openclaw config schema` ;
+5. capture le schéma vivant ;
 6. déploie les huit workspaces gérés ;
 7. génère le patch depuis les contrats ;
-8. exécute `openclaw config patch --dry-run` ;
+8. exécute le dry-run du patch ;
 9. applique le patch uniquement si la validation réussit ;
 10. exécute `openclaw config validate --json` ;
 11. vérifie `openclaw agents list --json` ;
-12. sur `ollama-vulkan`, exécute un vrai prompt full-agent sur Qwen 3.5, Gemma 4 et Ministral 3 Reasoning avant d'annoncer le PASS.
-
-Chaque contrôle d'admission sauvegarde son payload sous `proofs/openclaw_prompt_admission_*.json`. Si OpenClaw refuse le prompt, la configuration échoue immédiatement avec l'évidence. Lorsque le runtime renvoie `systemPromptReport`, les dimensions système/outils/skills sont affichées et `skills.promptChars` doit rester nul sur le chemin nominal.
+12. sur `ollama-vulkan`, exécute un vrai prompt full-agent sur Qwen 3.5, Gemma 4 et Ministral 3 Reasoning avant PASS.
 
 Les listes gérées sont remplacées intentionnellement via :
 
@@ -153,41 +174,13 @@ Les listes gérées sont remplacées intentionnellement via :
 --replace-path agents.list
 ```
 
-Le patch nominal Ollama configure notamment :
-
-- Gateway local sur loopback ;
-- Ollama sur `http://127.0.0.1:11434` ;
-- exactement trois modèles locaux routés ;
-- benchmark direct nominal 8192 ;
-- full-agent OpenClaw Ollama 16384 ;
-- huit agents ;
-- ownership explicite ;
-- `skills: []` et budget skills nul ;
-- `experimental.localModelLean=true` ;
-- profils d'outils minimaux et Tool Search structuré ;
-- `tools.fs.workspaceOnly=true` ;
-- `tools.exec.mode=ask` ;
-- elevated désactivé ;
-- outils Web local-first ;
-- **aucun provider LLM cloud**.
+Le patch nominal configure notamment Gateway loopback, Ollama local, exactement trois modèles routés, huit agents, outils bornés et **aucun provider LLM cloud**.
 
 ## Workspaces et projets
 
-Les modèles Ollama sont stockés sous :
-
 ```text
 <OPENCLAW_LOCAL_ROOT>\models\ollama
-```
-
-Les rôles disposent de workspaces séparés :
-
-```text
 <OPENCLAW_LOCAL_ROOT>\workspaces\<agent-id>
-```
-
-Le projet central reste sous :
-
-```text
 <OPENCLAW_LOCAL_ROOT>\projects\<project-id>
 ```
 
@@ -195,9 +188,7 @@ Les workspaces sont des snapshots jetables et ne remplacent jamais le projet cen
 
 ## Document Ingestion et Artifact Exchange
 
-L'ingestion construit des représentations locales traçables sans modifier les originaux : PDF/images via les capacités prévues, Office via extraction locale déterministe, texte/code via normalisation locale.
-
-Les sorties des tâches sont versionnées sous `context/exchange/`. Une sortie `PASS` peut être propagée aux dépendants ; une sortie `FAIL` reste historique et ne devient jamais une entrée valide. Provenance et SHA-256 sont conservés.
+L'ingestion construit des représentations locales traçables sans modifier les originaux. Les sorties des tâches sont versionnées sous `context/exchange/`. Une sortie `PASS` peut être propagée ; une sortie `FAIL` reste historique.
 
 ## Routage nominal
 
@@ -213,30 +204,26 @@ Auditeur qualité      -> gemma-deep
                          -> qwen-max si producteur Gemma
 ```
 
-La séparation producteur/auditeur change de famille lorsque cela est praticable. Tous les fallbacks restent dans la flotte locale fermée.
-
-## Backends locaux
-
-Trois moteurs sont qualifiables, plus un profil mixte :
-
-- `ollama-vulkan` : chemin nominal et rollback ;
-- `llama-cpp-sycl` : candidat Intel Arc ;
-- `llama-cpp-vulkan` : candidat Intel Arc ;
-- `b580-hybrid` : combinaison locale candidate.
-
-La migration de flotte invalide les conclusions de performance antérieures pour le choix final du backend. Les nouvelles mesures doivent être produites sur la B580 avec les runtimes V2 avant toute promotion.
+Tous les fallbacks restent dans la flotte locale fermée.
 
 ## Gate E2E
+
+Nominal :
 
 ```powershell
 .\menu.ps1 -Action e2e -DryRun
 .\menu.ps1 -Action e2e
 ```
 
-Le test doit prouver les huit agents, le provider local attendu, le modèle primaire conforme au catalogue, le vrai tool-calling, la réparation après erreur d'outil, la stabilité et l'absence de dépendance LLM cloud.
+Hybride :
 
-Le gate d'admission de `configure-openclaw` ne remplace pas le E2E : le E2E reste nécessaire pour les huit rôles et les parcours d'outils réels.
+```powershell
+.\menu.ps1 -Action e2e -Backend b580-hybrid -DryRun
+.\menu.ps1 -Action e2e -Backend b580-hybrid
+```
+
+Le test doit prouver les huit agents, le provider local attendu, le modèle primaire conforme, le vrai tool-calling, la réparation après erreur d'outil, la stabilité et l'absence de dépendance LLM cloud.
 
 ## Promotion
 
-Un succès d'admission, E2E ou challenger ne promeut automatiquement ni modèle, ni backend, ni contexte 32K, ni V1. La décision reste fondée sur la qualification matérielle, les preuves hashées et la revue humaine.
+Un succès d'admission, E2E ou challenger ne promeut automatiquement ni modèle, ni contexte 32K, ni profil hybride, ni V1. Le choix GPU Vulkan est déjà verrouillé ; les preuves servent à valider son exploitation réelle, pas à rouvrir une compétition de backends.

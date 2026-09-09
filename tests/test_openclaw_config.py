@@ -24,7 +24,6 @@ EXPECTED_MODELS = {
     "gemma4:12b-it-q4_K_M",
     MINISTRAL,
 }
-EXPECTED_SYCL_MODELS = EXPECTED_MODELS
 EXPECTED_VULKAN_MODELS = {
     "gemma4:12b-it-q4_K_M",
     MINISTRAL,
@@ -195,48 +194,7 @@ def test_multimodal_defaults_use_qwen35_then_gemma4() -> None:
     assert defaults["pdfModel"] == expected
 
 
-def test_intel_sycl_backend_routes_text_but_keeps_multimodal_on_ollama() -> None:
-    patch = build_openclaw_patch(
-        Path("C:/OpenClawLocal"), backend_id="llama-cpp-sycl"
-    )
-    providers = patch["models"]["providers"]
-    assert set(providers) == {"ollama", "intel-sycl"}
-
-    sycl = providers["intel-sycl"]
-    assert sycl["baseUrl"] == "http://127.0.0.1:8080/v1"
-    assert sycl["api"] == "openai-completions"
-    assert sycl["apiKey"] == "intel-sycl-local"
-    assert {model["id"] for model in sycl["models"]} == EXPECTED_SYCL_MODELS
-    assert all(model["input"] == ["text"] for model in sycl["models"])
-    assert all(model["contextWindow"] == 8192 for model in sycl["models"])
-    assert all(model["compat"]["toolSchemaProfile"] == "llamacpp" for model in sycl["models"])
-    assert all(
-        model["contextWindow"] == OPENCLAW_AGENT_CONTEXT_TOKENS
-        for model in providers["ollama"]["models"]
-    )
-
-    entries = _entries_by_id(patch)
-    for entry in entries.values():
-        assert entry["model"]["primary"].startswith("intel-sycl/")
-        assert all(
-            fallback.startswith("intel-sycl/")
-            for fallback in entry["model"]["fallbacks"]
-        )
-
-    defaults = patch["agents"]["defaults"]
-    assert defaults["model"] == {
-        "primary": "intel-sycl/qwen3.5:9b-q4_K_M",
-        "fallbacks": ["intel-sycl/gemma4:12b-it-q4_K_M"],
-    }
-    expected_multimodal = {
-        "primary": "ollama/qwen3.5:9b-q4_K_M",
-        "fallbacks": ["ollama/gemma4:12b-it-q4_K_M"],
-    }
-    assert defaults["imageModel"] == expected_multimodal
-    assert defaults["pdfModel"] == expected_multimodal
-
-
-def test_b580_hybrid_routes_each_model_to_measured_backend() -> None:
+def test_b580_hybrid_routes_each_model_to_vulkan_backend() -> None:
     patch = build_openclaw_patch(Path("C:/OpenClawLocal"), backend_id="b580-hybrid")
     providers = patch["models"]["providers"]
     assert set(providers) == {"ollama", "intel-vulkan"}
