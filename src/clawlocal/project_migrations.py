@@ -14,6 +14,12 @@ from clawlocal.project_contracts import (
 from clawlocal.project_governance import initialize_governance
 from clawlocal.project_ingestion import ingest_project_documents, validate_ingestion_index
 from clawlocal.project_learning import initialize_learning
+from clawlocal.safe_fs import (
+    assert_no_link_like,
+    copytree_no_links,
+    is_link_like,
+    secure_path_within,
+)
 
 _BACKUP_PATHS = (
     "context/learning",
@@ -46,63 +52,166 @@ def plan_project_migration(project: Path) -> list[str]:
     raise ValueError(f"migration non définie pour le schéma {schema}")
 
 
+def _migrations_root(project: Path, *, create: bool) -> Path:
+    project_root = project.resolve(strict=True)
+    root = project_root / ".migrations"
+    if root.exists() or is_link_like(root):
+        return secure_path_within(
+            root,
+            project_root,
+            require_dir=True,
+            label="répertoire de migrations",
+        )
+    if not create:
+        raise FileNotFoundError(root)
+    root.mkdir()
+    return secure_path_within(
+        root,
+        project_root,
+        require_dir=True,
+        label="répertoire de migrations",
+    )
+
+
 def _backup(project: Path, source_schema: str) -> Path:
+    project_root = project.resolve(strict=True)
+    manifest = secure_path_within(
+        project_root / "project.json",
+        project_root,
+        require_file=True,
+        label="manifest de migration",
+    )
+
+    sources: dict[str, Path | None] = {}
+    present: dict[str, bool] = {}
+    for relative in _BACKUP_PATHS:
+        source = project_root / relative
+        if not source.exists() and not is_link_like(source):
+            present[relative] = False
+            sources[relative] = None
+            continue
+        safe_source = secure_path_within(
+            source,
+            project_root,
+            label=f"backup migration {relative}",
+        )
+        if safe_source.is_dir():
+            assert_no_link_like(safe_source, label=f"backup migration {relative}")
+        elif not safe_source.is_file():
+            raise ValueError(f"backup migration: type non supporté: {relative}")
+        present[relative] = True
+        sources[relative] = safe_source
+
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-    root = project / ".migrations" / f"pre-{source_schema}-{stamp}"
-    root.mkdir(parents=True, exist_ok=False)
-    shutil.copy2(project / "project.json", root / "project.json")
+    root = _migrations_root(project_root, create=True) / f"pre-{source_schema}-{stamp}"
+    root.mkdir(exist_ok=False)
     metadata: dict[str, Any] = {
         "schema_version": "1.0.0",
         "source_schema": source_schema,
-        "paths": {},
+        "paths": present,
     }
-    paths = metadata["paths"]
-    assert isinstance(paths, dict)
-    for relative in _BACKUP_PATHS:
-        source = project / relative
-        paths[relative] = source.exists()
-        if source.is_dir():
-            shutil.copytree(source, root / relative)
-        elif source.is_file():
-            target = root / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
-    (root / "backup.json").write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    try:
+        shutil.copy2(manifest, root / "project.json")
+        for relative, backup_source in sources.items():
+            if backup_source is None:
+                continue
+            if backup_source.is_dir():
+                copytree_no_links(
+                    backup_source,
+                    root / relative,
+                    label=f"backup migration {relative}",
+                )
+            elif backup_source.is_file():
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(backup_source, target)
+        (root / "backup.json").write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        shutil.rmtree(root, ignore_errors=True)
+        raise
     return root
 
 
 def _remove_path(path: Path) -> None:
-    if path.is_dir() and not path.is_symlink():
+    if is_link_like(path):
+        if path.is_symlink():
+            path.unlink()
+        elif path.is_dir():
+            path.rmdir()
+        else:
+            path.unlink()
+        return
+    if path.is_dir():
         shutil.rmtree(path)
-    elif path.exists() or path.is_symlink():
+    elif path.exists():
         path.unlink()
 
 
 def _restore_backup(project: Path, backup: Path) -> None:
-    shutil.copy2(backup / "project.json", project / "project.json")
-    metadata = _load(backup / "backup.json")
+    project_root = project.resolve(strict=True)
+    migrations_root = _migrations_root(project_root, create=False)
+    backup_root = secure_path_within(
+        backup,
+        migrations_root,
+        require_dir=True,
+        label="backup de migration",
+    )
+    assert_no_link_like(backup_root, label="backup de migration")
+    manifest = secure_path_within(
+        backup_root / "project.json",
+        backup_root,
+        require_file=True,
+        label="manifest de rollback",
+    )
+    metadata_path = secure_path_within(
+        backup_root / "backup.json",
+        backup_root,
+        require_file=True,
+        label="métadonnées de rollback",
+    )
+    context_root = secure_path_within(
+        project_root / "context",
+        project_root,
+        require_dir=True,
+        label="contexte de rollback",
+    )
+
+    target_manifest = project_root / "project.json"
+    if is_link_like(target_manifest):
+        raise ValueError("rollback migration: project.json est un lien/reparse point")
+    shutil.copy2(manifest, target_manifest)
+    metadata = _load(metadata_path)
     paths = metadata.get("paths", {})
     if not isinstance(paths, dict):
         raise RuntimeError("backup migration invalide")
     for relative in _BACKUP_PATHS:
-        target = project / relative
-        if target.exists() or target.is_symlink():
+        target = project_root / relative
+        if target.exists() or is_link_like(target):
+            if not is_link_like(target):
+                secure_path_within(target, context_root, label=f"rollback {relative}")
             _remove_path(target)
         if paths.get(relative) is True:
-            source = backup / relative
+            source = secure_path_within(
+                backup_root / relative,
+                backup_root,
+                label=f"source rollback {relative}",
+            )
             if source.is_dir():
-                shutil.copytree(source, target)
+                copytree_no_links(
+                    source,
+                    target,
+                    label=f"restore migration {relative}",
+                )
             elif source.is_file():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
 
 
 def _append_ledger(project: Path, record: dict[str, Any]) -> None:
-    ledger = project / ".migrations" / "ledger.jsonl"
-    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger = _migrations_root(project, create=True) / "ledger.jsonl"
     with ledger.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -162,7 +271,7 @@ def apply_project_migrations(project: Path) -> list[str]:
                     "timestamp": _now(),
                     "source": source,
                     "target": target,
-                    "backup": str(backup.relative_to(project)),
+                    "backup": str(backup.relative_to(project.resolve(strict=True))),
                     "status": "ROLLED_BACK",
                     "error_type": type(exc).__name__,
                 },
@@ -174,7 +283,7 @@ def apply_project_migrations(project: Path) -> list[str]:
                 "timestamp": _now(),
                 "source": source,
                 "target": target,
-                "backup": str(backup.relative_to(project)),
+                "backup": str(backup.relative_to(project.resolve(strict=True))),
                 "status": "APPLIED",
             },
         )
