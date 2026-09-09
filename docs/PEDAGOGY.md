@@ -4,7 +4,7 @@ OPENCLAW_LOCAL ne doit pas seulement produire un livrable : il doit aussi permet
 
 La pédagogie est **transversale** : elle s'applique aux huit agents, à toutes les phases de l'orchestrateur et à tous les modèles routés. Elle n'est donc pas réservée au Rédacteur technique. Le contrat commun `agents/_shared/PEDAGOGY.md` est injecté dans le `AGENTS.md` effectif de chaque workspace avant le contrat spécifique du rôle.
 
-Cette couche reste active avec les trois modèles locaux supportés — Qwen 3.8 27B, Gemma 4 26B et Devstral Small 2 24B — et reste attachée au rôle si une escalade cloud explicite est exceptionnellement utilisée.
+Cette couche reste active avec les trois modèles locaux supportés — **Qwen 3.5 9B, Gemma 4 12B et Ministral 3 14B Reasoning**. Architecture V2 est local-only côté LLM : aucun modèle cloud ni fallback LLM en ligne n'est supporté. Les outils Web peuvent fournir des sources d'information, mais le raisonnement et la synthèse restent locaux.
 
 La livraison reste prioritaire. La pédagogie ne doit pas bloquer un incident, une correction urgente ou un livrable déjà compris, et elle ne doit pas transformer une tâche simple en cours inutilement long.
 

@@ -4,24 +4,25 @@ Ce document fixe les réglages GitHub attendus pour `mathiasseguincadiche/OPENCL
 
 ## Métadonnées du dépôt
 
-Description cible :
+Description cible Architecture V2 :
 
-> Plateforme IA multi-agents local-first pour Windows 11 : OpenClaw + Ollama, routage hybride, qualification matérielle et escalade cloud contrôlée.
+> Plateforme IA multi-agents local-only côté LLM pour Windows 11 : OpenClaw + Ollama, routage local hybride et qualification Intel Arc B580.
 
 Topics cibles :
 
 - `openclaw`
 - `ollama`
 - `local-ai`
+- `local-llm`
 - `multi-agent`
 - `windows-11`
+- `intel-arc`
 - `powershell`
 - `python`
 - `devops`
 - `llm`
-- `openrouter`
 
-Ces métadonnées sont actuellement présentes sur le dépôt.
+`openrouter` ne fait plus partie des topics cibles : Architecture V2 ne supporte aucun fournisseur d'inférence LLM cloud. Si les métadonnées visibles sur GitHub diffèrent de cette cible versionnée, elles doivent être réalignées dans les réglages du dépôt sans modifier les contrats runtime pour masquer l'écart.
 
 ## Protection de `main`
 
@@ -51,9 +52,9 @@ CodeQL / Python
 
 Les règles qui exigent un deuxième approbateur ne doivent être activées qu'après ajout d'un mainteneur distinct.
 
-### État observé le 28 août 2026
+### État observé le 9 septembre 2026
 
-Le ruleset `main-protection` est actif sur la branche par défaut et applique déjà :
+Le ruleset `main-protection` est actif sur la branche par défaut et applique :
 
 - suppression interdite ;
 - non-fast-forward interdit ;
@@ -64,16 +65,18 @@ Le ruleset `main-protection` est actif sur la branche par défaut et applique d�
 - status checks en mode strict, donc branche à jour ;
 - aucun acteur de bypass permanent.
 
-Checks actuellement imposés par GitHub :
+Les **six checks cibles sont actuellement obligatoires** dans GitHub :
 
 ```text
 quality
+python-3.12
+python-3.13
 windows-contract
 Dependency Review
 CodeQL / Python
 ```
 
-Il reste une **dérive administrative connue** : `python-3.12` et `python-3.13` passent dans la CI mais ne sont pas encore des checks obligatoires du ruleset. L'issue GitHub `#8` reste ouverte jusqu'à l'ajout de ces deux checks. La cible versionnée ci-dessus ne doit pas être abaissée pour masquer cet écart.
+L'issue administrative `#8` est clôturée : il n'existe plus de dérive entre la cible versionnée et le ruleset actif sur les status checks. Toute modification future du nom d'un check doit repasser par la procédure de contrôle décrite plus bas.
 
 ## Pull Requests
 
@@ -151,7 +154,7 @@ Pour autoriser une V1, le manifeste doit cibler exactement `VERSION` et contenir
 - SHA-256 de la télémétrie réelle ;
 - SHA-256 du package du projet représentatif ;
 - confirmation que les limites sont documentées ;
-- confirmation de l'absence de fallback cloud nominal ;
+- confirmation de l'absence de fallback **LLM cloud** nominal ;
 - approbation humaine explicite, identifiée et datée en UTC.
 
 Les preuves brutes restent hors Git conformément à la politique de confidentialité et de taille. Les SHA-256 inscrits dans le manifeste servent à **lier cryptographiquement** l'attestation versionnée aux fichiers de preuve conservés localement.
