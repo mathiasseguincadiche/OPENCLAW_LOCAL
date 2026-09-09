@@ -4,24 +4,25 @@ Ce document fixe les réglages GitHub attendus pour `mathiasseguincadiche/OPENCL
 
 ## Métadonnées du dépôt
 
-Description cible :
+Description cible Architecture V2 :
 
-> Plateforme IA multi-agents local-first pour Windows 11 : OpenClaw + Ollama, routage hybride, qualification matérielle et escalade cloud contrôlée.
+> Plateforme IA multi-agents local-only côté LLM pour Windows 11 : OpenClaw + Ollama, routage local hybride et qualification Intel Arc B580.
 
 Topics cibles :
 
 - `openclaw`
 - `ollama`
 - `local-ai`
+- `local-llm`
 - `multi-agent`
 - `windows-11`
+- `intel-arc`
 - `powershell`
 - `python`
 - `devops`
 - `llm`
-- `openrouter`
 
-Ces métadonnées sont actuellement présentes sur le dépôt.
+`openrouter` ne fait plus partie des topics cibles : Architecture V2 ne supporte aucun fournisseur d'inférence LLM cloud. Si les métadonnées visibles sur GitHub diffèrent de cette cible versionnée, elles doivent être réalignées dans les réglages du dépôt sans modifier les contrats runtime pour masquer l'écart.
 
 ## Protection de `main`
 
@@ -151,7 +152,7 @@ Pour autoriser une V1, le manifeste doit cibler exactement `VERSION` et contenir
 - SHA-256 de la télémétrie réelle ;
 - SHA-256 du package du projet représentatif ;
 - confirmation que les limites sont documentées ;
-- confirmation de l'absence de fallback cloud nominal ;
+- confirmation de l'absence de fallback **LLM cloud** nominal ;
 - approbation humaine explicite, identifiée et datée en UTC.
 
 Les preuves brutes restent hors Git conformément à la politique de confidentialité et de taille. Les SHA-256 inscrits dans le manifeste servent à **lier cryptographiquement** l'attestation versionnée aux fichiers de preuve conservés localement.
